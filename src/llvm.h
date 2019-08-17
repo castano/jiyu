@@ -18,6 +18,12 @@ namespace llvm {
     class TargetMachine;
     class ConstantFolder;
     class IRBuilderDefaultInserter;
+    class DIBuilder;
+    class DICompileUnit;
+    class DIType;
+    class DISubroutineType;
+    class DIScope;
+    class DILexicalBlock;
     
     template<typename T, typename Inserter> class IRBuilder;
     
@@ -50,6 +56,9 @@ struct LLVM_Generator {
     llvm::orc::ThreadSafeContext *thread_safe_context;
     llvm::IRBuilder<llvm::ConstantFolder, llvm::IRBuilderDefaultInserter> *irb;
     
+    llvm::DIBuilder *dib;
+    llvm::DICompileUnit *di_compile_unit;
+    
     llvm::Type *type_void;
     llvm::Type *type_i1;
     llvm::Type *type_i8;
@@ -63,8 +72,26 @@ struct LLVM_Generator {
     llvm::Type *type_string_length;
     
     llvm::Type *type_intptr;
+
+    // Debug types
+    llvm::DIType *di_type_bool;
+    llvm::DIType *di_type_s8;
+    llvm::DIType *di_type_s16;
+    llvm::DIType *di_type_s32;
+    llvm::DIType *di_type_s64;
+    llvm::DIType *di_type_u8;
+    llvm::DIType *di_type_u16;
+    llvm::DIType *di_type_u32;
+    llvm::DIType *di_type_u64;
+    llvm::DIType *di_type_f32;
+    llvm::DIType *di_type_f64;
+
+    llvm::DIType *di_type_string;
+    llvm::DIType *di_type_string_length;
     
     Array<Tuple<Ast_Declaration *, llvm::Value *>> decl_value_map;
+
+    llvm::DIScope *di_current_scope = nullptr;
     
     
     LLVM_Generator(Compiler *compiler) {
@@ -86,6 +113,9 @@ struct LLVM_Generator {
     void emit_function(Ast_Function *function);
     void emit_global_variable(Ast_Declaration *decl);
     llvm::Value *emit_expression(Ast_Expression *expression, bool is_lvalue = false);
+
+    llvm::DISubroutineType *get_debug_subroutine_type(Ast_Type_Info *type);
+    llvm::DIType           *get_debug_type(Ast_Type_Info *type);
 };
 
 struct LLVM_Jitter {

@@ -88,6 +88,7 @@ struct Ast_Type_Info {
     struct Struct_Member {
         Atom *name               = nullptr;
         s64 element_index        = -1;
+        s64 offset_in_struct     = -1;
         Ast_Type_Info *type_info = nullptr;
         bool is_let = false;
     };
@@ -278,7 +279,7 @@ struct Ast_Function : Ast_Expression {
     Ast_Identifier *identifier;
     
     Array<Ast_Declaration *> arguments;
-    Ast_Declaration *return_decl = nullptr;
+    Ast_Declaration *return_decl = nullptr; // @FixMe this should be a Ast_Type_Instantiation not a declaration.
     
     Ast_Scope *polymorphic_type_alias_scope = nullptr;
     Ast_Scope arguments_scope;

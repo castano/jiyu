@@ -26,6 +26,8 @@ typedef s64 string_length_type;
 typedef s32 string_length_type;
 #endif
 
+const int BYTES_TO_BITS = 8;
+
 struct String {
     char *data = nullptr;
     string_length_type length = 0;
@@ -261,6 +263,10 @@ struct TextSpan {
         this->span = span;
         
         assert(span.fits_in_string(string));
+    }
+
+    void calculate_text_coordinates(string_length_type *line_start, string_length_type *char_start, string_length_type *line_end, string_length_type *char_end) {
+        span.map_to_text_coordinates(string, line_start, char_start, line_end, char_end);
     }
     
     String get_text() {

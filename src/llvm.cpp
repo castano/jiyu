@@ -27,6 +27,7 @@
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
 
+#include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/IRBuilder.h"
 
 #include "llvm/ExecutionEngine/Orc/CompileUtils.h"
@@ -42,6 +43,23 @@
 
 using namespace llvm;
 using namespace llvm::orc;
+
+static StringRef string_ref(String s) {
+    return StringRef(s.data, s.length);
+}
+
+DIFile *get_debug_file(LLVMContext *ctx, Ast *ast) {
+    return DIFile::get(*ctx, string_ref(ast->filename), "");
+}
+
+string_length_type get_line_number(Ast *ast) {
+    // @Speed we should probably just track line_start on Ast itself
+    // and have the lexer set this on tokens.
+    string_length_type line_start, char_start, line_end, char_end;
+    ast->text_span.calculate_text_coordinates(&line_start, &char_start, &line_end, &char_end);
+
+    return line_start;
+}
 
 void LLVM_Generator::init() {
     InitializeAllTargetInfos();
@@ -74,7 +92,20 @@ void LLVM_Generator::init() {
     llvm_context = thread_safe_context->getContext();
     
     llvm_module = new Module("jiyu Module", *llvm_context);
+
+    bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
+    if (is_win32) {
+        llvm_module->addModuleFlag(Module::Warning, "CodeView", 1);
+    }
+    
     irb = new IRBuilder<>(*llvm_context);
+    dib = new DIBuilder(*llvm_module);
+
+    const char *JIYU_PRODUCER_STRING = "Jiyu Compiler";
+    bool is_optimized = false; // @BuildOptions
+    const char *COMMAND_LINE_FLAGS = "";
+    const unsigned runtime_version = 0;
+    di_compile_unit = dib->createCompileUnit(dwarf::DW_LANG_C, DIFile::get(*llvm_context, "fib.jyu", ""), JIYU_PRODUCER_STRING, is_optimized, COMMAND_LINE_FLAGS, runtime_version);
     
     type_void = Type::getVoidTy(*llvm_context);
     type_i1   = Type::getInt1Ty(*llvm_context);
@@ -98,11 +129,56 @@ void LLVM_Generator::init() {
     assert(type_string_length);
     
     
-    // Matches the definition in general.h
+    // Matches the definition in general.h, except when the target's pointer size doesn't match the host's.
     type_string = StructType::create(*llvm_context, { type_i8->getPointerTo(), type_string_length }, "string", true/*packed*/);
+
+    di_type_bool = dib->createBasicType("bool",   dwarf::DW_ATE_boolean, 8);
+    di_type_s8   = dib->createBasicType("int8",   dwarf::DW_ATE_signed, 8);
+    di_type_s16  = dib->createBasicType("int16",  dwarf::DW_ATE_signed, 16);
+    di_type_s32  = dib->createBasicType("int32",  dwarf::DW_ATE_signed, 32);
+    di_type_s64  = dib->createBasicType("int64",  dwarf::DW_ATE_signed, 64);
+    di_type_u8   = dib->createBasicType("uint8",  dwarf::DW_ATE_unsigned,  8);
+    di_type_u16  = dib->createBasicType("uint16", dwarf::DW_ATE_unsigned, 16);
+    di_type_u32  = dib->createBasicType("uint32", dwarf::DW_ATE_unsigned, 32);
+    di_type_u64  = dib->createBasicType("uint64", dwarf::DW_ATE_unsigned, 64);
+    di_type_f32  = dib->createBasicType("float",  dwarf::DW_ATE_float, 32);
+    di_type_f64  = dib->createBasicType("double", dwarf::DW_ATE_float, 64);
+
+    di_type_string_length = nullptr;
+    if (TargetMachine->getPointerSize(0) == 4) {
+        di_type_string_length = di_type_s32;
+    } else if (TargetMachine->getPointerSize(0) == 8) {
+        di_type_string_length = di_type_s64;
+    }
+
+    {
+        auto debug_file = DIFile::get(*llvm_context, "", "");
+        unsigned line_number = 0;
+        DINode::DIFlags flags = DINode::DIFlags();
+
+        auto di_data_type  = dib->createPointerType(di_type_u8, TargetMachine->getPointerSizeInBits(0));
+
+        // @Cleanup literal numbers
+        auto data = dib->createMemberType(di_compile_unit, "data", debug_file, 0,
+                            TargetMachine->getPointerSizeInBits(0), TargetMachine->getPointerSizeInBits(0),
+                            0, flags, di_data_type);
+        auto length = dib->createMemberType(di_compile_unit, "length", debug_file, 0,
+                            type_string_length->getPrimitiveSizeInBits(), type_string_length->getPrimitiveSizeInBits(),
+                            TargetMachine->getPointerSizeInBits(0), flags, di_type_string_length);
+        auto elements = dib->getOrCreateArray({data, length});
+
+        auto type = compiler->type_string;
+        di_type_string = dib->createStructType(di_compile_unit, "string", debug_file,
+                            line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
+                            flags, nullptr, elements);
+    }
+
+    di_current_scope = di_compile_unit;
 }
 
 void LLVM_Generator::finalize() {
+    dib->finalize();
+
     // @Cleanup duplicate
     std::string TargetTriple = llvm::sys::getDefaultTargetTriple();
     
@@ -131,10 +207,6 @@ void LLVM_Generator::finalize() {
     
     pass.run(*llvm_module);
     dest.flush();
-}
-
-static StringRef string_ref(String s) {
-    return StringRef(s.data, s.length);
 }
 
 Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
@@ -237,6 +309,149 @@ Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
         }
         
         return FunctionType::get(return_type, ArrayRef<Type *>(arguments.data, arguments.count), type->is_c_varargs)->getPointerTo();
+    }
+    
+    assert(false);
+    return nullptr;
+}
+
+DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
+    if (type->type == Ast_Type_Info::VOID) {
+        return nullptr;
+    }
+    
+    if (type->type == Ast_Type_Info::INTEGER) {
+        if (type->is_signed) {
+            switch (type->size) {
+                case 1: return di_type_s8;
+                case 2: return di_type_s16;
+                case 4: return di_type_s32;
+                case 8: return di_type_s64;
+                default: assert(false);
+            }
+        } else {
+            switch (type->size) {
+                case 1: return di_type_u8;
+                case 2: return di_type_u16;
+                case 4: return di_type_u32;
+                case 8: return di_type_u64;
+                default: assert(false);
+            }
+        }
+    }
+    
+    if (type->type == Ast_Type_Info::BOOL) {
+        return di_type_bool;
+    }
+    
+    if (type->type == Ast_Type_Info::FLOAT) {
+        switch(type->size) {
+            case 4: return di_type_f32;
+            case 8: return di_type_f64;
+            default: assert(false);
+        }
+    }
+    
+    if (type->type == Ast_Type_Info::STRING) {
+        return di_type_string;
+    }
+    
+    if (type->type == Ast_Type_Info::POINTER) {
+        auto pointee = get_debug_type(type->pointer_to);
+        return dib->createPointerType(pointee, TargetMachine->getPointerSizeInBits(0));
+    }
+    
+    if (type->type == Ast_Type_Info::ARRAY) {
+        auto element = get_debug_type(type->array_element);
+        if (type->array_element_count >= 0) {
+            assert(type->is_dynamic == false);
+            
+            auto subscripts = dib->getOrCreateArray({ dib->getOrCreateSubrange(0, type->array_element_count) });
+            return dib->createArrayType(type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS, element, subscripts);
+        } else {
+            // @Cleanup this should be type_array_count or something
+            auto di_count_type = di_type_string_length;
+            auto di_data_type  = dib->createPointerType(element, TargetMachine->getPointerSizeInBits(0));
+
+            auto debug_file = DIFile::get(*llvm_context, "", "");
+
+            DINode::DIFlags flags = DINode::DIFlags();
+
+            // @Cleanup literal numbers
+            auto data = dib->createMemberType(di_compile_unit, "data", debug_file, 0,
+                                TargetMachine->getPointerSizeInBits(0), TargetMachine->getPointerSizeInBits(0),
+                                0, flags, di_data_type);
+            auto count = dib->createMemberType(di_compile_unit, "count", debug_file, 0,
+                                type_string_length->getPrimitiveSizeInBits(), type_string_length->getPrimitiveSizeInBits(),
+                                TargetMachine->getPointerSizeInBits(0), flags, di_count_type);
+            
+            unsigned line_number = 0;
+            DIType *derived_from = nullptr;
+            if (!type->is_dynamic) {
+                auto elements = dib->getOrCreateArray({data, count});
+                // @Incomplete we should probably be using the correct scope info here.
+                // @Incomplete name
+                String name;
+                return dib->createStructType(di_compile_unit, string_ref(name), debug_file,
+                                    line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
+                                    flags, derived_from, elements);
+            } else {
+                auto allocated = dib->createMemberType(di_compile_unit, "allocated", debug_file, 0,
+                                type_string_length->getPrimitiveSizeInBits(), type_string_length->getPrimitiveSizeInBits(),
+                                TargetMachine->getPointerSizeInBits(0) + type_string_length->getPrimitiveSizeInBits(), flags, di_count_type);
+                auto elements = dib->getOrCreateArray({data, count, allocated});
+                // @Incomplete we should probably be using the correct scope info here.
+                // @Incomplete name
+                String name;
+                return dib->createStructType(di_compile_unit, string_ref(name), debug_file,
+                                    line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
+                                    flags, derived_from, elements);
+            }
+        }
+    }
+    
+    if (type->type == Ast_Type_Info::STRUCT) {
+        Array<Metadata *> member_types;
+
+        auto struct_decl = type->struct_decl;
+        auto debug_file = get_debug_file(llvm_context, struct_decl);
+        auto line_number = get_line_number(struct_decl);
+        
+        for (auto member : type->struct_members) {
+            if (member.is_let) continue;
+            
+            auto member_type = member.type_info;
+            auto di_type = get_debug_type(member_type);
+
+            String name;
+            if (member.name) name = member.name->name;
+
+            DINode::DIFlags flags = DINode::DIFlags();
+            // @Incomplete file and line number are not technically correct.
+            auto di_member = dib->createMemberType(di_compile_unit, string_ref(name), debug_file, line_number,
+                                        member_type->size * BYTES_TO_BITS, member_type->alignment * BYTES_TO_BITS,
+                                        member.offset_in_struct * BYTES_TO_BITS, flags, di_type);
+            member_types.add(di_member);
+        }
+
+        String name;
+        if (struct_decl->identifier) name = struct_decl->identifier->name->name;
+
+        DIType *derived_from = nullptr;
+        auto elements = dib->getOrCreateArray(ArrayRef<Metadata *>(member_types.data, member_types.count));
+
+        DINode::DIFlags flags = DINode::DIFlags();
+        
+        // @Incomplete we should probably be using the correct scope info here.
+        return dib->createStructType(di_compile_unit, string_ref(name), debug_file,
+                            line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
+                            flags, derived_from, elements);
+    }
+    
+    if (type->type == Ast_Type_Info::FUNCTION) {
+        auto subroutine_type = get_debug_subroutine_type(type);
+        
+        return subroutine_type; // does this need to be a pointer? 
     }
     
     assert(false);
@@ -998,6 +1213,9 @@ Function *LLVM_Generator::get_or_create_function(Ast_Function *function) {
 }
 
 void LLVM_Generator::emit_scope(Ast_Scope *scope) {
+    auto old_di_scope = di_current_scope;
+    di_current_scope = dib->createLexicalBlock(old_di_scope, get_debug_file(llvm_context, scope), get_line_number(scope), 0);
+
     // setup variable mappings
     for (auto it : scope->declarations) {
         while (it->substitution) it = it->substitution;
@@ -1032,16 +1250,72 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
     }
     
     for (auto &it : scope->statements) {
+        irb->SetCurrentDebugLocation(DebugLoc::get(get_line_number(it), 0, di_current_scope));
         emit_expression(it);
     }
+
+    di_current_scope = old_di_scope;
+}
+
+DISubroutineType *LLVM_Generator::get_debug_subroutine_type(Ast_Type_Info *type) {
+    Array<Metadata *> arguments;
+
+
+    DIType *return_type = get_debug_type(type->return_type);
+    // @Incomplete void return types need to be null?
+
+    arguments.add(return_type);
+        
+    bool is_c_function = type->is_c_function;
+    bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
+    
+    for (auto arg_type : type->arguments) {
+        if (arg_type == compiler->type_void) continue;
+        
+        DIType *di_type = get_debug_type(arg_type);
+        
+        // if (is_c_function && is_win32 && is_aggregate_type(arg_type)) {
+        //     assert(arg_type->size >= 0);
+            
+        //     // @TargetInfo this is only true for x64 too
+        //     const int _8BYTES = 8;
+        //     if (arg_type->size > _8BYTES) {
+        //         arguments.add(type->getPointerTo());
+        //         continue;
+        //     }
+        // }
+
+        if (is_aggregate_type(arg_type)) {
+            di_type = dib->createReferenceType(dwarf::DW_TAG_reference_type, di_type, TargetMachine->getPointerSizeInBits(0));
+        }
+        
+        arguments.add(di_type);
+    }
+
+    return dib->createSubroutineType(dib->getOrCreateTypeArray(ArrayRef<Metadata *>(arguments.data, arguments.count)));
 }
 
 void LLVM_Generator::emit_function(Ast_Function *function) {
     assert(function->identifier && function->identifier->name);
     
     Function *func = get_or_create_function(function);
+
     if (!function->scope) return; // forward declaration of external thing
-    
+
+    StringRef function_name = string_ref(function->identifier->name->name);
+    StringRef linkage_name  = string_ref(function->linkage_name);
+    auto subroutine_type    = get_debug_subroutine_type(get_type_info(function));
+    assert(di_current_scope);
+    auto di_subprogram      = dib->createFunction(di_current_scope, function_name, linkage_name,
+                                            get_debug_file(llvm_context, function), get_line_number(function),
+                                            subroutine_type, get_line_number(function->scope), DINode::FlagPrototyped, DISubprogram::SPFlagDefinition);
+    func->setSubprogram(di_subprogram);
+
+    auto old_di_scope = di_current_scope;
+    di_current_scope = di_subprogram;
+
+    irb->SetCurrentDebugLocation(DebugLoc());
+
     // create entry block
     BasicBlock *entry = BasicBlock::Create(*llvm_context, "entry", func);
     BasicBlock *starting_block = BasicBlock::Create(*llvm_context, "start", func);
@@ -1086,6 +1360,8 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
     }
     // func->dump();
     decl_value_map.clear();
+
+    di_current_scope = old_di_scope;
 }
 
 void LLVM_Generator::emit_global_variable(Ast_Declaration *decl) {
