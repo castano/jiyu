@@ -133,13 +133,15 @@ s64    __compiler_instance_count = 0; // @ThreadSafety
 
 
 extern "C" {
-    EXPORT Compiler *create_compiler_instance() {
+    EXPORT Compiler *create_compiler_instance(Build_Options *options) {
         auto compiler = new Compiler();
         compiler->init();
         
         compiler->instance_number = __compiler_instance_count++;
-        
-        compiler->executable_name = to_string("output");
+
+        // these are copies to prevent the user program from modifying the strings after the fact.
+        compiler->build_options.executable_name = copy_string(options->executable_name);
+        compiler->build_options.target_triple   = copy_string(options->target_triple);
         
         compiler->copier = new Copier(compiler);
         
@@ -156,7 +158,7 @@ extern "C" {
     }
     
     EXPORT bool compiler_run_default_link_command(Compiler *compiler) {
-        if (compiler->executable_name == to_string("")) return false;
+        if (compiler->build_options.executable_name == to_string("")) return false;
 #if WIN32
         auto win32_sdk = find_visual_studio_and_windows_sdk();
         
@@ -205,7 +207,7 @@ extern "C" {
             
             args.add(to_string("output.o"));
             
-            String output_name = compiler->executable_name;
+            String output_name = compiler->build_options.executable_name;
             char executable_name[LINE_SIZE];
             snprintf(executable_name, LINE_SIZE, "/OUT:%.*s.exe", output_name.length, output_name.data);
             convert_to_back_slashes(executable_name + 1);
@@ -238,7 +240,7 @@ extern "C" {
         args.add(to_string("output.o"));
         
         args.add(to_string("-o"));
-        args.add(compiler->executable_name);
+        args.add(compiler->build_options.executable_name);
         
         for (auto lib: compiler->libraries) {
             if (lib->is_framework) {
@@ -340,10 +342,18 @@ String get_jiyu_work_directory(String exe_dir_path) {
 int main(int argc, char **argv) {
     String filename;
     bool is_metaprogram = false;
+    String target_triple;
     
     for (int i = 1; i < argc; ++i) {
         if (to_string("-meta") == to_string(argv[i])) {
             is_metaprogram = true;
+        } else if (to_string("-triple") == to_string(argv[i])) {
+            if (i+1 < argc) {
+                target_triple = to_string(argv[i+1]);
+            } else {
+                printf("error: No target triple specified, following -triple switch.\n");
+                return -1;
+            }
         } else {
             filename = to_string(argv[i]);
         }
@@ -358,8 +368,12 @@ int main(int argc, char **argv) {
 
         free(path.data);
     }
+
+    Build_Options options;
+    options.executable_name = to_string("output");
+    options.target_triple = target_triple;
     
-    auto compiler = create_compiler_instance();
+    auto compiler = create_compiler_instance(&options);
     compiler->is_metaprogram = is_metaprogram;
     
     if (filename == to_string("")) {

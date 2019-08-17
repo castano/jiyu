@@ -2,9 +2,10 @@
 #import "Compiler";
 
 func main() {
-    var compiler = create_compiler_instance();
+	var options: Build_Options;
+	options.executable_name = "glfw_game";
 
-    compiler.executable_name = "glfw_game";
+    var compiler = create_compiler_instance(*options);
 
     if compiler_load_file(compiler, "tests/glfw_test.jyu") != true return;
     if compiler_typecheck_program(compiler) != true return;

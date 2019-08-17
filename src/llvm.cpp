@@ -69,6 +69,11 @@ void LLVM_Generator::init() {
     InitializeAllAsmPrinters();
     
     std::string TargetTriple = llvm::sys::getDefaultTargetTriple();
+    if (compiler->build_options.target_triple.length) {
+        TargetTriple = to_c_string(compiler->build_options.target_triple); // @Leak
+    }
+    // printf("TRIPLE: '%s'\n", TargetTriple.c_str());
+    
     std::string Error;
     auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
     
@@ -93,11 +98,6 @@ void LLVM_Generator::init() {
     
     llvm_module = new Module("jiyu Module", *llvm_context);
 
-    bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
-    if (is_win32) {
-        llvm_module->addModuleFlag(Module::Warning, "CodeView", 1);
-    }
-    
     irb = new IRBuilder<>(*llvm_context);
     dib = new DIBuilder(*llvm_module);
 
@@ -184,6 +184,11 @@ void LLVM_Generator::finalize() {
     
     llvm_module->setDataLayout(TargetMachine->createDataLayout());
     llvm_module->setTargetTriple(TargetTriple);
+
+    bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
+    if (is_win32) {
+        llvm_module->addModuleFlag(Module::Warning, "CodeView", 1);
+    }
     
     auto Filename = "output.o";
     std::error_code EC;

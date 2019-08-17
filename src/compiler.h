@@ -51,16 +51,22 @@ struct Atom_Table {
 };
 
 // @Volatile must match Compiler.jyu stuff
+struct Build_Options {
+    String executable_name;
+    String target_triple;
+};
+
+// @Volatile must match Compiler.jyu stuff
 struct Compiler {
     bool is_metaprogram = false;
     s64 errors_reported = 0;
-    String executable_name;
 
     s64 instance_number = -1;
     Array<Ast_Library *> libraries;
     Array<String> module_search_paths;
     Array<Ast_Directive_Import *> loaded_imports;
-    
+    Build_Options build_options;
+
     Sema *sema;
     Copier *copier;
     LLVM_Generator *llvm_gen;

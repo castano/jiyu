@@ -2,10 +2,14 @@
 struct Compiler {
     var is_metaprogram: bool;
     var errors_reported: int64;
-    var executable_name: string;
 }
 
-func @c_function create_compiler_instance() -> *Compiler;
+struct Build_Options {
+	var executable_name: string;
+	var target_triple: string;
+}
+
+func @c_function create_compiler_instance(options: *Build_Options) -> *Compiler;
 func @c_function compiler_run_default_link_command(compiler: *Compiler) -> bool;
 func @c_function compiler_load_file(compiler: *Compiler, filename: string) -> bool;
 func @c_function compiler_typecheck_program(compiler: *Compiler) -> bool;
