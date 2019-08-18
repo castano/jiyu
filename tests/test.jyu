@@ -4,6 +4,9 @@
 func @c_function exit(value: int);
 func @c_function _write(fd: int, buf: *uint8, count: int);
 
+func test_string(b: string) {
+	var c = b;
+}
 
 func test_func() -> void {
     // @TODO verify that these things all produce expected results.
@@ -32,7 +35,7 @@ func test_func() -> void {
     var n8 = *  << <<  << n7;
 }
 
-func main (arg: int, arg2: int) -> void {
+func main (argc: int, argv: **uint8) -> void {
     var my_var: int = 10;
     var my_var2 = my_var;
     // my_var = 1;
@@ -46,6 +49,7 @@ func main (arg: int, arg2: int) -> void {
     test_bool();
     
     test_array();
+	test_string("Hello, Sailor!");
     exit(11);
 }
 

@@ -101,7 +101,7 @@ struct LLVM_Generator {
     void init();
     void finalize();
     
-    llvm::Value *create_string_literal(Ast_Literal *lit);
+    llvm::Value *create_string_literal(Ast_Literal *lit, bool want_lvalue = false);
     llvm::Value *get_value_for_decl(Ast_Declaration *decl);
     llvm::Value *dereference(llvm::Value *value, s64 element_path_index, bool is_lvalue = false);
     void default_init_struct(llvm::Value *decl_value, Ast_Type_Info *info);

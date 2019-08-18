@@ -302,6 +302,9 @@ Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
                     arguments.add(type->getPointerTo());
                     continue;
                 }
+            } else if (is_aggregate_type(arg_type)) {
+                arguments.add(type->getPointerTo());
+                continue;
             }
             
             arguments.add(type);
@@ -483,6 +486,7 @@ Value *LLVM_Generator::get_value_for_decl(Ast_Declaration *decl) {
 
 static Value *create_alloca_in_entry(IRBuilder<> *irb, Type *type) {
     auto current_block = irb->GetInsertBlock();
+    auto current_debug_loc = irb->getCurrentDebugLocation();
     
     auto func = current_block->getParent();
     
@@ -492,11 +496,12 @@ static Value *create_alloca_in_entry(IRBuilder<> *irb, Type *type) {
     Value *alloca = irb->CreateAlloca(type);
     
     irb->SetInsertPoint(current_block);
+    irb->SetCurrentDebugLocation(current_debug_loc);
     
     return alloca;
 }
 
-Value *LLVM_Generator::create_string_literal(Ast_Literal *lit) {
+Value *LLVM_Generator::create_string_literal(Ast_Literal *lit, bool want_lvalue) {
     assert(lit->literal_type == Ast_Literal::STRING);
     
     if (lit->string_value.length == 0 || lit->string_value.data == nullptr) {
@@ -507,7 +512,14 @@ Value *LLVM_Generator::create_string_literal(Ast_Literal *lit) {
     Constant *data = irb->CreateGlobalStringPtr(string_ref(lit->string_value));
     Constant *length = ConstantInt::get(type_string_length, lit->string_value.length);
     
-    return ConstantStruct::get(type_string, { data, length });
+    auto value = ConstantStruct::get(type_string, { data, length });
+    if (want_lvalue) {
+        auto alloca = create_alloca_in_entry(irb, type_string);
+        irb->CreateStore(value, alloca);
+        return alloca;
+    }
+
+    return value;
 }
 
 Value *LLVM_Generator::dereference(Value *value, s64 element_path_index, bool is_lvalue) {
@@ -769,7 +781,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto type_info = get_type_info(lit);
             switch (lit->literal_type) {
                 case Ast_Literal::INTEGER: return ConstantInt::get(get_type(type_info), lit->integer_value, type_info->is_signed);
-                case Ast_Literal::STRING:  return create_string_literal(lit);
+                case Ast_Literal::STRING:  return create_string_literal(lit, is_lvalue);
                 case Ast_Literal::FLOAT:   return ConstantFP::get(get_type(type_info),  lit->float_value);
                 case Ast_Literal::BOOL:    return ConstantInt::get(get_type(type_info), (lit->bool_value ? 1 : 0));
                 case Ast_Literal::NULLPTR: return ConstantPointerNull::get(static_cast<PointerType *>(get_type(type_info)));
@@ -846,7 +858,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             
             Array<Value *> args;
             for (auto &it : call->argument_list) {
-                auto value = emit_expression(it);
+                bool is_aggregate_value = is_aggregate_type(get_type_info(it));
+                auto value = emit_expression(it, is_aggregate_value);
                 
                 auto info = get_type_info(it);
                 
@@ -857,10 +870,14 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     if (info->size > _8BYTES) {
                         auto alloca = create_alloca_in_entry(irb, get_type(info));
                         
-                        irb->CreateStore(value, alloca);
+                        auto loaded_value = irb->CreateLoad(value);
+                        irb->CreateStore(loaded_value, alloca);
                         args.add(alloca);
                         continue;
                     }
+                } else if (is_aggregate_type(info)) {
+                    args.add(value);
+                    continue;
                 }
                 
                 args.add(value);
@@ -1363,17 +1380,37 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
         auto a  = arg_it;
         
         auto decl = function->arguments[i];
-        Value *alloca = irb->CreateAlloca(get_type(get_type_info(decl)));
-        
-        if (decl->identifier) {
-            alloca->setName(string_ref(decl->identifier->name->name));
+
+        Value *storage = nullptr;
+        if (is_aggregate_type(get_type_info(decl))) {
+            // Aggregate parameters are already references/pointers so we don't need storage for them.
+            assert(get_value_for_decl(decl) == nullptr);
+            decl_value_map.add(MakeTuple(decl, static_cast<Value *>(a)));
+
+            storage = a;
+        } else {
+            // Create storage for value-parameters so that we can treat the parameters
+            // the same as local variables during code generation. Maybe this isn't super necessary anymore, idk!
+            Value *alloca = irb->CreateAlloca(get_type(get_type_info(decl)));
+            irb->CreateStore(a, alloca);
+            
+            assert(get_value_for_decl(decl) == nullptr);
+            decl_value_map.add(MakeTuple(decl, alloca));
+
+            storage = alloca;
         }
-        
-        irb->CreateStore(a, alloca);
-        
-        assert(get_value_for_decl(decl) == nullptr);
-        decl_value_map.add(MakeTuple(decl, alloca));
-        
+
+        String name;
+        if (decl->identifier) name = decl->identifier->name->name;
+
+        auto di_type = get_debug_type(get_type_info(decl));
+        bool always_preserve = true; // @TODO should be based on desired optimization.
+        auto param = dib->createParameterVariable(di_subprogram, string_ref(name), i,
+                            get_debug_file(llvm_context, decl), get_line_number(decl),
+                            di_type, always_preserve);
+        auto declare = dib->insertDeclare(storage, param, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(decl), 0, di_subprogram),
+                            starting_block);
+
         arg_it++;
     }
     
