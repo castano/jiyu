@@ -128,21 +128,20 @@ void LLVM_Generator::init() {
     
     assert(type_string_length);
     
-    
     // Matches the definition in general.h, except when the target's pointer size doesn't match the host's.
     type_string = StructType::create(*llvm_context, { type_i8->getPointerTo(), type_string_length }, "string", true/*packed*/);
 
-    di_type_bool = dib->createBasicType("bool",   dwarf::DW_ATE_boolean, 8);
-    di_type_s8   = dib->createBasicType("int8",   dwarf::DW_ATE_signed, 8);
-    di_type_s16  = dib->createBasicType("int16",  dwarf::DW_ATE_signed, 16);
-    di_type_s32  = dib->createBasicType("int32",  dwarf::DW_ATE_signed, 32);
-    di_type_s64  = dib->createBasicType("int64",  dwarf::DW_ATE_signed, 64);
-    di_type_u8   = dib->createBasicType("uint8",  dwarf::DW_ATE_unsigned,  8);
-    di_type_u16  = dib->createBasicType("uint16", dwarf::DW_ATE_unsigned, 16);
-    di_type_u32  = dib->createBasicType("uint32", dwarf::DW_ATE_unsigned, 32);
-    di_type_u64  = dib->createBasicType("uint64", dwarf::DW_ATE_unsigned, 64);
-    di_type_f32  = dib->createBasicType("float",  dwarf::DW_ATE_float, 32);
-    di_type_f64  = dib->createBasicType("double", dwarf::DW_ATE_float, 64);
+    di_type_bool = dib->createBasicType("bool",    8, dwarf::DW_ATE_boolean);
+    di_type_s8   = dib->createBasicType("int8",    8, dwarf::DW_ATE_signed);
+    di_type_s16  = dib->createBasicType("int16",  16, dwarf::DW_ATE_signed);
+    di_type_s32  = dib->createBasicType("int32",  32, dwarf::DW_ATE_signed);
+    di_type_s64  = dib->createBasicType("int64",  64, dwarf::DW_ATE_signed);
+    di_type_u8   = dib->createBasicType("uint8",   8, dwarf::DW_ATE_unsigned);
+    di_type_u16  = dib->createBasicType("uint16", 16, dwarf::DW_ATE_unsigned);
+    di_type_u32  = dib->createBasicType("uint32", 32, dwarf::DW_ATE_unsigned);
+    di_type_u64  = dib->createBasicType("uint64", 64, dwarf::DW_ATE_unsigned);
+    di_type_f32  = dib->createBasicType("float",  32, dwarf::DW_ATE_float);
+    di_type_f64  = dib->createBasicType("double", 64, dwarf::DW_ATE_float);
 
     di_type_string_length = nullptr;
     if (TargetMachine->getPointerSize(0) == 4) {
@@ -159,17 +158,17 @@ void LLVM_Generator::init() {
         auto di_data_type  = dib->createPointerType(di_type_u8, TargetMachine->getPointerSizeInBits(0));
 
         // @Cleanup literal numbers
-        auto data = dib->createMemberType(di_compile_unit, "data", debug_file, 0,
+        auto data = dib->createMemberType(di_compile_unit, "data", debug_file, line_number,
                             TargetMachine->getPointerSizeInBits(0), TargetMachine->getPointerSizeInBits(0),
                             0, flags, di_data_type);
-        auto length = dib->createMemberType(di_compile_unit, "length", debug_file, 0,
+        auto length = dib->createMemberType(di_compile_unit, "length", debug_file, line_number,
                             type_string_length->getPrimitiveSizeInBits(), type_string_length->getPrimitiveSizeInBits(),
                             TargetMachine->getPointerSizeInBits(0), flags, di_type_string_length);
         auto elements = dib->getOrCreateArray({data, length});
 
         auto type = compiler->type_string;
         di_type_string = dib->createStructType(di_compile_unit, "string", debug_file,
-                            line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
+                            line_number, type->size * BYTES_TO_BITS, type->alignment & BYTES_TO_BITS,
                             flags, nullptr, elements);
     }
 
@@ -1221,6 +1220,10 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
     auto old_di_scope = di_current_scope;
     di_current_scope = dib->createLexicalBlock(old_di_scope, get_debug_file(llvm_context, scope), get_line_number(scope), 0);
 
+    auto current_block = irb->GetInsertBlock();
+    auto func = current_block->getParent();
+    BasicBlock *entry_block = &func->getEntryBlock();
+
     // setup variable mappings
     for (auto it : scope->declarations) {
         while (it->substitution) it = it->substitution;
@@ -1230,14 +1233,30 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
         
         auto alloca = create_alloca_in_entry(irb, get_type(get_type_info(it)));
         
+        String name;
+        if (decl->identifier) name = decl->identifier->name->name;
+
         if (decl->identifier) {
-            alloca->setName(string_ref(decl->identifier->name->name));
+            alloca->setName(string_ref(name));
         }
         
         assert(get_value_for_decl(decl) == nullptr);
         decl_value_map.add(MakeTuple(decl, alloca));
+
+        // debug info
+
+        // @TODO this should be based on desired optimization. Though, in my experience,
+        // even this flag doesn't help preserve the actual stack variable much on Windows
+        // without using a hack like inserting a GEP. -josh 18 August 2019
+        bool always_preserve = true;
+        auto di_type = get_debug_type(get_type_info(it));
+        auto di_local_var = dib->createAutoVariable(di_current_scope, string_ref(name),
+                                get_debug_file(llvm_context, it), get_line_number(it), di_type, always_preserve);
+        auto declare = dib->insertDeclare(alloca, di_local_var, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(it), 0, di_current_scope),
+                            entry_block);
     }
 
+    // @Cleanup private decclarations should just be denoted by a flag.
     for (auto it : scope->private_declarations) {
         while (it->substitution) it = it->substitution;
         
@@ -1246,12 +1265,23 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
         
         auto alloca = create_alloca_in_entry(irb, get_type(get_type_info(it)));
         
+        String name;
+        if (decl->identifier) name = decl->identifier->name->name;
+
         if (decl->identifier) {
-            alloca->setName(string_ref(decl->identifier->name->name));
+            alloca->setName(string_ref(name));
         }
         
         assert(get_value_for_decl(decl) == nullptr);
         decl_value_map.add(MakeTuple(decl, alloca));
+
+        // debug info
+        bool always_preserve = true;
+        auto di_type = get_debug_type(get_type_info(it));
+        auto di_local_var = dib->createAutoVariable(di_current_scope, string_ref(name),
+                                get_debug_file(llvm_context, it), get_line_number(it), di_type, always_preserve);
+        dib->insertDeclare(alloca, di_local_var, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(it), 0, di_current_scope),
+                            entry_block);
     }
     
     for (auto &it : scope->statements) {

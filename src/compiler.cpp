@@ -63,6 +63,7 @@ Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee) {
     info->pointer_to = pointee;
     info->size = 8; // @TargetInfo
     info->alignment = info->size;
+    info->stride    = info->size;
     return info;
 }
 
@@ -107,6 +108,7 @@ static Ast_Type_Info *make_int_type(bool is_signed, s64 size) {
     info->is_signed = is_signed;
     info->size = size;
     info->alignment = info->size;
+    info->stride = info->size;
     return info;
 }
 
@@ -115,6 +117,7 @@ static Ast_Type_Info *make_float_type(s64 size) {
     info->type = Ast_Type_Info::FLOAT;
     info->size = size;
     info->alignment = info->size;
+    info->stride    = info->size;
     return info;
 }
 
