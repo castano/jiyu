@@ -1,4 +1,6 @@
 
+#import "LibC";
+
 typealias HMODULE = *void;
 typealias FARPROC = *void;
 typealias DWORD   = int32;

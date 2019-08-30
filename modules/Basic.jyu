@@ -102,7 +102,7 @@ func read_entire_file(path: string) -> string {
 }
 
 #if os(Windows) {
-    #load "Windows.jyu";
+    #import "Windows";
 
     func get_executable_path() -> string {
         var buf: [512] uint8;

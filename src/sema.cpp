@@ -343,7 +343,7 @@ Ast_Array_Dereference *make_array_index(Ast_Expression *array, Ast_Expression *i
 }
 
 // @Note MUST typecheck the return value of this!!!
-Ast_Dereference *make_derefence(Ast_Expression *aggregate_expression, Atom *field) {
+Ast_Dereference *make_dereference(Ast_Expression *aggregate_expression, Atom *field) {
     auto ident = make_identifier(field);
     copy_location_info(ident, aggregate_expression);
     
@@ -451,6 +451,18 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
             }
             
             viability_score += 1;
+        } else if (is_pointer_type(ltype) && types_match(ltype->pointer_to, compiler->type_uint8) && types_match(rtype, compiler->type_string)) {
+            // Implicity dereference string when the left-type is *uint8.
+            // @TODO maybe have an allow parameter for this in case this should only be allowed in certain situations.
+
+            // Only allow this for literals because this is a convinience for passing literal strings to C functions!
+            if (folds_to_literal(expression)) {
+                auto deref = make_dereference(expression, compiler->atom_data);
+                typecheck_expression(deref);
+
+                right = deref;
+                viability_score += 1;
+            }
         }
     }
     
@@ -1659,7 +1671,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
             
             if (!is_int_type(init_type)) {
-                auto count_expr = make_derefence(_for->initial_iterator_expression, compiler->atom_count);
+                auto count_expr = make_dereference(_for->initial_iterator_expression, compiler->atom_count);
                 typecheck_expression(count_expr);
                 
                 auto zero = make_integer_literal(0, get_type_info(count_expr));
