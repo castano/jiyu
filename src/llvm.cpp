@@ -724,7 +724,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                         }
                     }
                     
-                    case '<': {
+                    case Token::LEFT_ANGLE: {
                         auto info = get_type_info(bin->left);
                         if (is_int_type(info)) {
                             if (info->is_signed) {
@@ -738,7 +738,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                         }
                     }
                     
-                    case '>': {
+                    case Token::RIGHT_ANGLE: {
                         auto info = get_type_info(bin->left);
                         if (is_int_type(info)) {
                             if (info->is_signed) {
@@ -755,6 +755,10 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     case Token::VERTICAL_BAR: {
                         return irb->CreateOr(left, right);
                     }
+
+                    case Token::AMPERSAND: {
+                        return irb->CreateAnd(left, right);
+                    }
                     
                     case Token::AND_OP: {
                         assert(left->getType()  == type_i1);
@@ -767,6 +771,21 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                         assert(right->getType() == type_i1);
                         
                         return irb->CreateOr(left, right);
+                    }
+
+                    case Token::DEREFERENCE_OR_SHIFT: { // <<
+                        // This is the integer binary shift.
+                        return irb->CreateShl(left, right);
+                    }
+
+                    case Token::RIGHT_SHIFT: {
+                        auto info = get_type_info(bin->left);
+
+                        if (info->is_signed) {
+                            return irb->CreateAShr(left, right);
+                        } else {
+                            return irb->CreateLShr(left, right);
+                        }
                     }
                     default: assert(false);
                 }
