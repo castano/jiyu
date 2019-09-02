@@ -575,6 +575,19 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             
             return nullptr;
         }
+
+        case AST_IDENTIFIER: {
+            auto ident = static_cast<Ast_Identifier *>(expression);
+            auto decl = static_cast<Ast_Declaration *>(ident->resolved_declaration);
+
+            if (decl->type == AST_DECLARATION) {
+                if (decl->is_let && !decl->is_readonly_variable && decl->initializer_expression) {
+                    auto literal = folds_to_literal(decl->initializer_expression);
+                    assert(literal);
+                    return literal;
+                }
+            }
+        }
         
         default: return nullptr;
     }
@@ -2121,7 +2134,7 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
                 return nullptr;
             }
             
-            auto lit = resolves_to_literal_value(size_expr);
+            auto lit = folds_to_literal(size_expr);
             
             if (!lit) {
                 compiler->report_error(type_inst, "Array-type size specifier must resolve to a literal expression.\n");
