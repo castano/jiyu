@@ -456,8 +456,8 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
             // @TODO maybe have an allow parameter for this in case this should only be allowed in certain situations.
 
             // Only allow this for literals because this is a convinience for passing literal strings to C functions!
-            if (folds_to_literal(expression)) {
-                auto deref = make_dereference(expression, compiler->atom_data);
+            if (auto literal = folds_to_literal(expression)) {
+                auto deref = make_dereference(literal, compiler->atom_data);
                 typecheck_expression(deref);
 
                 right = deref;
@@ -587,6 +587,22 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     return literal;
                 }
             }
+
+            return nullptr;
+        }
+
+        case AST_DECLARATION: {
+            auto decl = static_cast<Ast_Declaration *>(expression);
+
+            // @Copynpaste from the AST_IDENTIFIER case.
+            if (decl->is_let && !decl->is_readonly_variable && decl->initializer_expression) {
+                auto literal = folds_to_literal(decl->initializer_expression);
+                assert(literal);
+                typecheck_expression(literal);
+                return literal;
+            }
+
+            return nullptr;
         }
         
         default: return nullptr;
@@ -770,10 +786,10 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
     }
     
     u64 viability_score = 0;
-    // @Incomplete check that types match between arguments
     for (array_count_type i = 0; i < call->argument_list.count; ++i) {
-        auto value = call->argument_list[i];
-        
+        auto original_value = call->argument_list[i];
+        auto value = original_value;
+
         if (i < function_type->arguments.count) {
             // use null for morphed param because we don't care about the modified value because function parameter declarations can't be mutated here
             auto param_type = function_type->arguments[i];
@@ -789,7 +805,7 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
                 if (perform_full_check) {
                     auto wanted = type_to_string(param_type);
                     auto given  = type_to_string(value_type);
-                    compiler->report_error(value, "Mismatch in function call argument types. (Wanted %.*s, Given %.*s).\n",
+                    compiler->report_error(original_value, "Mismatch in function call argument types. (Wanted %.*s, Given %.*s).\n",
                                            wanted.length, wanted.data, given.length, given.data);
                     
                     free(wanted.data);
@@ -1042,8 +1058,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
             
             if (decl->is_let && !decl->is_readonly_variable && decl->initializer_expression) {
-                if (!resolves_to_literal_value(decl->initializer_expression)) {
+                auto literal = folds_to_literal(decl->initializer_expression);
+
+                if (!literal) {
                     compiler->report_error(decl->initializer_expression, "let constant may only be initialized by a literal expression.\n");
+                } else {
+                    if (decl->initializer_expression != literal) decl->initializer_expression->substitution = literal;
                 }
                 
                 // decl->substitution = decl->initializer_expression;
@@ -1062,7 +1082,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             } else {
                 assert(decl->initializer_expression);
                 
-                decl->type_info = decl->initializer_expression->type_info;
+                decl->type_info = get_type_info(decl->initializer_expression);
             }
             
             if (!decl->is_let && decl->identifier && compiler->is_toplevel_scope(decl->identifier->enclosing_scope)) {
