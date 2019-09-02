@@ -92,6 +92,9 @@ struct LLVM_Generator {
     Array<Tuple<Ast_Declaration *, llvm::Value *>> decl_value_map;
 
     llvm::DIScope *di_current_scope = nullptr;
+
+    Array<llvm::Type *> llvm_types;
+    Array<llvm::DIType *> llvm_debug_types;
     
     
     LLVM_Generator(Compiler *compiler) {

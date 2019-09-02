@@ -103,6 +103,9 @@ struct Ast_Type_Info {
     s64 stride = -1;
     s64 alignment = -1;
     s64 size = -1;
+
+    array_count_type type_table_index = -1; // Mostly used for LLVM for now. @Cleanup @TODO actually make a type table system.
+    array_count_type debug_type_table_index = -1; // @Cleanup this should not be necessary once we have a real type table.
 };
 
 struct Ast_Expression : Ast {

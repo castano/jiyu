@@ -129,7 +129,7 @@ void LLVM_Generator::init() {
     assert(type_string_length);
     
     // Matches the definition in general.h, except when the target's pointer size doesn't match the host's.
-    type_string = StructType::create(*llvm_context, { type_i8->getPointerTo(), type_string_length }, "string", true/*packed*/);
+    type_string = StructType::create(*llvm_context, { type_i8->getPointerTo(), type_string_length }, "string", false/*packed*/);
 
     di_type_bool = dib->createBasicType("bool",    8, dwarf::DW_ATE_boolean);
     di_type_s8   = dib->createBasicType("int8",    8, dwarf::DW_ATE_signed);
@@ -271,6 +271,14 @@ Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
     }
     
     if (type->type == Ast_Type_Info::STRUCT) {
+        if (type->type_table_index >= 0) {
+            return llvm_types[type->type_table_index];
+        }
+
+        type->type_table_index = llvm_types.count;
+        auto final_type = StructType::create(*llvm_context, type->struct_decl->identifier ? string_ref(type->struct_decl->identifier->name->name) : "");
+        llvm_types.add(final_type);
+
         Array<Type *> member_types;
         
         for (auto member : type->struct_members) {
@@ -278,8 +286,12 @@ Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
             
             member_types.add(get_type(member.type_info));
         }
+
+        final_type->setBody(ArrayRef<Type *>(member_types.data, member_types.count), false/*is packed*/);
+
+        // final_type->dump();
         
-        return StructType::get(*llvm_context, ArrayRef<Type *>(member_types.data, member_types.count), false);
+        return final_type;
     }
     
     if (type->type == Ast_Type_Info::FUNCTION) {
@@ -418,12 +430,27 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
     }
     
     if (type->type == Ast_Type_Info::STRUCT) {
-        Array<Metadata *> member_types;
+        if (type->debug_type_table_index >= 0) {
+            return llvm_debug_types[type->debug_type_table_index];
+        }
 
         auto struct_decl = type->struct_decl;
         auto debug_file = get_debug_file(llvm_context, struct_decl);
         auto line_number = get_line_number(struct_decl);
-        
+
+        String name;
+        if (struct_decl->identifier) name = struct_decl->identifier->name->name;
+        DIType *derived_from = nullptr;
+        DINode::DIFlags flags = DINode::DIFlags();
+        auto empty_elements = dib->getOrCreateArray({});
+        auto final_type = dib->createStructType(di_compile_unit, string_ref(name), debug_file,
+                            line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
+                            flags, derived_from, empty_elements);
+
+        type->debug_type_table_index = llvm_debug_types.count;
+        llvm_debug_types.add(final_type);
+
+        Array<Metadata *> member_types;
         for (auto member : type->struct_members) {
             if (member.is_let) continue;
             
@@ -441,18 +468,11 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
             member_types.add(di_member);
         }
 
-        String name;
-        if (struct_decl->identifier) name = struct_decl->identifier->name->name;
-
-        DIType *derived_from = nullptr;
-        auto elements = dib->getOrCreateArray(ArrayRef<Metadata *>(member_types.data, member_types.count));
-
-        DINode::DIFlags flags = DINode::DIFlags();
         
-        // @Incomplete we should probably be using the correct scope info here.
-        return dib->createStructType(di_compile_unit, string_ref(name), debug_file,
-                            line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
-                            flags, derived_from, elements);
+        auto elements = dib->getOrCreateArray(ArrayRef<Metadata *>(member_types.data, member_types.count));
+        final_type->replaceElements(elements);
+
+        return final_type;
     }
     
     if (type->type == Ast_Type_Info::FUNCTION) {
