@@ -477,8 +477,9 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
     
     if (type->type == Ast_Type_Info::FUNCTION) {
         auto subroutine_type = get_debug_subroutine_type(type);
-        
-        return subroutine_type; // does this need to be a pointer? 
+
+        // Always return a pointer here. Code that doesn't want a pointer should call get_debug_subroutine_type directly.
+        return dib->createPointerType(subroutine_type, TargetMachine->getPointerSizeInBits(0));
     }
     
     assert(false);
