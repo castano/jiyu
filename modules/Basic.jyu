@@ -13,6 +13,23 @@ func basename(_s: string) -> string {
     return s;
 }
 
+func strip_path_extension(_s: string) -> string {
+    var s = _s;
+
+    while (s.length > 0) {
+        if (s[s.length-1] == '/' || s[s.length-1] == '\\') return _s; // @TODO break
+
+        if (s[s.length-1] == '.') {
+            s.length = s.length-1;
+            return s;
+        }
+
+        s.length = s.length-1;
+    }
+
+    return s;
+}
+
 func copy_string(input: string) -> string {
     var data = cast(*uint8) malloc(cast(size_t) input.length);
     memcpy(data, input.data, cast(size_t) input.length);
