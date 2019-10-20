@@ -1,5 +1,11 @@
 
+/*
 func poly_test<T>(x: float) -> int {
+    return 0;
+}
+*/
+
+func poly_test<T>(x: T) -> T {
     return 0;
 }
 

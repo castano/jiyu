@@ -1,0 +1,25 @@
+
+#import "Compiler";
+#import "Basic";
+
+func compile_single_test_file(path: string) {
+    var options: Build_Options;
+    options.executable_name = strip_path_extension(path);
+
+    var compiler = create_compiler_instance(*options);
+
+    if compiler_load_file(compiler, path) != true return;
+    if compiler_typecheck_program(compiler) != true return;
+    if compiler_generate_llvm_module(compiler) != true return;
+    if compiler_emit_object_file(compiler) != true return;
+    if compiler_run_default_link_command(compiler) != true return;
+}
+
+func @metaprogram main() {
+    compile_single_test_file("tests/array_index.jyu");
+    compile_single_test_file("tests/conditional_compilation.jyu");
+    compile_single_test_file("tests/template_argument_test.jyu");
+    compile_single_test_file("tests/function_pointers.jyu");
+    compile_single_test_file("tests/overload_test.jyu");
+    compile_single_test_file("tests/primitive_types.jyu");
+}
