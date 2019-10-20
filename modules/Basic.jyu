@@ -2,6 +2,22 @@
 #import "LibC";
 #import "Array";
 
+func assert(cond: bool) {
+
+    if cond {
+        return;
+    }
+
+    #if os(Windows) {
+        func @c_function DebugBreak() -> void;
+        DebugBreak();
+    }
+
+    #if os(MacOSX) {
+        exit(-1);
+    }
+}
+
 func basename(_s: string) -> string {
     var s = _s;
     while (s.length > 0) {
