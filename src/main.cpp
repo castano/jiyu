@@ -323,6 +323,12 @@ extern "C" {
         compiler->llvm_gen->finalize();
         return compiler->errors_reported == 0;
     }
+
+    EXPORT bool compiler_run_metaprogram(Compiler *compiler) {
+        LLVM_Jitter *jitter = new LLVM_Jitter(compiler->llvm_gen);
+        jitter->init();
+        return true;
+    }
 }
 
 String get_jiyu_work_directory(String exe_dir_path) {
@@ -388,8 +394,7 @@ int main(int argc, char **argv) {
     if (!compiler_generate_llvm_module(compiler)) return -1;
     
     if (compiler->is_metaprogram) {
-        LLVM_Jitter *jitter = new LLVM_Jitter(compiler->llvm_gen);
-        jitter->init();
+        compiler_run_metaprogram(compiler);
         return 0;
     }
     

@@ -1,8 +1,11 @@
 
 #import "Compiler";
 #import "Basic";
+#import "LibC";
 
-func compile_single_test_file(path: string) {
+func compile_single_test_file(path: string, as_metaprogram: bool) {
+    printf("Compiling: %.*s\n", path.length, path.data);
+
     var options: Build_Options;
     options.executable_name = strip_path_extension(path);
 
@@ -11,15 +14,21 @@ func compile_single_test_file(path: string) {
     if compiler_load_file(compiler, path) != true return;
     if compiler_typecheck_program(compiler) != true return;
     if compiler_generate_llvm_module(compiler) != true return;
-    if compiler_emit_object_file(compiler) != true return;
-    if compiler_run_default_link_command(compiler) != true return;
+    
+    if as_metaprogram {
+        if compiler_run_metaprogram(compiler) != true return;
+    } else {
+        if compiler_emit_object_file(compiler) != true return;
+        if compiler_run_default_link_command(compiler) != true return;
+    }
 }
 
 func @metaprogram main() {
-    compile_single_test_file("tests/array_index.jyu");
-    compile_single_test_file("tests/conditional_compilation.jyu");
-    compile_single_test_file("tests/template_argument_test.jyu");
-    compile_single_test_file("tests/function_pointers.jyu");
-    compile_single_test_file("tests/overload_test.jyu");
-    compile_single_test_file("tests/primitive_types.jyu");
+    var as_metaprogram = false;
+    compile_single_test_file("tests/array_index.jyu", as_metaprogram);
+    compile_single_test_file("tests/conditional_compilation.jyu", as_metaprogram);
+    compile_single_test_file("tests/template_argument_test.jyu", as_metaprogram);
+    compile_single_test_file("tests/function_pointers.jyu", as_metaprogram);
+    compile_single_test_file("tests/overload_test.jyu", as_metaprogram);
+    compile_single_test_file("tests/primitive_types.jyu", as_metaprogram);
 }

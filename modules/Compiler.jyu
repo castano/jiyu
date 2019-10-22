@@ -15,3 +15,4 @@ func @c_function compiler_load_file(compiler: *Compiler, filename: string) -> bo
 func @c_function compiler_typecheck_program(compiler: *Compiler) -> bool;
 func @c_function compiler_generate_llvm_module(compiler: *Compiler) -> bool;
 func @c_function compiler_emit_object_file(compiler: *Compiler) -> bool;
+func @c_function compiler_run_metaprogram(compiler: *Compiler) -> bool;
