@@ -965,7 +965,10 @@ s64 pad_to_alignment(s64 current, s64 align) {
 
 void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_numeric_type, bool overload_set_allowed) {
     while (expression->substitution) expression = expression->substitution;
-    if (expression->type_info) return;
+
+    // @Temporary maybe, if this is a function declaration, typecheck it anyways since typecheck_function_header() will have set
+    // the type info on the function node, but not have checked the entire body.
+    if (expression->type != AST_FUNCTION && expression->type_info) return;
     
     switch (expression->type) {
         case AST_DIRECTIVE_LOAD: {
@@ -1027,11 +1030,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         ident->resolved_declaration = decl;
                         ident->type_info = get_type_info(decl);
                         return;
-                    }
-                    
-                    // @FixMe @Hack this shouldnt be necessary since all functions should be found and typchecked by descending the AST.
-                    for (auto it: ident->overload_set) {
-                        typecheck_function(it);
                     }
 
                     // resolved_declaration and type_info will be resolved by the Ast_Function_Call code.

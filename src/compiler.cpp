@@ -189,6 +189,8 @@ void Compiler::queue_directive(Ast_Directive *directive) {
     directive_queue.add(directive);
 }
 
+#include <windows.h>
+
 void Compiler::resolve_directives() {
     // Use ordered_remove here because if we handle these out-of-order in which they were
     // queued up, then directives that depend on static_if may resolve before the outer static_if does.
@@ -210,13 +212,6 @@ void Compiler::resolve_directives() {
             scope_i_belong_to = scope_i_belong_to->parent;
         }
         
-        if (directive->type == AST_DIRECTIVE_LOAD) {
-            auto load = static_cast<Ast_Directive_Load *>(directive);
-            
-            auto name = load->target_filename;
-            // printf("%d DEBUG: load '%.*s', rejected? : %s\n", this->instance_number, name.length, name.data, rejected ? "true" : "false");
-        }
-        
         if (rejected) {
             directive_queue.ordered_remove(0);
             continue;
@@ -226,11 +221,11 @@ void Compiler::resolve_directives() {
             auto load = static_cast<Ast_Directive_Load *>(directive);
             
             auto name = load->target_filename;
-            // printf("%d DEBUG: load '%.*s'\n", this->instance_number, name.length, name.data);
+            // printf("%d DEBUG: load '%.*s', rejected? : %s\n", this->instance_number, name.length, name.data, rejected ? "true" : "false");
             
             void perform_load(Compiler *compiler, Ast *ast, String filename, Ast_Scope *target_scope);
             perform_load(this, load, load->target_filename, load->target_scope);
-            
+
             if (this->errors_reported) return;
             
             directive_queue.ordered_remove(0);

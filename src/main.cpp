@@ -370,7 +370,7 @@ int main(int argc, char **argv) {
         String working_dir = get_jiyu_work_directory(basepath(path));
 
         __default_module_search_path = mprintf("%.*smodules", working_dir.length, working_dir.data);
-        printf("Modules path: %.*s\n", __default_module_search_path.length, __default_module_search_path.data);
+        // printf("Modules path: %.*s\n", __default_module_search_path.length, __default_module_search_path.data);
 
         free(path.data);
     }
