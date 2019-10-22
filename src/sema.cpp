@@ -2177,7 +2177,7 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
     }
     
     if (type_inst->function_header) {
-        typecheck_function_header(type_inst->function_header);
+        typecheck_function_header(type_inst->function_header, /*is_for_type_instantiation*/true);
         
         if (compiler->errors_reported) return nullptr;
         
@@ -2190,7 +2190,7 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
     return nullptr;
 }
 
-void Sema::typecheck_function_header(Ast_Function *function) {
+void Sema::typecheck_function_header(Ast_Function *function, bool is_for_type_instantiation) {
     if (function->type_info) return;
     
     if (compiler->errors_reported) return;
@@ -2239,6 +2239,16 @@ void Sema::typecheck_function_header(Ast_Function *function) {
     
     function->type_info = make_function_type(compiler, function);
     assert(function->type_info->type == Ast_Type_Info::FUNCTION);
+
+    if (!is_for_type_instantiation && function->linkage_name == to_string("")) {
+        if (function->is_c_function) {
+            function->linkage_name = function->identifier->name->name;
+        } else {
+            function->linkage_name = get_mangled_name(compiler, function);
+            String name = function->linkage_name;
+            // printf("Mangled name: '%.*s'\n", name.length, name.data);
+        }
+    }
 }
 
 void Sema::typecheck_function(Ast_Function *function) {
@@ -2250,14 +2260,6 @@ void Sema::typecheck_function(Ast_Function *function) {
     
     if (!function->body_checked) {
         function->body_checked = true;
-        
-        if (function->is_c_function) {
-            function->linkage_name = function->identifier->name->name;
-        } else {
-            function->linkage_name = get_mangled_name(compiler, function);
-            String name = function->linkage_name;
-            // printf("Mangled name: '%.*s'\n", name.length, name.data);
-        }
         
         if (function->is_marked_metaprogram) {
             if (function->linkage_name != to_string("main")) {

@@ -80,6 +80,8 @@ inline char *to_c_string(String s) {
 
 inline bool operator==(const String &s, const String &t) {
     if (s.length != t.length) return false;
+    if (s.length == 0 && t.length == 0) return true;
+
     if (s.data == nullptr && t.data != nullptr) return false;
     if (t.data == nullptr && s.data != nullptr) return false;
     if (s.data == nullptr && t.data == nullptr) return true;
