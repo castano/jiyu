@@ -1029,6 +1029,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         return;
                     }
                     
+                    // @FixMe @Hack this shouldnt be necessary since all functions should be found and typchecked by descending the AST.
+                    for (auto it: ident->overload_set) {
+                        typecheck_function(it);
+                    }
+
                     // resolved_declaration and type_info will be resolved by the Ast_Function_Call code.
                     // Set to void for now, Ast_Function_Call code will either error or fix this up.
                     ident->type_info = compiler->type_void;
