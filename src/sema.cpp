@@ -1342,7 +1342,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
             }
             
-            typecheck_expression(subexpression);
+            typecheck_expression(subexpression, want_numeric_type, true);
             if (compiler->errors_reported) return;
             
             if (subexpression->type == AST_IDENTIFIER) {

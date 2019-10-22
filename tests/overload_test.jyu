@@ -1,10 +1,10 @@
 
 func literal_overload_test(x: float) -> int64 {
- return 1;
+	return 1;
 }
 
 func literal_overload_test(x: int64) -> int64 {
- return 2;
+	return 2;
 }
 
 func poly_test<T>(x: T) -> int64 {
