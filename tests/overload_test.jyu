@@ -21,6 +21,11 @@ func main() {
 	assert(value1 == 2);
 	assert(value2 == 1);
 
+	var value3 = literal_overload_test(-1); // should select int64 variant
+	var value4 = literal_overload_test(-1.0); // should select float variant
+	assert(value3 == 2);
+	assert(value4 == 1);
+
     
     var a = poly_test(1);
     var b = poly_test(cast(double) 3);
