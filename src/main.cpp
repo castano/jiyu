@@ -19,6 +19,13 @@
 
 #include <stdio.h>
 
+String TextSpan::get_text() {
+    String s;
+    s.data = string.data + span.start;
+    s.length = span.length;
+    return s;
+}
+
 String mprintf(char *c_fmt, ...) {
     String_Builder builder;
     

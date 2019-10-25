@@ -271,12 +271,7 @@ struct TextSpan {
         span.map_to_text_coordinates(string, line_start, char_start, line_end, char_end);
     }
     
-    String get_text() {
-        String s;
-        s.data = string.data + span.start;
-        s.length = span.length;
-        return s;
-    }
+    String get_text();
 };
 
 #ifdef ENV64

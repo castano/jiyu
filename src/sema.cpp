@@ -6,11 +6,6 @@
 
 #include <stdio.h>
 
-inline void copy_location_info(Ast *left, Ast *right) {
-    left->text_span = right->text_span;
-    left->filename  = right->filename;
-}
-
 void add_type(String_Builder *builder, Ast_Type_Info *type) {
     if (type->type == Ast_Type_Info::INTEGER) {
         if (type->is_signed) builder->putchar('s');
@@ -411,6 +406,49 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
     return false;
 }
 
+
+// @Returns viability contribution
+u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_type) {
+    u64 viability_score = 0;
+    if (lit->literal_type == Ast_Literal::INTEGER) {
+        if (want_numeric_type && (want_numeric_type->type == Ast_Type_Info::INTEGER || want_numeric_type->type == Ast_Type_Info::FLOAT)) {
+            if (!types_match(get_type_info(lit), want_numeric_type)) {
+                viability_score += 1;
+            }
+            auto old_type = lit->type_info;
+            // @Incomplete check that number can fit in target type
+            // @Incomplete cast to float if we have an int literal
+            lit->type_info = want_numeric_type;
+            
+            
+            // @Cleanup I'm mutating the literal for now, but this would be a good place to use substitution, I think
+            // Or since literal ints are considered completely typeless up until this point, maybe this is the right thing to do
+            if (want_numeric_type->type == Ast_Type_Info::FLOAT) {
+                lit->literal_type = Ast_Literal::FLOAT;
+                
+                if (old_type->is_signed) {
+                    lit->float_value = static_cast<double>(lit->integer_value);
+                } else {
+                    lit->float_value = static_cast<double>(static_cast<u64>(lit->integer_value));
+                }
+                viability_score += 1;
+            }
+        } else {
+            // lit->type_info = compiler->type_int32;
+        }
+    }
+    
+    if (lit->literal_type == Ast_Literal::FLOAT) {
+        if (want_numeric_type && want_numeric_type->type == Ast_Type_Info::FLOAT) {
+            if (!types_match(get_type_info(lit), want_numeric_type)) viability_score += 1;
+            lit->type_info = want_numeric_type;
+        }
+        //else lit->type_info = compiler->type_float64; // @TODO we should probably have a check that verifies if the literal can fit in a 32-bit float and then default to that.
+    }
+
+    return viability_score;
+}
+
 Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression(Ast_Expression *expression, Ast_Type_Info *target_type_info, bool allow_coerce_to_ptr_void) {
     typecheck_expression(expression, target_type_info);
     
@@ -418,11 +456,18 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
     
     while (expression->substitution) expression = expression->substitution;
     
+    u64  viability_score  = 0;
+
+    if (auto lit = folds_to_literal(expression)) {
+        auto score = maybe_mutate_literal_to_type(lit, target_type_info);
+        expression = lit;
+        viability_score += score;
+    }
+
     auto rtype = get_type_info(expression);
     auto ltype = target_type_info;
     
     auto right = expression;
-    u64  viability_score  = 0;
     
     if (!types_match(ltype, rtype)) {
         if (is_int_type(ltype) && is_int_type(rtype) && (ltype->is_signed == rtype->is_signed)) {
@@ -518,6 +563,7 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     case Token::MINUS: return make_integer_literal(left_int - right_int, left_type, bin);
                     case Token::STAR : return make_integer_literal(left_int * right_int, left_type, bin);
                     case Token::SLASH: return make_integer_literal(left_int / right_int, left_type, bin);
+                    case Token::VERTICAL_BAR: return make_integer_literal(left_int | right_int, left_type, bin);
                     
                     case Token::LE_OP: FOLD_COMPARE(<=, left_int, right_int, left_type, bin);
                     case Token::GE_OP: FOLD_COMPARE(>=, left_int, right_int, left_type, bin);
@@ -560,13 +606,15 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             if (!rhs) return nullptr;
             
             if (un->operator_type == Token::MINUS) {
-                auto left_type = un->type_info;
+                auto left_type = get_type_info(un);
                 
                 assert(types_match(left_type, get_type_info(rhs)));
                 if (left_type->type == Ast_Type_Info::INTEGER) {
+                    assert(rhs->literal_type == Ast_Literal::INTEGER);
                     // @Incomplete if we need to work about casting between the target type sizes and s64, the we probably need to do that here too.
                     return make_integer_literal(-rhs->integer_value, left_type, un);
                 } else if (left_type->type == Ast_Type_Info::FLOAT) {
+                    assert(rhs->literal_type == Ast_Literal::FLOAT);
                     return make_float_literal(-rhs->float_value, left_type, un);
                 } else {
                     return nullptr;
@@ -583,8 +631,13 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             if (decl->type == AST_DECLARATION) {
                 if (decl->is_let && !decl->is_readonly_variable && decl->initializer_expression) {
                     auto literal = folds_to_literal(decl->initializer_expression);
-                    assert(literal);
-                    return literal;
+                    if (literal) {
+                        assert(literal->type == AST_LITERAL);
+                        literal = static_cast<Ast_Literal *>(compiler->copier->copy(literal)); // Make a copy in case the user code wants to mutate the literal itself.
+                        assert(literal);
+                        literal->type_info = get_type_info(decl->initializer_expression);
+                    }
+                    return nullptr;
                 }
             }
 
@@ -597,41 +650,19 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             // @Copynpaste from the AST_IDENTIFIER case.
             if (decl->is_let && !decl->is_readonly_variable && decl->initializer_expression) {
                 auto literal = folds_to_literal(decl->initializer_expression);
-                assert(literal);
-                typecheck_expression(literal);
-                return literal;
+                if (literal) {
+                    assert(literal->type == AST_LITERAL);
+                    literal = static_cast<Ast_Literal *>(compiler->copier->copy(literal)); // Make a copy in case the user code wants to mutate the literal itself.
+                    assert(literal);
+                    literal->type_info = get_type_info(decl->initializer_expression);
+                }
+                return nullptr;
             }
 
             return nullptr;
         }
         
         default: return nullptr;
-    }
-}
-
-void maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_type) {
-    if (lit->literal_type == Ast_Literal::INTEGER) {
-        if (want_numeric_type && (want_numeric_type->type == Ast_Type_Info::INTEGER || want_numeric_type->type == Ast_Type_Info::FLOAT)) {
-            // @Incomplete check that number can fit in target type
-            // @Incomplete cast to float if we have an int literal
-            lit->type_info = want_numeric_type;
-            
-            
-            // @Cleanup I'm mutating the literal for now, but this would be a good place to use substitution, I think
-            // Or since literal ints are considered completely typeless up until this point, maybe this is the right thing to do
-            if (want_numeric_type->type == Ast_Type_Info::FLOAT) {
-                lit->literal_type = Ast_Literal::FLOAT;
-                // @Cleanup the u64 cast
-                lit->float_value = static_cast<double>((u64)lit->integer_value);
-            }
-        } else {
-            // lit->type_info = compiler->type_int32;
-        }
-    }
-    
-    if (lit->literal_type == Ast_Literal::FLOAT) {
-        if (want_numeric_type && want_numeric_type->type == Ast_Type_Info::FLOAT) lit->type_info = want_numeric_type;
-        //else lit->type_info = compiler->type_float64; // @TODO we should probably have a check that verifies if the literal can fit in a 32-bit float and then default to that.
     }
 }
 
@@ -1054,7 +1085,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
             
             // @TODO prevent use of a declaration in it's initializer
-            if (decl->initializer_expression) typecheck_expression(decl->initializer_expression, get_type_info(decl));
+            if (decl->initializer_expression) {
+                typecheck_expression(decl->initializer_expression, get_type_info(decl));
+                if (compiler->errors_reported) return;
+            }
             
             if (decl->is_let && !decl->is_readonly_variable && !decl->initializer_expression) {
                 compiler->report_error(decl, "let constant must be initialized by an expression.\n");
@@ -1095,10 +1129,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 
                 compiler->global_decl_emission_queue.add(decl);
             }
+
+            if (compiler->errors_reported) return;
             
             if (decl->type_info && decl->initializer_expression) {
                 bool allow_coerce_to_ptr_void = true;
-                typecheck_and_implicit_cast_expression_pair(decl, decl->initializer_expression, nullptr, &decl->initializer_expression, allow_coerce_to_ptr_void);
+                auto result = typecheck_and_implicit_cast_single_expression(decl->initializer_expression, get_type_info(decl), allow_coerce_to_ptr_void);
+                
+                if (decl->initializer_expression != result.item2) decl->initializer_expression = result.item2; // Don't do a substitution here, otherwise we can cause a loop
                 if (!types_match(get_type_info(decl), get_type_info(decl->initializer_expression))) {
                     auto wanted = type_to_string(get_type_info(decl));
                     auto given  = type_to_string(get_type_info(decl->initializer_expression));

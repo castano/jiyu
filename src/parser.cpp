@@ -161,6 +161,7 @@ Ast_Expression *Parser::parse_postfix_expression() {
         if (token->type == Token::LEFT_PAREN) {
             // transform this into a function call
             Ast_Function_Call *call = AST_NEW(Ast_Function_Call);
+            copy_location_info(call, sub_expression);
             next_token();
             
             call->function_or_function_ptr = sub_expression;

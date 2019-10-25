@@ -207,4 +207,21 @@ Ast_Literal *resolves_to_literal_value(Ast_Expression *expr) {
     return nullptr;
 }
 
+inline
+void copy_location_info(Ast *left, Ast *right) {
+    left->text_span = right->text_span;
+    left->filename  = right->filename;
+}
+
+inline
+Ast_Type_Info *get_final_type(Ast_Type_Info *info) {
+    if (!info) return nullptr;
+
+    if (info->type == Ast_Type_Info::ALIAS) {
+        return get_final_type(info->alias_of);
+    }
+
+    return info;
+}
+
 #endif
