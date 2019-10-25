@@ -1500,6 +1500,9 @@ void LLVM_Generator::emit_global_variable(Ast_Declaration *decl) {
 void LLVM_Jitter::init() {
     // llvm::sys::DynamicLibrary::LoadLibraryPermanently("OpenGL");
     // llvm::sys::DynamicLibrary::LoadLibraryPermanently("/usr/local/Cellar/glfw/3.3/lib/libglfw.dylib");
+    // llvm::sys::DynamicLibrary::LoadLibraryPermanently("glfw3");
+    // llvm::sys::DynamicLibrary::LoadLibraryPermanently("opengl32");
+
     auto JTMB = JITTargetMachineBuilder::detectHost();
     
     if (!JTMB) {
@@ -1543,8 +1546,8 @@ void LLVM_Jitter::init() {
         return;
     }
     
-    auto *Main = (void (*)()) sym->getAddress();
-    Main();
+    auto *Main = (void (*)(s32 argc, char **argv)) sym->getAddress();
+    Main(compiler->metaprogram_argc, compiler->metaprogram_argv);
 }
 
 void *LLVM_Jitter::lookup_symbol(String name) {

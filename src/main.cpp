@@ -331,7 +331,9 @@ extern "C" {
         return compiler->errors_reported == 0;
     }
 
-    EXPORT bool compiler_run_metaprogram(Compiler *compiler) {
+    EXPORT bool compiler_run_metaprogram(Compiler *compiler, s32 argc, char **argv) {
+        compiler->metaprogram_argc = argc;
+        compiler->metaprogram_argv = argv;
         LLVM_Jitter *jitter = new LLVM_Jitter(compiler->llvm_gen);
         jitter->init();
         return true;
@@ -356,6 +358,8 @@ int main(int argc, char **argv) {
     String filename;
     bool is_metaprogram = false;
     String target_triple;
+
+    int metaprogram_arg_start = -1;
     
     for (int i = 1; i < argc; ++i) {
         if (to_string("-meta") == to_string(argv[i])) {
@@ -367,6 +371,9 @@ int main(int argc, char **argv) {
                 printf("error: No target triple specified, following -triple switch.\n");
                 return -1;
             }
+        } else if (to_string("--") == to_string(argv[i])) {
+            metaprogram_arg_start = i+1;
+            break;
         } else {
             filename = to_string(argv[i]);
         }
@@ -388,6 +395,13 @@ int main(int argc, char **argv) {
     
     auto compiler = create_compiler_instance(&options);
     compiler->is_metaprogram = is_metaprogram;
+
+    Array<char *> metaprogram_arguments;
+    if (metaprogram_arg_start >= 0) {
+        for (int i = metaprogram_arg_start; i < argc; ++i) {
+            metaprogram_arguments.add(argv[i]);
+        }
+    }
     
     if (filename == to_string("")) {
         compiler->report_error((Token *)nullptr, "No input files specified.\n");
@@ -401,7 +415,7 @@ int main(int argc, char **argv) {
     if (!compiler_generate_llvm_module(compiler)) return -1;
     
     if (compiler->is_metaprogram) {
-        compiler_run_metaprogram(compiler);
+        compiler_run_metaprogram(compiler, static_cast<s32>(metaprogram_arguments.count),  metaprogram_arguments.data);
         return 0;
     }
     

@@ -16,7 +16,7 @@ func compile_single_test_file(path: string, as_metaprogram: bool) {
     if compiler_generate_llvm_module(compiler) != true return;
     
     if as_metaprogram {
-        if compiler_run_metaprogram(compiler) != true return;
+        if compiler_run_metaprogram(compiler, 0, null) != true return;
     } else {
         if compiler_emit_object_file(compiler) != true return;
         if compiler_run_default_link_command(compiler) != true return;
@@ -24,7 +24,7 @@ func compile_single_test_file(path: string, as_metaprogram: bool) {
 }
 
 func @metaprogram main() {
-    var as_metaprogram = false;
+    var as_metaprogram = true;
     compile_single_test_file("tests/array_index.jyu", as_metaprogram);
     compile_single_test_file("tests/conditional_compilation.jyu", as_metaprogram);
     compile_single_test_file("tests/template_argument_test.jyu", as_metaprogram);

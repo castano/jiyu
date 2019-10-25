@@ -67,6 +67,9 @@ struct Compiler {
     Array<Ast_Directive_Import *> loaded_imports;
     Build_Options build_options;
 
+    s32 metaprogram_argc = 0;
+    char **metaprogram_argv = nullptr;
+
     Sema *sema;
     Copier *copier;
     LLVM_Generator *llvm_gen;

@@ -28,6 +28,8 @@ func @c_function malloc(size: size_t) -> *void;
 func @c_function free(ptr: *void);
 func @c_function memcpy(dest: *void, src: *void, count: size_t);
 
+func @c_function strlen(str: c_string) -> size_t;
+
 func @c_function atof(str: c_string) -> double;
 func @c_function atoi(str: c_string) -> int32;
 
