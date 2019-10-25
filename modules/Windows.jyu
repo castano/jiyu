@@ -5,6 +5,29 @@ typealias HMODULE = *void;
 typealias FARPROC = *void;
 typealias DWORD   = int32;
 typealias BOOL    = int32;
+typealias WORD    = int16;
+typealias BYTE    = int8;
+typealias USHORT  = uint16;
+typealias UINT_PTR = uint64; // @PointerSize
+typealias LPTSTR   = c_string;
+
+library "kernel32";
+
+func MAKEWORD(bLow: BYTE, bHigh: BYTE) -> WORD {
+	var out: WORD = 0;
+	out = bLow | (cast(WORD) bHigh << 8);
+	return out;
+}
+
+func LOBYTE(word: WORD) -> BYTE {
+	return cast(BYTE) (word & 0xFF);
+}
+
+func HIBYTE(word: WORD) -> BYTE {
+	return cast(BYTE) ((word >> 8) & 0xFF);
+}
+
+func @c_function ZeroMemory(data: *void, size: size_t);
 
 func @c_function LoadLibraryA(lpLibFileName: c_string) -> HMODULE;
 func @c_function GetProcAddress(module: HMODULE, lpProcName: c_string) -> FARPROC;
@@ -12,3 +35,111 @@ func @c_function GetProcAddress(module: HMODULE, lpProcName: c_string) -> FARPRO
 func @c_function GetModuleHandleA(lpModuleName: c_string) -> HMODULE;
 func @c_function GetModuleFileNameA(hModule: HMODULE, lpFilename: c_string, nSize: DWORD) -> DWORD;
 func @c_function SetCurrentDirectoryA(lpPathName: c_string) -> BOOL;
+func @c_function GetCurrentDirectoryA(nBufferLength: DWORD, lpBuffer: LPTSTR) -> DWORD;
+
+// Winsock
+
+library "Ws2_32";
+
+let INVALID_SOCKET: SOCKET = -1;// (~0);
+let SOCKET_ERROR           = -1;
+
+typealias ADDRESS_FAMILY = USHORT;
+typealias SOCKET = UINT_PTR;
+
+let WSADESCRIPTION_LEN = 256;
+let WSASYS_STATUS_LEN  = 128;
+
+/*
+struct WSADATA {
+	var wVersion: WORD;
+	var wHighVersion: WORD;
+
+	var iMaxSockets: uint16;
+	var iMaxUdpDg  : uint16;
+	var lpVendorInfo: c_string;
+	var szDescription : [WSADESCRIPTION_LEN+1] uint8;
+	var szSystemStatus: [WSASYS_STATUS_LEN+1]  uint8;
+}
+*/
+struct sockaddr {
+	var sa_family: ADDRESS_FAMILY;
+    var sa_data: [14] uint8;
+}
+
+typealias SOCKADDR = sockaddr;
+
+struct addrinfo {
+    var ai_flags   : int;
+    var ai_family  : int;
+    var ai_socktype: int;
+    var ai_protocol: int;
+    var ai_addrlen : size_t;
+    var ai_canonname: c_string;
+    var ai_addr: *sockaddr;
+    var ai_next: *addrinfo;
+}
+
+typealias ADDRINFOA = addrinfo;
+/*
+let AF_UNSPEC       = 0;
+let AF_UNIX         = 1;
+let AF_INET         = 2;
+let AF_IMPLINK      = 3;
+let AF_PUP          = 4;
+let AF_CHAOS        = 5;
+let AF_IPX          = 6;
+let AF_NS           = 6;
+let AF_ISO          = 7;
+let AF_OSI          = AF_ISO;
+let AF_ECMA         = 8;
+let AF_DATAKIT      = 9;
+let AF_CCITT        = 10;
+let AF_SNA          = 11;
+let AF_DECnet       = 12;
+let AF_DLI          = 13;
+let AF_LAT          = 14;
+let AF_HYLINK       = 15;
+let AF_APPLETALK    = 16;
+let AF_NETBIOS      = 17;
+let AF_VOICEVIEW    = 18;
+let AF_FIREFOX      = 19;
+let AF_UNKNOWN1     = 20;
+let AF_BAN          = 21;
+
+let AF_MAX          = 22;
+
+let SOCK_STREAM     = 1;
+let SOCK_DGRAM      = 2;
+let SOCK_RAW        = 3;
+let SOCK_RDM        = 4;
+let SOCK_SEQPACKET  = 5;
+*/
+let IPPROTO_TCP: int32 = 6;
+/*
+let AI_PASSIVE                  = 0x00000001;
+let AI_CANONNAME                = 0x00000002;
+let AI_NUMERICHOST              = 0x00000004;
+let AI_NUMERICSERV              = 0x00000008;
+let AI_DNS_ONLY                 = 0x00000010;
+let AI_ALL                      = 0x00000100;
+let AI_ADDRCONFIG               = 0x00000400;
+let AI_V4MAPPED                 = 0x00000800;
+let AI_NON_AUTHORITATIVE        = 0x00004000;
+let AI_SECURE                   = 0x00008000;
+let AI_RETURN_PREFERRED_NAMES   = 0x00010000;
+let AI_FQDN                     = 0x00020000;
+let AI_FILESERVER               = 0x00040000;
+let AI_DISABLE_IDN_ENCODING     = 0x00080000;
+let AI_EXTENDED                 = 0x80000000;
+let AI_RESOLUTION_HANDLE        = 0x40000000;
+
+func @c_function WSAStartup(wVersionRequired: WORD, lpWSAData: *WSADATA) -> int32;
+func @c_function WSACleanup() -> int32;
+
+func @c_function getaddrinfo(pNodeName: c_string, pServiceName: c_string, pHints: *ADDRINFOA, ppResult: **ADDRINFOA) -> int32;
+func @c_function freeaddrinfo(info: *ADDRINFOA);
+
+func @c_function socket(af: int32, type: int32, protocol: int32) -> SOCKET;
+func @c_function bind(s: SOCKET, addr: *sockaddr, namelen: int32) -> int32;
+*/

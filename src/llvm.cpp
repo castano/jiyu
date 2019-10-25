@@ -1495,13 +1495,35 @@ void LLVM_Generator::emit_global_variable(Ast_Declaration *decl) {
     // printf("EMIT GV: '%.*s'\n", name.length, name.data);
 }
 
+#ifdef WIN32
+#define PATH_SEPARATOR "\\"
+#else
+#define PATH_SEPARATOR "/"
+#endif
+
 #include <stdio.h>
 
 void LLVM_Jitter::init() {
-    // llvm::sys::DynamicLibrary::LoadLibraryPermanently("OpenGL");
-    // llvm::sys::DynamicLibrary::LoadLibraryPermanently("/usr/local/Cellar/glfw/3.3/lib/libglfw.dylib");
-    // llvm::sys::DynamicLibrary::LoadLibraryPermanently("glfw3");
-    // llvm::sys::DynamicLibrary::LoadLibraryPermanently("opengl32");
+
+    for (auto lib: compiler->libraries) {
+        String name = lib->libname;
+        auto c_str = to_c_string(name);
+        bool not_valid = llvm::sys::DynamicLibrary::LoadLibraryPermanently(c_str);
+        if (not_valid) { // It cannot be loaded by name alone so it may not be a system library. Try provided search paths instead.
+            for (auto path: compiler->library_search_paths) {
+                String mprintf(char *c_fmt, ...);
+                auto fullpath = mprintf("%.*s" PATH_SEPARATOR "%s", path.length, path.data, c_str);
+                auto fullpath_c_string = to_c_string(fullpath);
+                // printf("PATH: %s\n", fullpath_c_string);
+                not_valid = llvm::sys::DynamicLibrary::LoadLibraryPermanently(fullpath_c_string);
+                free(fullpath.data);
+                free(fullpath_c_string);
+                if (!not_valid) break;
+            }
+        }
+
+        free(c_str);
+    }
 
     auto JTMB = JITTargetMachineBuilder::detectHost();
     

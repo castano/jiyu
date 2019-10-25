@@ -338,6 +338,10 @@ extern "C" {
         jitter->init();
         return true;
     }
+
+    EXPORT void compiler_add_library_search_path(Compiler *compiler, String path) {
+        compiler->library_search_paths.add(copy_string(path)); // @TODO we should check for duplication here, maybe.
+    }
 }
 
 String get_jiyu_work_directory(String exe_dir_path) {

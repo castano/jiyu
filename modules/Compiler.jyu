@@ -16,3 +16,4 @@ func @c_function compiler_typecheck_program(compiler: *Compiler) -> bool;
 func @c_function compiler_generate_llvm_module(compiler: *Compiler) -> bool;
 func @c_function compiler_emit_object_file(compiler: *Compiler) -> bool;
 func @c_function compiler_run_metaprogram(compiler: *Compiler, argc: int32, argv: **uint8) -> bool;
+func @c_function compiler_add_library_search_path(compiler: *Compiler, path: string) -> void;

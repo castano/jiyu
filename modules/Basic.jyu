@@ -150,6 +150,12 @@ func read_entire_file(path: string) -> string {
         SetCurrentDirectoryA(c_str);
         free(c_str);
     }
+
+    func get_working_directory() -> string {
+        var buf: [512] uint8;
+        GetCurrentDirectoryA(cast(DWORD) buf.count, buf.data);
+        return copy_string(to_string(buf.data));
+    }
 }
 
 #if os(MacOSX) {

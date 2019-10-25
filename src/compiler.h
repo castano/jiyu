@@ -63,6 +63,7 @@ struct Compiler {
 
     s64 instance_number = -1;
     Array<Ast_Library *> libraries;
+    Array<String> library_search_paths;
     Array<String> module_search_paths;
     Array<Ast_Directive_Import *> loaded_imports;
     Build_Options build_options;

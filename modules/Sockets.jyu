@@ -1,0 +1,72 @@
+
+#if os(Windows) {
+	#import "Windows";
+}
+
+#import "LibC";
+
+struct Socket {
+	let DEFAULT_PORT = "27015";
+
+	var addr_info: *addrinfo;
+	var listening_socket: SOCKET;
+
+	func bind(this: *Socket) -> bool {
+		// var error = bind(this.listening_socket, this.addr_info.ai_addr, this.addr_info.ai_addrlen);
+		// if error == SOCKET_ERROR {
+		// 	printf("bind() failed\n");
+		// 	return false;
+		// }
+
+		return true;
+	}
+}
+
+func create_socket() -> Socket {
+	var sock: Socket;
+
+	var hints: addrinfo;
+	hints.ai_family   = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_protocol = IPPROTO_TCP;
+	hints.ai_flags    = AI_PASSIVE;
+
+	var error = getaddrinfo(null, Socket.DEFAULT_PORT, *hints, *sock.addr_info);
+
+	if error != 0 {
+		printf("getaddrinfo failed\n");
+		return sock;
+	}
+
+	var result = sock.addr_info;
+	sock.listening_socket = socket(result.ai_family, result.ai_socktype, result.ai_protocol);
+
+	if sock.listening_socket == INVALID_SOCKET {
+		freeaddrinfo(sock.addr_info);
+		sock.addr_info = null;
+		return sock;
+	}
+
+	return sock;
+}
+
+func init_sockets() -> bool {
+	let WANT_HI_VERSION: BYTE = 2;
+	let WANT_LO_VERSION: BYTE = 2;
+	var want_version = MAKEWORD(WANT_HI_VERSION, WANT_LO_VERSION);
+	var wsa_data: WSADATA;
+	var error = WSAStartup(want_version, *wsa_data);
+
+	if error != 0 {
+		return false;
+	}
+
+	var version_given = wsa_data.wVersion;
+
+	if LOBYTE(version_given) != WANT_LO_VERSION || HIBYTE(version_given) != WANT_HI_VERSION {
+		WSACleanup();
+		return false;
+	}
+
+	return true;
+}
