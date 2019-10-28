@@ -189,8 +189,6 @@ void Compiler::queue_directive(Ast_Directive *directive) {
     directive_queue.add(directive);
 }
 
-#include <windows.h>
-
 void Compiler::resolve_directives() {
     // Use ordered_remove here because if we handle these out-of-order in which they were
     // queued up, then directives that depend on static_if may resolve before the outer static_if does.
