@@ -268,8 +268,9 @@ extern "C" {
         return true;
     }
     
-    EXPORT bool compiler_load_file(Compiler *compiler, String filename) {
-        perform_load(compiler, nullptr, filename, compiler->global_scope);
+    // @FixMe on macOS/Linux string should normally be passed by-value but we're currently passing string by pointer by default.
+    EXPORT bool compiler_load_file(Compiler *compiler, String *filename) {
+        perform_load(compiler, nullptr, *filename, compiler->global_scope);
         
         return compiler->errors_reported == 0;
     }
@@ -339,8 +340,9 @@ extern "C" {
         return true;
     }
 
-    EXPORT void compiler_add_library_search_path(Compiler *compiler, String path) {
-        compiler->library_search_paths.add(copy_string(path)); // @TODO we should check for duplication here, maybe.
+    // @FixMe on macOS/Linux string should normally be passed by-value but we're currently passing string by pointer by default.
+    EXPORT void compiler_add_library_search_path(Compiler *compiler, String *path) {
+        compiler->library_search_paths.add(copy_string(*path)); // @TODO we should check for duplication here, maybe.
     }
 }
 
@@ -412,7 +414,7 @@ int main(int argc, char **argv) {
         return -1;
     }
     
-    if (!compiler_load_file(compiler, filename)) return -1;
+    if (!compiler_load_file(compiler, &filename)) return -1;
     
     if (!compiler_typecheck_program(compiler)) return -1;
     

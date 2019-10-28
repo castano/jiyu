@@ -177,4 +177,12 @@ func read_entire_file(path: string) -> string {
         chdir(c_str);
         free(c_str);
     }
+
+    func get_working_directory() -> string {
+        func @c_function getcwd(buf: *uint8, size: size_t) -> c_string;
+
+        var buf: [512] uint8;
+        getcwd(buf.data, cast(size_t) buf.count);
+        return copy_string(to_string(buf.data));
+    }
 }

@@ -1506,20 +1506,40 @@ void LLVM_Generator::emit_global_variable(Ast_Declaration *decl) {
 void LLVM_Jitter::init() {
 
     for (auto lib: compiler->libraries) {
+        String mprintf(char *c_fmt, ...);
+
         String name = lib->libname;
         auto c_str = to_c_string(name);
-        bool not_valid = llvm::sys::DynamicLibrary::LoadLibraryPermanently(c_str);
-        if (not_valid) { // It cannot be loaded by name alone so it may not be a system library. Try provided search paths instead.
-            for (auto path: compiler->library_search_paths) {
-                String mprintf(char *c_fmt, ...);
-                auto fullpath = mprintf("%.*s" PATH_SEPARATOR "%s", path.length, path.data, c_str);
-                auto fullpath_c_string = to_c_string(fullpath);
-                // printf("PATH: %s\n", fullpath_c_string);
-                not_valid = llvm::sys::DynamicLibrary::LoadLibraryPermanently(fullpath_c_string);
-                free(fullpath.data);
-                free(fullpath_c_string);
-                if (!not_valid) break;
+        if (!lib->is_framework) {
+            bool not_valid = llvm::sys::DynamicLibrary::LoadLibraryPermanently(c_str);
+            if (not_valid) { // It cannot be loaded by name alone so it may not be a system library. Try provided search paths instead.
+                for (auto path: compiler->library_search_paths) {
+
+                    String fullpath;
+                    if (llvm->TargetMachine->getTargetTriple().isOSWindows()) {
+                        fullpath = mprintf("%.*s" PATH_SEPARATOR "%s", path.length, path.data, c_str);
+                    } else {
+                        char *ext = "so";
+                        if (llvm->TargetMachine->getTargetTriple().isMacOSX()) ext = "dylib";
+
+                        fullpath = mprintf("%.*s" PATH_SEPARATOR "lib%s.%s", path.length, path.data, c_str, ext);
+                    }
+                    auto fullpath_c_string = to_c_string(fullpath);
+                    // printf("PATH: %s\n", fullpath_c_string);
+                    not_valid = llvm::sys::DynamicLibrary::LoadLibraryPermanently(fullpath_c_string);
+                    free(fullpath.data);
+                    free(fullpath_c_string);
+                    if (!not_valid) break;
+                }
             }
+        } else {
+            auto fullpath = mprintf("/System/Library/Frameworks" PATH_SEPARATOR "%s.framework" PATH_SEPARATOR "%s", c_str, c_str);
+            auto fullpath_c_string = to_c_string(fullpath);
+            // printf("PATH: %s\n", fullpath_c_string);
+            bool not_valid = llvm::sys::DynamicLibrary::LoadLibraryPermanently(fullpath_c_string);
+            free(fullpath.data);
+            free(fullpath_c_string);
+            // if (!not_valid) break;
         }
 
         free(c_str);
