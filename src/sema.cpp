@@ -357,6 +357,16 @@ Ast_Unary_Expression *make_unary(Token::Type op, Ast_Expression *subexpr) {
     return un;
 }
 
+Ast_Binary_Expression *make_binary(Token::Type op, Ast_Expression *left, Ast_Expression *right, Ast *location) {
+    Ast_Binary_Expression *bin = new Ast_Binary_Expression();
+    bin->operator_type = op;
+    bin->left = left;
+    bin->right = right;
+    if (location) copy_location_info(bin, location);
+
+    return bin;
+}
+
 bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) {
     while (expression->substitution) expression = expression->substitution;
     
@@ -1153,6 +1163,36 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         
         case AST_BINARY_EXPRESSION: {
             auto bin = static_cast<Ast_Binary_Expression *>(expression);
+
+            if (bin->operator_type == Token::PLUS_EQ          ||      // +=
+                bin->operator_type == Token::MINUS_EQ         ||      // -=
+                bin->operator_type == Token::STAR_EQ          ||      // *=
+                bin->operator_type == Token::SLASH_EQ         ||      // /=
+                bin->operator_type == Token::PERCENT_EQ       ||      // %=
+                bin->operator_type == Token::AMPERSAND_EQ     ||      // &=
+                bin->operator_type == Token::VERTICAL_BAR_EQ  ||      // |=
+                bin->operator_type == Token::CARET_EQ                 // ^=
+                ) {
+                // Desugar these shorthand operators.
+                Token::Type op;
+                switch (bin->operator_type) {
+                    case Token::PLUS_EQ        : op = Token::PLUS; break;
+                    case Token::MINUS_EQ       : op = Token::MINUS; break;
+                    case Token::STAR_EQ        : op = Token::STAR; break;
+                    case Token::SLASH_EQ       : op = Token::SLASH; break;
+                    case Token::PERCENT_EQ     : op = Token::PERCENT; break;
+                    case Token::AMPERSAND_EQ   : op = Token::AMPERSAND; break;
+                    case Token::VERTICAL_BAR_EQ: op = Token::VERTICAL_BAR; break;
+                    case Token::CARET_EQ       : op = Token::CARET; break;
+                    default: assert(false);
+                }
+
+                auto operation = make_binary(op, bin->left, bin->right, bin);
+                auto assignment = make_binary(Token::EQUALS, bin->left, operation, bin);
+
+                bin->substitution = assignment;
+                bin = assignment;
+            }
             
             bool allow_coerce_to_ptr_void = (bin->operator_type == Token::EQUALS);
             
@@ -1259,6 +1299,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 bin->operator_type == Token::CARET) {
                 if (!is_int_type(left_type)) {
                     compiler->report_error(bin, "Bitwise logical operators are only valid for integer operands.\n");
+                    return;
+                }
+            }
+
+            if (bin->operator_type == Token::DEREFERENCE_OR_SHIFT    ||
+                bin->operator_type == Token::RIGHT_SHIFT) {
+                if (!is_int_type(left_type)) {
+                    compiler->report_error(bin, "Bitwise arithmetic operators are only valid for integer operands.\n");
                     return;
                 }
             }

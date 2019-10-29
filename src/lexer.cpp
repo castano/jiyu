@@ -283,6 +283,12 @@ Token Lexer::lex_token() {
             current_char += 2;
             return make_token(Token::ARROW, Span(start, 2));
         }
+
+        if (current_char+1 < text.length && text[current_char+1] == '=') {
+            string_length_type start = current_char;
+            current_char += 2;
+            return make_token(Token::MINUS_EQ, Span(start, 2));
+        }
     } else if (text[current_char] == '.') {
         if (current_char+1 < text.length && text[current_char+1] == '.') {
             string_length_type start = current_char;
@@ -372,17 +378,59 @@ Token Lexer::lex_token() {
             current_char += 2;
             return make_token(Token::AND_OP, Span(start, 2));
         }
+
+        if (current_char+1 < text.length && text[current_char+1] == '=') {
+            string_length_type start = current_char;
+            current_char += 2;
+            return make_token(Token::AMPERSAND_EQ, Span(start, 2));
+        }
     } else if (text[current_char] == '^') {
         if (current_char+1 < text.length && text[current_char+1] == '^') {
             string_length_type start = current_char;
             current_char += 2;
             return make_token(Token::XOR_OP, Span(start, 2));
         }
+
+        if (current_char+1 < text.length && text[current_char+1] == '=') {
+            string_length_type start = current_char;
+            current_char += 2;
+            return make_token(Token::CARET_EQ, Span(start, 2));
+        }
     } else if (text[current_char] == '|') {
         if (current_char+1 < text.length && text[current_char+1] == '|') {
             string_length_type start = current_char;
             current_char += 2;
             return make_token(Token::OR_OP, Span(start, 2));
+        }
+
+        if (current_char+1 < text.length && text[current_char+1] == '=') {
+            string_length_type start = current_char;
+            current_char += 2;
+            return make_token(Token::VERTICAL_BAR_EQ, Span(start, 2));
+        }
+    } else if (text[current_char] == '+') {
+        if (current_char+1 < text.length && text[current_char+1] == '=') {
+            string_length_type start = current_char;
+            current_char += 2;
+            return make_token(Token::PLUS_EQ, Span(start, 2));
+        }
+    } else if (text[current_char] == '*') {
+        if (current_char+1 < text.length && text[current_char+1] == '=') {
+            string_length_type start = current_char;
+            current_char += 2;
+            return make_token(Token::STAR_EQ, Span(start, 2));
+        }
+    } else if (text[current_char] == '/') {
+        if (current_char+1 < text.length && text[current_char+1] == '=') {
+            string_length_type start = current_char;
+            current_char += 2;
+            return make_token(Token::SLASH_EQ, Span(start, 2));
+        }
+    } else if (text[current_char] == '%') {
+        if (current_char+1 < text.length && text[current_char+1] == '=') {
+            string_length_type start = current_char;
+            current_char += 2;
+            return make_token(Token::PERCENT_EQ, Span(start, 2));
         }
     }
     

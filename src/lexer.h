@@ -87,6 +87,15 @@ struct Token {
         ARROW,                // ->
         DEREFERENCE_OR_SHIFT, // <<
         RIGHT_SHIFT,          // >>
+
+        PLUS_EQ,              // +=
+        MINUS_EQ,             // -=
+        STAR_EQ,              // *=
+        SLASH_EQ,             // /=
+        PERCENT_EQ,           // %=
+        AMPERSAND_EQ,         // &=
+        VERTICAL_BAR_EQ,      // |=
+        CARET_EQ,             // ^=
         
         DOTDOT,               // ..
         

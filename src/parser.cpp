@@ -858,7 +858,16 @@ Ast_Expression *Parser::parse_statement() {
     if (!left) return nullptr;
     
     token = peek_token();
-    if (token->type == Token::EQUALS) {
+    if (token->type == Token::EQUALS          ||     // =
+        token->type == Token::PLUS_EQ         ||     // +=
+        token->type == Token::MINUS_EQ        ||     // -=
+        token->type == Token::STAR_EQ         ||     // *=
+        token->type == Token::SLASH_EQ        ||     // /=
+        token->type == Token::PERCENT_EQ      ||     // %=
+        token->type == Token::AMPERSAND_EQ    ||     // &=
+        token->type == Token::VERTICAL_BAR_EQ ||     // |=
+        token->type == Token::CARET_EQ               // ^=
+        ) {
         next_token();
         
         Ast_Expression *right = parse_expression();
@@ -870,7 +879,7 @@ Ast_Expression *Parser::parse_statement() {
         }
         
         Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
-        bin->operator_type = Token::EQUALS;
+        bin->operator_type = token->type;
         bin->left = left;
         bin->right = right;
         
