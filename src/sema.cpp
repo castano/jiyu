@@ -1182,14 +1182,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
             }
             
-            if (bin->operator_type == Token::EQ_OP
-                || bin->operator_type == Token::NE_OP
-                || bin->operator_type == Token::LE_OP
-                || bin->operator_type == Token::GE_OP
-                || bin->operator_type == '>'
-                || bin->operator_type == '<'
-                || bin->operator_type == Token::AND_OP
-                || bin->operator_type == Token::OR_OP) {
+            if (bin->operator_type == Token::EQ_OP ||
+                bin->operator_type == Token::NE_OP ||
+                bin->operator_type == Token::LE_OP ||
+                bin->operator_type == Token::GE_OP ||
+                bin->operator_type == Token::RIGHT_ANGLE ||
+                bin->operator_type == Token::LEFT_ANGLE ||
+                bin->operator_type == Token::AND_OP ||
+                bin->operator_type == Token::OR_OP) {
                 bin->type_info = compiler->type_bool;
             }
             
@@ -1223,6 +1223,51 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 free(lhs.data);
                 free(rhs.data);
                 return;
+            }
+
+            if (bin->operator_type == Token::LE_OP ||
+                bin->operator_type == Token::GE_OP ||
+                bin->operator_type == Token::RIGHT_ANGLE ||
+                bin->operator_type == Token::LEFT_ANGLE) {
+                if (!is_int_type(left_type) && !is_float_type(left_type)) {
+                    compiler->report_error(bin, "Comparison operators are only valid for integer and floating-point operands.\n");
+                    return;
+                }
+            }
+
+            if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
+                if (!is_int_type(left_type) && !is_float_type(left_type) &&
+                    left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type) && left_type->type != Ast_Type_Info::BOOL) {
+                    compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, and string operands.\n");
+                    return;
+                }
+            }
+
+            if (bin->operator_type == Token::PLUS  ||
+                bin->operator_type == Token::MINUS ||
+                bin->operator_type == Token::SLASH ||
+                bin->operator_type == Token::STAR) {
+                bool pointer_arithmetic_allowed = (bin->operator_type == Token::MINUS) && is_pointer_type(left_type);
+                if (!is_int_type(left_type) && !is_float_type(left_type) && !pointer_arithmetic_allowed) {
+                    compiler->report_error(bin, "Arithmetic operators are only valid for integer and floating-point operands.\n");
+                    return;
+                }
+            }
+
+            if (bin->operator_type == Token::AMPERSAND    ||
+                bin->operator_type == Token::VERTICAL_BAR ||
+                bin->operator_type == Token::CARET) {
+                if (!is_int_type(left_type)) {
+                    compiler->report_error(bin, "Bitwise logical operators are only valid for integer operands.\n");
+                    return;
+                }
+            }
+
+            if (bin->operator_type == Token::PERCENT) {
+                if (!is_int_type(left_type) && !is_float_type(left_type)) {
+                    compiler->report_error(bin, "Remainder operator is only valid for integer and floating-point operands.\n");
+                    return;
+                }
             }
             
             if (bin->operator_type == Token::EQ_OP) {

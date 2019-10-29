@@ -31,4 +31,5 @@ func @metaprogram main() {
     compile_single_test_file("tests/function_pointers.jyu", as_metaprogram);
     compile_single_test_file("tests/overload_test.jyu", as_metaprogram);
     compile_single_test_file("tests/primitive_types.jyu", as_metaprogram);
+    compile_single_test_file("tests/operators.jyu", as_metaprogram);
 }

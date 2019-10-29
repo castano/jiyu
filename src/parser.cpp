@@ -312,9 +312,9 @@ Ast_Expression *Parser::parse_additive_expression() {
         
         if (token->type == Token::PLUS
             || token->type == Token::MINUS) {
+            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
             next_token();
             
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
             
@@ -441,9 +441,9 @@ Ast_Expression *Parser::parse_and_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::AMPERSAND) {
+            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
             next_token();
             
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
             
@@ -472,9 +472,9 @@ Ast_Expression *Parser::parse_exclusive_or_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::CARET) {
+            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
             next_token();
             
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
             
@@ -503,9 +503,9 @@ Ast_Expression *Parser::parse_inclusive_or_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::VERTICAL_BAR) {
+            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
             next_token();
             
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
             

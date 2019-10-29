@@ -1,0 +1,29 @@
+
+struct Matrix {
+
+}
+
+func main() {
+    var m: Matrix;
+    var n: Matrix;
+
+    // m + n;
+    // m - n;
+    // m / n;
+    // m * n;
+    // m % n;
+
+    // m * n;
+
+    var f1: float;
+    var f2: float;
+
+    // f1 | f2;
+    // f1 & f2;
+    // f1 ^ f2;
+
+    // f1 || f2;
+    // f1 && f2;
+    // f1.f2;
+    f1 % f2;
+}

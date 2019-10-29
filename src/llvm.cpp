@@ -661,7 +661,19 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                             return irb->CreateFMul(left, right);
                         }
                     }
-                    case Token::PERCENT: assert(false); // @Incomplete
+                    case Token::PERCENT: {
+                        auto info = get_type_info(bin->left);
+                        if (is_int_type(info)) {
+                            if (info->is_signed) {
+                                return irb->CreateSRem(left, right);
+                            } else {
+                                return irb->CreateURem(left, right);
+                            }
+                        } else {
+                            assert(is_float_type(info));
+                            return irb->CreateFRem(left, right);
+                        }
+                    }
                     case Token::SLASH: {
                         auto info = get_type_info(bin->left);
                         if (is_int_type(info)) {
@@ -675,6 +687,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                             return irb->CreateFDiv(left, right);
                         }
                     }
+
                     case Token::PLUS: {
                         auto left_type = get_type_info(bin->left);
                         auto right_type = get_type_info(bin->right);
@@ -779,6 +792,10 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                     case Token::AMPERSAND: {
                         return irb->CreateAnd(left, right);
+                    }
+
+                    case Token::CARET: {
+                        return irb->CreateXor(left, right);
                     }
                     
                     case Token::AND_OP: {

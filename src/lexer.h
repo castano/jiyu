@@ -18,9 +18,9 @@ struct Token {
         PERCENT      = '%',
         PLUS         = '+',
         MINUS        = '-',
-        VERTICAL_BAR = '|',
-        CARET        = '^',
-        AMPERSAND    = '&',
+        VERTICAL_BAR = '|', // bitwise Or
+        CARET        = '^', // bitwise Xor
+        AMPERSAND    = '&', // bitwise And
         
         LEFT_ANGLE   = '<',
         RIGHT_ANGLE  = '>',
