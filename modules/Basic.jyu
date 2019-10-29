@@ -92,7 +92,10 @@ func split(input: string, delim: uint8) -> [] string {
             var o: string;
             o.data = input.data + start;
             o.length = cursor - start;
-            array_add(*output, o);
+
+            if o.length > 0 {
+                array_add(*output, o);
+            }
             
             start = cursor + 1;
         }
