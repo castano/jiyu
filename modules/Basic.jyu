@@ -8,6 +8,8 @@ func assert(cond: bool) {
         return;
     }
 
+    printf("Assertion failed!\n");
+
     #if os(Windows) {
         func @c_function DebugBreak() -> void;
         DebugBreak();
@@ -23,7 +25,7 @@ func basename(_s: string) -> string {
     while (s.length > 0) {
         if (s[s.length-1] == '/' || s[s.length-1] == '\\') return s;
         
-        s.length = s.length - 1;
+        s.length -= 1;
     }
     
     return s;
@@ -36,11 +38,11 @@ func strip_path_extension(_s: string) -> string {
         if (s[s.length-1] == '/' || s[s.length-1] == '\\') return _s; // @TODO break
 
         if (s[s.length-1] == '.') {
-            s.length = s.length-1;
+            s.length -= 1;
             return s;
         }
 
-        s.length = s.length-1;
+        s.length -= 1;
     }
 
     return s;
@@ -66,7 +68,7 @@ func to_c_string(input: string) -> c_string {
 func c_style_strlen(input: c_string) -> int64 {
     var cursor = input;
     while <<cursor != 0 {
-        cursor = cursor + 1;
+        cursor += 1;
     }
     
     return cast(int64) (cursor - input);
@@ -95,7 +97,7 @@ func split(input: string, delim: uint8) -> [] string {
             start = cursor + 1;
         }
         
-        cursor = cursor + 1;
+        cursor += 1;
     }
     
     var o: string;

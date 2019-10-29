@@ -29,7 +29,7 @@ func array_add<T>(array: *[..] T, item: T) {
     
     array.allocated + NEW_MEM_CHUNK_ELEMENT_COUNT);
 
-    array.count = array.count + 1;
+    array.count += 1;
     (<<array)[array.count-1] = item;
 }
 
