@@ -1092,6 +1092,11 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
         compiler->report_error(token, "@metaprogram tag is not valid for function types.");
         return nullptr;
     }
+
+    if (token->type == Token::TAG_EXPORT) {
+        compiler->report_error(token, "@export tag is not valid for function types.");
+        return nullptr;
+    }
     
     if (token->type == '(') {
         Ast_Type_Instantiation *final_type_inst = AST_NEW(Ast_Type_Instantiation);
@@ -1173,6 +1178,12 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
     return nullptr;
 }
 
+bool is_tag_token(Token *token) {
+    auto type = token->type;
+    return type == Token::TAG_C_FUNCTION || type == Token::TAG_META
+        || type == Token::TAG_EXPORT;
+}
+
 Ast_Function *Parser::parse_function() {
     expect_and_eat(Token::KEYWORD_FUNC);
     
@@ -1185,16 +1196,32 @@ Ast_Function *Parser::parse_function() {
     
     
     Token *token = peek_token();
-    if (token->type == Token::TAG_C_FUNCTION) {
-        function->is_c_function = true;
-        next_token();
-    }
+
+    while (is_tag_token(token)) {
+        if (token->type == Token::TAG_C_FUNCTION) {
+            function->is_c_function = true;
+            next_token();
+        } else if (token->type == Token::TAG_META) {
+            function->is_marked_metaprogram = true;
+            next_token();
+        } else if (token->type == Token::TAG_EXPORT) {
+            next_token();
+            if (!expect_and_eat((Token::Type) '(')) return nullptr;
+            
+            // We expect an identifier here but don't call parse_identifier since we only care about the value typed in.
+            // func @export(linkage_name) my_function() {}
+            if (!expect(Token::IDENTIFIER)) return nullptr;
     
-    token = peek_token();
-    if (token->type == Token::TAG_META) {
-        function->is_marked_metaprogram = true;
-        next_token();
+            token = peek_token();
+            function->linkage_name = token->string;
+            next_token();
+
+            if (!expect_and_eat((Token::Type) ')')) return nullptr;
+        }
+
+        token = peek_token();
     }
+
     
     Ast_Identifier *ident = parse_identifier();
     if (!ident) return nullptr;

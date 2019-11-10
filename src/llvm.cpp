@@ -75,7 +75,7 @@ void LLVM_Generator::preinit() {
     if (compiler->build_options.target_triple.length) {
         TargetTriple = to_c_string(compiler->build_options.target_triple); // @Leak
     }
-    printf("TRIPLE: '%s'\n", TargetTriple.c_str());
+    // printf("TRIPLE: '%s'\n", TargetTriple.c_str());
     
     std::string Error;
     auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
@@ -97,8 +97,6 @@ void LLVM_Generator::preinit() {
 }
 
 void LLVM_Generator::init() {
-    
-    
     auto ctx = llvm::make_unique<LLVMContext>();
     thread_safe_context = new ThreadSafeContext(std::move(ctx));
     llvm_context = thread_safe_context->getContext();
@@ -1418,6 +1416,12 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
 
     if (!function->scope) return; // forward declaration of external thing
 
+    if (!func->empty()) {
+        String name = function->linkage_name;
+        compiler->report_error(function, "Function with linkage name \"%.*s\" already has been defined!\n", name.length, name.data);
+        return;
+    }
+
     StringRef function_name = string_ref(function->identifier->name->name);
     StringRef linkage_name  = string_ref(function->linkage_name);
     auto subroutine_type    = get_debug_subroutine_type(get_type_info(function));
@@ -1494,7 +1498,7 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
             irb->CreateRetVoid();
         }
     }
-    // func->dump();
+
     decl_value_map.clear();
 
     di_current_scope = old_di_scope;

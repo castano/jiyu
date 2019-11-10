@@ -145,9 +145,10 @@ extern "C" {
 
         compiler->instance_number = __compiler_instance_count++;
 
-        // these are copies to prevent the user program from modifying the strings after the fact.
+        // these are copies to prevent the user program from modifying the strings after-the-fact.
         compiler->build_options.executable_name = copy_string(options->executable_name);
         compiler->build_options.target_triple   = copy_string(options->target_triple);
+        compiler->build_options.only_want_obj_file = options->only_want_obj_file;
 
         compiler->llvm_gen = new LLVM_Generator(compiler);
         compiler->llvm_gen->preinit();
@@ -168,7 +169,9 @@ extern "C" {
     }
     
     EXPORT bool compiler_run_default_link_command(Compiler *compiler) {
+        if (compiler->build_options.only_want_obj_file) return true;
         if (compiler->build_options.executable_name == to_string("")) return false;
+
 #if WIN32
         auto win32_sdk = find_visual_studio_and_windows_sdk();
         
@@ -293,7 +296,7 @@ extern "C" {
         }
         
         // set metaprogram status if main is marked @metaprogram
-        if (!compiler->errors_reported) {
+        if (!compiler->errors_reported && !compiler->build_options.only_want_obj_file) {
             auto expr = compiler->sema->find_declaration_for_atom_in_scope(compiler->global_scope, compiler->atom_main);
             
             if (!expr) {

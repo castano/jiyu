@@ -7,6 +7,7 @@ struct Compiler {
 struct Build_Options {
 	var executable_name: string;
 	var target_triple: string;
+    var only_want_obj_file: bool;
 }
 
 func @c_function create_compiler_instance(options: *Build_Options) -> *Compiler;

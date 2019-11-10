@@ -54,6 +54,7 @@ struct Atom_Table {
 struct Build_Options {
     String executable_name;
     String target_triple;
+    bool only_want_obj_file = false;
 };
 
 // @Volatile must match Compiler.jyu stuff

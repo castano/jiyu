@@ -217,6 +217,7 @@ Token Lexer::lex_token() {
         // @Cleanup we should probably have a "tag" token
         else if (result.string == to_string("@c_function"))  result.type = Token::TAG_C_FUNCTION;
         else if (result.string == to_string("@metaprogram")) result.type = Token::TAG_META;
+        else if (result.string == to_string("@export")) result.type = Token::TAG_EXPORT;
         
         else if (result.string == to_string("temporary_c_vararg")) result.type = Token::TEMPORARY_KEYWORD_C_VARARGS;
         
