@@ -117,6 +117,22 @@ Token Lexer::lex_string(char delim) {
                         ++i;
                         continue;
                     }
+
+                    if (input[i + 1] == '\\') {
+                        output_string.length++;
+                        output_string.data[output_string.length-1] = '\\';
+                        
+                        ++i;
+                        continue;
+                    }
+
+                    if (input[i + 1] == '\"') {
+                        output_string.length++;
+                        output_string.data[output_string.length-1] = '\"';
+                        
+                        ++i;
+                        continue;
+                    }
                 }
             }
             
