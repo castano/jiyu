@@ -101,6 +101,7 @@ struct LLVM_Generator {
         this->compiler = compiler;
     }
     
+    void preinit();
     void init();
     void finalize();
     

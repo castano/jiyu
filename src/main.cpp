@@ -142,19 +142,22 @@ s64    __compiler_instance_count = 0; // @ThreadSafety
 extern "C" {
     EXPORT Compiler *create_compiler_instance(Build_Options *options) {
         auto compiler = new Compiler();
-        compiler->init();
-        
+
         compiler->instance_number = __compiler_instance_count++;
 
         // these are copies to prevent the user program from modifying the strings after the fact.
         compiler->build_options.executable_name = copy_string(options->executable_name);
         compiler->build_options.target_triple   = copy_string(options->target_triple);
+
+        compiler->llvm_gen = new LLVM_Generator(compiler);
+        compiler->llvm_gen->preinit();
+
+        compiler->init();
         
         compiler->copier = new Copier(compiler);
         
         compiler->sema = new Sema(compiler);
         
-        compiler->llvm_gen = new LLVM_Generator(compiler);
         compiler->llvm_gen->init();
 
         compiler->module_search_paths.add(__default_module_search_path);

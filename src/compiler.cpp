@@ -4,7 +4,10 @@
 #include "lexer.h"
 #include "parser.h"
 #include "sema.h"
+#include "llvm.h"
 #include "os_support.h"
+
+#include "llvm/Target/TargetMachine.h"
 
 #include <stdio.h> // for vprintf
 
@@ -57,11 +60,11 @@ Ast_Type_Info *make_array_type(Ast_Type_Info *element, array_count_type count, b
     return info;
 }
 
-Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee) {
+Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee, s64 pointer_size) {
     Ast_Type_Info *info = new Ast_Type_Info();
     info->type = Ast_Type_Info::POINTER;
     info->pointer_to = pointee;
-    info->size = 8; // @TargetInfo
+    info->size = pointer_size; // @TargetInfo
     info->alignment = info->size;
     info->stride    = info->size;
     return info;
@@ -130,6 +133,24 @@ char *Compiler::get_temp_c_string(String s) {
 }
 
 void Compiler::init() {
+    auto target_machine = llvm_gen->TargetMachine;
+
+    pointer_size = target_machine->getPointerSize(0);
+
+    bool is_64bits = false;
+    bool is_32bits = false;
+    if (pointer_size == 4) {
+        is_64bits = false;
+        is_32bits = true;
+    } else if (pointer_size == 8) {
+        is_64bits = true;
+        is_32bits = false; 
+    } else {
+        assert(false);
+        // @TODO Not sure what the right thing to do would be on a 128-bit machine
+        // or a 16 or 8-bit machine..
+    }
+
     type_void = new Ast_Type_Info();
     type_void->type = Ast_Type_Info::VOID;
     
@@ -152,9 +173,13 @@ void Compiler::init() {
     type_float32 = make_float_type(4);
     type_float64 = make_float_type(8);
     
-    type_string_data = make_pointer_type(type_uint8);
-    // @FixMe
-    type_string_length = type_int64; // @TargetInfo
+    type_string_data = make_pointer_type(type_uint8, pointer_size);
+
+    if (is_64bits) {
+        type_string_length = type_int64; // @TargetInfo
+    } else if (is_32bits) {
+        type_string_length = type_int32; // @TargetInfo
+    }
     
     type_string = new Ast_Type_Info();
     type_string->type = Ast_Type_Info::STRING;
@@ -162,12 +187,16 @@ void Compiler::init() {
     type_string->stride = type_string->size;
     type_string->alignment = type_string_length->alignment;
     
-    type_array_count   = type_int64; // @TargetInfo
+    if (is_64bits) {
+        type_array_count = type_int64; // @TargetInfo
+    } else if (is_32bits) {
+        type_array_count = type_int32; // @TargetInfo
+    }
     
     type_info_type = new Ast_Type_Info();
     type_info_type->type = Ast_Type_Info::TYPE;
     
-    type_ptr_void = make_pointer_type(type_void);
+    type_ptr_void = make_pointer_type(type_void, pointer_size);
     
     atom_data      = make_atom(to_string("data"));
     atom_length    = make_atom(to_string("length"));

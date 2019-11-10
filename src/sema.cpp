@@ -1350,7 +1350,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 if (!expression_is_lvalue(un->expression, true)) {
                     compiler->report_error(un, "lvalue required as unary '%c' operand.\n", un->operator_type);
                 }
-                un->type_info = make_pointer_type(get_type_info(un->expression));
+                un->type_info = make_pointer_type(get_type_info(un->expression), compiler->pointer_size);
                 
                 auto expr = un->expression;
                 while (expr->substitution) expr = expr->substitution;
@@ -1649,7 +1649,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         deref->byte_offset = 0;
                         
                         // @Hack @Incomplete
-                        deref->type_info = make_pointer_type(left_type->array_element);
+                        deref->type_info = make_pointer_type(left_type->array_element, compiler->pointer_size);
                     } else if (field_atom == compiler->atom_count) {
                         deref->element_path_index = 1;
                         // @Hack @Cleanup
@@ -2226,7 +2226,7 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
     
     if (type_inst->pointer_to) {
         auto pointee = resolve_type_inst(type_inst->pointer_to);
-        type_inst->type_value = make_pointer_type(pointee);
+        type_inst->type_value = make_pointer_type(pointee, compiler->pointer_size);
         return type_inst->type_value;
     }
     

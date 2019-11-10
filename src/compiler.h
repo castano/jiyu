@@ -68,6 +68,8 @@ struct Compiler {
     Array<Ast_Directive_Import *> loaded_imports;
     Build_Options build_options;
 
+    s64 pointer_size = -1; // @TargetInfo
+
     s32 metaprogram_argc = 0;
     char **metaprogram_argv = nullptr;
 
@@ -145,7 +147,7 @@ struct Compiler {
     bool is_toplevel_scope(Ast_Scope *scope);
 };
 
-Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee);
+Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee, s64 pointer_size);
 Ast_Type_Info *make_array_type(Ast_Type_Info *element, array_count_type count, bool is_dynamic);
 Ast_Type_Info *make_function_type(Compiler *compiler, Ast_Function *function);
 

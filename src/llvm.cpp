@@ -61,7 +61,10 @@ string_length_type get_line_number(Ast *ast) {
     return line_start;
 }
 
-void LLVM_Generator::init() {
+void LLVM_Generator::preinit() {
+    // This gets called before Compiler is fully initialized so that Compiler
+    // can query TargetMachine to configure string and arrays to be the right
+    // size on 32-bit vs 64-bit machines.
     InitializeAllTargetInfos();
     InitializeAllTargets();
     InitializeAllTargetMCs();
@@ -72,7 +75,7 @@ void LLVM_Generator::init() {
     if (compiler->build_options.target_triple.length) {
         TargetTriple = to_c_string(compiler->build_options.target_triple); // @Leak
     }
-    // printf("TRIPLE: '%s'\n", TargetTriple.c_str());
+    printf("TRIPLE: '%s'\n", TargetTriple.c_str());
     
     std::string Error;
     auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
@@ -91,6 +94,10 @@ void LLVM_Generator::init() {
     TargetOptions opt;
     auto RM = Optional<Reloc::Model>();
     TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
+}
+
+void LLVM_Generator::init() {
+    
     
     auto ctx = llvm::make_unique<LLVMContext>();
     thread_safe_context = new ThreadSafeContext(std::move(ctx));
