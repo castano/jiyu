@@ -204,10 +204,34 @@ func get_command_line(strings: [] string) -> *uint8 {
         var process_info: PROCESS_INFORMATION;
 
         var cmd_line = get_command_line(command_strings);
-        printf("Command line: %s\n", cmd_line);
         var success = CreateProcessA(null, cmd_line, null, null, TRUE, 0, null, null, *startup, *process_info);
         if success == 0 {
-            printf("wat\n");
+            return -1;
+        }
+
+        WaitForSingleObject(process_info.hProcess, INFINITE);
+        free(cmd_line);
+
+        var exit_code: DWORD;
+        GetExitCodeProcess(process_info.hProcess, *exit_code);
+        return exit_code;
+    }
+
+    // Slightly lazier version of the [] string one.
+    // @Return process exit code.
+    func run_command(command_string: string) -> int32 {
+        var cmd_line = to_c_string(command_string);
+
+        var startup: STARTUPINFOA;
+        startup.cb = sizeof(STARTUPINFOA);
+        startup.dwFlags    = STARTF_USESTDHANDLES;
+        startup.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
+        startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        startup.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
+        
+        var process_info: PROCESS_INFORMATION;
+        var success = CreateProcessA(null, cmd_line, null, null, TRUE, 0, null, null, *startup, *process_info);
+        if success == 0 {
             return -1;
         }
 
