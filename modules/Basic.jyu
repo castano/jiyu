@@ -139,6 +139,36 @@ func read_entire_file(path: string) -> string {
     return result;
 }
 
+func get_command_line(strings: [] string) -> *uint8 {
+    typealias string_length_type = int64; // @TODO
+
+    var total_length: string_length_type = 0;
+    
+    for strings total_length += it.length;
+    
+    total_length += strings.count * 3 + 1; // enough space for quotes and a space around each argument
+    
+    var cursor: string_length_type = 0;
+    var final = cast(*uint8) malloc(cast() total_length);
+    
+    for strings {
+        final[cursor] = '\"'; // "
+        cursor += 1;
+
+        memcpy(final + cursor, it.data, cast() it.length);
+        cursor += it.length;
+        
+        final[cursor] = '\"'; // "
+        cursor += 1;
+        final[cursor] = ' ';
+        cursor += 1;
+    }
+    
+    final[cursor] = 0;
+    cursor += 1;
+    return final;
+}
+
 #if os(Windows) {
     #import "Windows";
 
@@ -160,6 +190,33 @@ func read_entire_file(path: string) -> string {
         var buf: [512] uint8;
         GetCurrentDirectoryA(cast(DWORD) buf.count, buf.data);
         return copy_string(to_string(buf.data));
+    }
+
+    // @Return process exit code.
+    func run_command(command_strings: [] string) -> int32 {
+        var startup: STARTUPINFOA;
+        startup.cb = sizeof(STARTUPINFOA);
+        startup.dwFlags    = STARTF_USESTDHANDLES;
+        startup.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
+        startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
+        startup.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
+        
+        var process_info: PROCESS_INFORMATION;
+
+        var cmd_line = get_command_line(command_strings);
+        printf("Command line: %s\n", cmd_line);
+        var success = CreateProcessA(null, cmd_line, null, null, TRUE, 0, null, null, *startup, *process_info);
+        if success == 0 {
+            printf("wat\n");
+            return -1;
+        }
+
+        WaitForSingleObject(process_info.hProcess, INFINITE);
+        free(cmd_line);
+
+        var exit_code: DWORD;
+        GetExitCodeProcess(process_info.hProcess, *exit_code);
+        return exit_code;
     }
 }
 

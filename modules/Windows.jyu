@@ -1,30 +1,42 @@
 
 #import "LibC";
 
-typealias HMODULE = *void;
-typealias FARPROC = *void;
-typealias DWORD   = int32;
-typealias BOOL    = int32;
-typealias WORD    = int16;
-typealias BYTE    = int8;
-typealias USHORT  = uint16;
-typealias UINT_PTR = uint64; // @PointerSize
-typealias LPTSTR   = c_string;
-
 library "kernel32";
 
+typealias HMODULE = *void;
+typealias HANDLE = PVOID;
+typealias FARPROC = *void;
+
+typealias PVOID = *void;
+typealias LPVOID = PVOID;
+typealias DWORD   = uint32;
+typealias LPDWORD = *DWORD;
+typealias BOOL    = uint32;
+typealias WORD    = uint16;
+typealias BYTE    = uint8;
+typealias LPBYTE = *BYTE;
+typealias USHORT  = uint16;
+typealias UINT_PTR = uint64; // @PointerSize
+
+typealias LPSTR = c_string;
+typealias LPCSTR = c_string;
+typealias LPTSTR   = LPSTR; // @Incomplete Unicode version.
+
+let TRUE : BOOL = 1;
+let FALSE: BOOL = 0;
+
 func MAKEWORD(bLow: BYTE, bHigh: BYTE) -> WORD {
-	var out: WORD = 0;
-	out = bLow | (cast(WORD) bHigh << 8);
-	return out;
+    var out: WORD = 0;
+    out = bLow | (cast(WORD) bHigh << 8);
+    return out;
 }
 
 func LOBYTE(word: WORD) -> BYTE {
-	return cast(BYTE) (word & 0xFF);
+    return cast(BYTE) (word & 0xFF);
 }
 
 func HIBYTE(word: WORD) -> BYTE {
-	return cast(BYTE) ((word >> 8) & 0xFF);
+    return cast(BYTE) ((word >> 8) & 0xFF);
 }
 
 func @c_function ZeroMemory(data: *void, size: size_t);
@@ -36,6 +48,65 @@ func @c_function GetModuleHandleA(lpModuleName: c_string) -> HMODULE;
 func @c_function GetModuleFileNameA(hModule: HMODULE, lpFilename: c_string, nSize: DWORD) -> DWORD;
 func @c_function SetCurrentDirectoryA(lpPathName: c_string) -> BOOL;
 func @c_function GetCurrentDirectoryA(nBufferLength: DWORD, lpBuffer: LPTSTR) -> DWORD;
+
+let STARTF_USESTDHANDLES = 0x00000100;
+
+struct STARTUPINFOA {
+    var cb: DWORD;
+    var lpReserved: LPSTR;
+    var lpDesktop: LPSTR;
+    var lpTitle: LPSTR;
+    var dwX: DWORD;
+    var dwY: DWORD;
+    var dwXSize: DWORD;
+    var dwYSize: DWORD;
+    var dwXCountChars: DWORD;
+    var dwYCountChars: DWORD;
+    var dwFillAttribute: DWORD;
+    var dwFlags: DWORD;
+    var wShowWindow: WORD;
+    var cbReserved2: WORD;
+    var lpReserved2: LPBYTE;
+    var hStdInput: HANDLE;
+    var hStdOutput: HANDLE;
+    var hStdError: HANDLE;
+}
+
+typealias LPSTARTUPINFOA = *STARTUPINFOA;
+
+struct PROCESS_INFORMATION {
+    var hProcess: HANDLE;
+    var hThread: HANDLE;
+    var dwProcessId: DWORD;
+    var dwThreadId: DWORD;
+}
+
+typealias LPPROCESS_INFORMATION = *PROCESS_INFORMATION;
+
+struct SECURITY_ATTRIBUTES {
+    var nLength: DWORD;
+    var lpSecurityDescriptor: LPVOID;
+    var bInheritHandle: BOOL;
+}
+
+typealias LPSECURITY_ATTRIBUTES = *SECURITY_ATTRIBUTES;
+
+func @c_function CreateProcessA(lpApplicationName: LPCSTR, lpCommandLine: LPSTR,
+  lpProcessAttributes: LPSECURITY_ATTRIBUTES, lpThreadAttributes: LPSECURITY_ATTRIBUTES,
+  bInheritHandles: BOOL, dwCreationFlags: DWORD, lpEnvironment: LPVOID, lpCurrentDirectory: LPCSTR,
+  lpStartupInfo: LPSTARTUPINFOA, lpProcessInformation: LPPROCESS_INFORMATION) -> BOOL;
+
+let INFINITE = -1;
+
+func @c_function WaitForSingleObject(hHandle: HANDLE, dwMilliseconds: DWORD) -> DWORD;
+
+func @c_function GetExitCodeProcess(hProcess: HANDLE, lpExitCode: LPDWORD) -> BOOL;
+
+let STD_INPUT_HANDLE : DWORD = -10;
+let STD_OUTPUT_HANDLE: DWORD = -11;
+let STD_ERROR_HANDLE : DWORD = -12;
+
+func @c_function GetStdHandle(nStdHandle: DWORD) -> HANDLE;
 
 // Winsock
 
@@ -52,18 +123,18 @@ let WSASYS_STATUS_LEN  = 128;
 
 /*
 struct WSADATA {
-	var wVersion: WORD;
-	var wHighVersion: WORD;
+    var wVersion: WORD;
+    var wHighVersion: WORD;
 
-	var iMaxSockets: uint16;
-	var iMaxUdpDg  : uint16;
-	var lpVendorInfo: c_string;
-	var szDescription : [WSADESCRIPTION_LEN+1] uint8;
-	var szSystemStatus: [WSASYS_STATUS_LEN+1]  uint8;
+    var iMaxSockets: uint16;
+    var iMaxUdpDg  : uint16;
+    var lpVendorInfo: c_string;
+    var szDescription : [WSADESCRIPTION_LEN+1] uint8;
+    var szSystemStatus: [WSASYS_STATUS_LEN+1]  uint8;
 }
 */
 struct sockaddr {
-	var sa_family: ADDRESS_FAMILY;
+    var sa_family: ADDRESS_FAMILY;
     var sa_data: [14] uint8;
 }
 
