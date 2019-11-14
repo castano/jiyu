@@ -93,6 +93,7 @@ void LLVM_Generator::preinit() {
     
     TargetOptions opt;
     auto RM = Optional<Reloc::Model>();
+    // RM = Reloc::Model::PIC_;
     TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
 }
 
@@ -530,15 +531,19 @@ static Value *create_alloca_in_entry(IRBuilder<> *irb, Type *type) {
 Value *LLVM_Generator::create_string_literal(Ast_Literal *lit, bool want_lvalue) {
     assert(lit->literal_type == Ast_Literal::STRING);
     
+    Value *value = nullptr;
     if (lit->string_value.length == 0 || lit->string_value.data == nullptr) {
-        return Constant::getNullValue(type_string);
+        value = Constant::getNullValue(type_string);
+    } else {
+        bool add_null = true;
+        Constant *data = irb->CreateGlobalStringPtr(string_ref(lit->string_value));
+        Constant *length = ConstantInt::get(type_string_length, lit->string_value.length);
+        
+        value = ConstantStruct::get(type_string, { data, length });
     }
     
-    bool add_null = true;
-    Constant *data = irb->CreateGlobalStringPtr(string_ref(lit->string_value));
-    Constant *length = ConstantInt::get(type_string_length, lit->string_value.length);
+    assert(value);
     
-    auto value = ConstantStruct::get(type_string, { data, length });
     if (want_lvalue) {
         auto alloca = create_alloca_in_entry(irb, type_string);
         irb->CreateStore(value, alloca);
