@@ -312,8 +312,11 @@ struct Array {
     }
     
     void resize(array_count_type amount) {
+        auto old_count = count;
         reserve(amount);
         count = amount;
+
+        memset((char *)data + (old_count * sizeof(T)), 0, (count - old_count) * sizeof(T));
         // @TODO maybe default initalized all elements
         // that we grew by?
     }

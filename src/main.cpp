@@ -158,8 +158,6 @@ extern "C" {
         compiler->copier = new Copier(compiler);
         
         compiler->sema = new Sema(compiler);
-        
-        compiler->llvm_gen->init();
 
         compiler->module_search_paths.add(__default_module_search_path);
         
@@ -330,6 +328,8 @@ extern "C" {
     
     EXPORT bool compiler_generate_llvm_module(Compiler *compiler) {
         // @Incomplete global variables
+
+        compiler->llvm_gen->init();
         
         for (auto decl: compiler->global_decl_emission_queue) {
             assert(!decl->is_let);

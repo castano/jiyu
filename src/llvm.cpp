@@ -181,6 +181,23 @@ void LLVM_Generator::init() {
     }
 
     di_current_scope = di_compile_unit;
+
+    assert(llvm_types.count == 0);
+    llvm_types.resize(compiler->type_table.count);
+    for (auto t: llvm_types) assert(t == nullptr);
+
+    for (auto entry: compiler->type_table) {
+        if (llvm_types[entry->type_table_index]) continue;
+
+        if (types_match(entry, compiler->type_void)) {
+            llvm_types[entry->type_table_index] = type_void;
+            continue;
+        }
+
+        llvm_types[entry->type_table_index] = make_llvm_type(entry);
+    }
+
+    assert(llvm_types.count == compiler->type_table.count);
 }
 
 void LLVM_Generator::finalize() {
@@ -226,9 +243,17 @@ void LLVM_Generator::finalize() {
 }
 
 Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
+    return llvm_types[type->type_table_index];
+}
+
+Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
     if (type->type == Ast_Type_Info::VOID) {
         // return type_i8 for pointers.
         return type_i8;
+    }
+
+    if (type->type == Ast_Type_Info::TYPE) {
+        return type_i8->getPointerTo();
     }
     
     if (type->type == Ast_Type_Info::INTEGER) {
@@ -283,13 +308,13 @@ Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
     }
     
     if (type->type == Ast_Type_Info::STRUCT) {
-        if (type->type_table_index >= 0) {
+        // Prevent recursion.
+        if (llvm_types[type->type_table_index]) {
             return llvm_types[type->type_table_index];
         }
 
-        type->type_table_index = llvm_types.count;
         auto final_type = StructType::create(*llvm_context, type->struct_decl->identifier ? string_ref(type->struct_decl->identifier->name->name) : "");
-        llvm_types.add(final_type);
+        llvm_types[type->type_table_index] = final_type;
 
         Array<Type *> member_types;
         
@@ -341,6 +366,8 @@ Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
         
         return FunctionType::get(return_type, ArrayRef<Type *>(arguments.data, arguments.count), type->is_c_varargs)->getPointerTo();
     }
+
+    printf("%d\n\n", type->type);
     
     assert(false);
     return nullptr;

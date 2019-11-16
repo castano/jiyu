@@ -112,6 +112,7 @@ struct LLVM_Generator {
     
     llvm::Function *get_or_create_function(Ast_Function *function);
     llvm::Type *get_type(Ast_Type_Info *type);
+    llvm::Type *make_llvm_type(Ast_Type_Info *type);
     llvm::FunctionType *create_function_type(Ast_Function *function);
     void emit_scope(Ast_Scope *scope);
     void emit_function(Ast_Function *function);

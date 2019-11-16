@@ -121,9 +121,11 @@ struct Compiler {
     Atom *atom_Windows;
     Atom *atom_Linux;
     
-    Array<Ast_Function *>    function_emission_queue;
+    Array<Ast_Function    *> function_emission_queue;
     Array<Ast_Declaration *> global_decl_emission_queue;
-    Array<Ast_Directive *>   directive_queue;
+    Array<Ast_Directive   *> directive_queue;
+
+    Array<Ast_Type_Info   *> type_table;
     
     Compiler() {
         atom_table = new Atom_Table();
@@ -135,6 +137,12 @@ struct Compiler {
     char *get_temp_c_string(String s);
     
     void init();
+
+    // All these functions add to the type table before returning. Their results should not be modified!
+    Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee);
+    Ast_Type_Info *make_array_type(Ast_Type_Info *element, array_count_type count, bool is_dynamic);
+    Ast_Type_Info *make_function_type(Ast_Function *function);
+    void add_to_type_table(Ast_Type_Info *info);
     
     Atom *make_atom(String name);
     
@@ -148,10 +156,7 @@ struct Compiler {
     bool is_toplevel_scope(Ast_Scope *scope);
 };
 
-Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee, s64 pointer_size);
-Ast_Type_Info *make_array_type(Ast_Type_Info *element, array_count_type count, bool is_dynamic);
-Ast_Type_Info *make_function_type(Compiler *compiler, Ast_Function *function);
-
+// Structs must be added to the type table manually
 Ast_Type_Info *make_struct_type(Ast_Struct *_struct);
 
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right);

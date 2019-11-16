@@ -33,11 +33,28 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
         assert(right->struct_decl);
         return left->struct_decl == right->struct_decl;
     }
+
+    if (left->type == Ast_Type_Info::FUNCTION) {
+        if (left->is_c_function != right->is_c_function) return false;
+        if (left->is_c_varargs  != right->is_c_varargs) return false;
+        if (!types_match(left->return_type, right->return_type)) return false;
+
+        if (left->arguments.count != right->arguments.count) return false;
+
+        for (array_count_type i = 0; i < left->arguments.count; ++i) {
+            auto larg = left->arguments[i];
+            auto rarg = right->arguments[i];
+
+            if (!types_match(larg, rarg)) return false;
+        }
+
+        return true;
+    }
     
     return true;
 }
 
-Ast_Type_Info *make_array_type(Ast_Type_Info *element, array_count_type count, bool is_dynamic) {
+Ast_Type_Info *Compiler::make_array_type(Ast_Type_Info *element, array_count_type count, bool is_dynamic) {
     Ast_Type_Info *info = new Ast_Type_Info();
     info->type = Ast_Type_Info::ARRAY;
     info->array_element       = element;
@@ -50,23 +67,27 @@ Ast_Type_Info *make_array_type(Ast_Type_Info *element, array_count_type count, b
         info->alignment = element->alignment;
     } else {
         if (!is_dynamic) {
-            info->size = 16; // @Cleanup hardcoded value
+            info->size = this->pointer_size * 2;
         } else {
-            info->size = 24; // @Cleanup hardcoded value
+            info->size = this->pointer_size * 3;
         }
         
-        info->alignment = 8; // @TargetInfo @PointerSize @Cleanup hardcoded value
+        info->alignment = this->pointer_size; // @TargetInfo @PointerSize
     }
+
+    add_to_type_table(info);
     return info;
 }
 
-Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee, s64 pointer_size) {
+Ast_Type_Info *Compiler::make_pointer_type(Ast_Type_Info *pointee) {
     Ast_Type_Info *info = new Ast_Type_Info();
     info->type = Ast_Type_Info::POINTER;
     info->pointer_to = pointee;
-    info->size = pointer_size; // @TargetInfo
+    info->size = this->pointer_size; // @TargetInfo
     info->alignment = info->size;
     info->stride    = info->size;
+
+    add_to_type_table(info);
     return info;
 }
 
@@ -77,11 +98,11 @@ Ast_Type_Info *make_struct_type(Ast_Struct *_struct) {
     return info;
 }
 
-Ast_Type_Info *make_function_type(Compiler *compiler, Ast_Function *function) {
+Ast_Type_Info *Compiler::make_function_type(Ast_Function *function) {
     Ast_Type_Info *info = new Ast_Type_Info();
     info->type   = Ast_Type_Info::FUNCTION;
-    info->size   = compiler->type_ptr_void->size;
-    info->stride = compiler->type_ptr_void->stride;
+    info->size   = this->type_ptr_void->size;
+    info->stride = this->type_ptr_void->stride;
     
     info->is_c_function = function->is_c_function;
     info->is_c_varargs  = function->is_c_varargs;
@@ -99,28 +120,33 @@ Ast_Type_Info *make_function_type(Compiler *compiler, Ast_Function *function) {
         info->return_type = get_type_info(function->return_decl);
         assert(info->return_type);
     } else {
-        info->return_type = compiler->type_void;
+        info->return_type = this->type_void;
     }
     
+    add_to_type_table(info);
     return info;
 }
 
-static Ast_Type_Info *make_int_type(bool is_signed, s64 size) {
+static Ast_Type_Info *make_int_type(Compiler *compiler, bool is_signed, s64 size) {
     Ast_Type_Info *info = new Ast_Type_Info();
     info->type = Ast_Type_Info::INTEGER;
     info->is_signed = is_signed;
     info->size = size;
     info->alignment = info->size;
     info->stride = info->size;
+
+    compiler->add_to_type_table(info);
     return info;
 }
 
-static Ast_Type_Info *make_float_type(s64 size) {
+static Ast_Type_Info *make_float_type(Compiler *compiler, s64 size) {
     Ast_Type_Info *info = new Ast_Type_Info();
     info->type = Ast_Type_Info::FLOAT;
     info->size = size;
     info->alignment = info->size;
     info->stride    = info->size;
+
+    compiler->add_to_type_table(info);
     return info;
 }
 
@@ -153,27 +179,29 @@ void Compiler::init() {
 
     type_void = new Ast_Type_Info();
     type_void->type = Ast_Type_Info::VOID;
-    
+    add_to_type_table(type_void);
+
     type_bool = new Ast_Type_Info();
     type_bool->type = Ast_Type_Info::BOOL;
     type_bool->size   = 1;
     type_bool->stride = 1;
     type_bool->alignment = 1;
+    add_to_type_table(type_bool);
     
-    type_int8  = make_int_type(true, 1);
-    type_int16 = make_int_type(true, 2);
-    type_int32 = make_int_type(true, 4);
-    type_int64 = make_int_type(true, 8);
+    type_int8  = make_int_type(this, true, 1);
+    type_int16 = make_int_type(this, true, 2);
+    type_int32 = make_int_type(this, true, 4);
+    type_int64 = make_int_type(this, true, 8);
     
-    type_uint8  = make_int_type(false, 1);
-    type_uint16 = make_int_type(false, 2);
-    type_uint32 = make_int_type(false, 4);
-    type_uint64 = make_int_type(false, 8);
+    type_uint8  = make_int_type(this, false, 1);
+    type_uint16 = make_int_type(this, false, 2);
+    type_uint32 = make_int_type(this, false, 4);
+    type_uint64 = make_int_type(this, false, 8);
     
-    type_float32 = make_float_type(4);
-    type_float64 = make_float_type(8);
+    type_float32 = make_float_type(this, 4);
+    type_float64 = make_float_type(this, 8);
     
-    type_string_data = make_pointer_type(type_uint8, pointer_size);
+    type_string_data = make_pointer_type(type_uint8);
 
     if (is_64bits) {
         type_string_length = type_int64; // @TargetInfo
@@ -186,6 +214,7 @@ void Compiler::init() {
     type_string->size = type_string_length->size + type_string_data->size;
     type_string->stride = type_string->size;
     type_string->alignment = type_string_length->alignment;
+    add_to_type_table(type_string);
     
     if (is_64bits) {
         type_array_count = type_int64; // @TargetInfo
@@ -195,8 +224,11 @@ void Compiler::init() {
     
     type_info_type = new Ast_Type_Info();
     type_info_type->type = Ast_Type_Info::TYPE;
+    add_to_type_table(type_info_type);
     
-    type_ptr_void = make_pointer_type(type_void, pointer_size);
+    type_ptr_void = make_pointer_type(type_void);
+    
+    add_to_type_table(type_ptr_void);
     
     atom_data      = make_atom(to_string("data"));
     atom_length    = make_atom(to_string("length"));
@@ -210,6 +242,20 @@ void Compiler::init() {
     atom_MacOSX    = make_atom(to_string("MacOSX"));
     atom_Windows   = make_atom(to_string("Windows"));
     atom_Linux     = make_atom(to_string("Linux"));
+}
+
+void Compiler::add_to_type_table(Ast_Type_Info *info) {
+    if (info->type_table_index >= 0) return;
+
+    for (auto entry: type_table) {
+        if (types_match(entry, info)) {
+            info->type_table_index = entry->type_table_index;
+            return;
+        }
+    }
+
+    info->type_table_index = type_table.count;
+    type_table.add(info);
 }
 
 void Compiler::queue_directive(Ast_Directive *directive) {
