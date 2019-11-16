@@ -44,6 +44,8 @@
 using namespace llvm;
 using namespace llvm::orc;
 
+String mprintf(char *c_fmt, ...);
+
 static StringRef string_ref(String s) {
     return StringRef(s.data, s.length);
 }
@@ -195,9 +197,11 @@ void LLVM_Generator::finalize() {
         llvm_module->addModuleFlag(Module::Warning, "CodeView", 1);
     }
     
-    auto Filename = "output.o";
+    String exec_name = compiler->build_options.executable_name;
+    String obj_name = mprintf("%.*s.o", exec_name.length, exec_name.data);
+
     std::error_code EC;
-    raw_fd_ostream dest(Filename, EC, sys::fs::F_None);
+    raw_fd_ostream dest(string_ref(obj_name), EC, sys::fs::F_None);
     
     if (EC) {
         errs() << "Could not open file: " << EC.message();
@@ -217,6 +221,8 @@ void LLVM_Generator::finalize() {
     
     pass.run(*llvm_module);
     dest.flush();
+
+    free(obj_name.data);
 }
 
 Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
@@ -1539,8 +1545,6 @@ void LLVM_Generator::emit_global_variable(Ast_Declaration *decl) {
 void LLVM_Jitter::init() {
 
     for (auto lib: compiler->libraries) {
-        String mprintf(char *c_fmt, ...);
-
         String name = lib->libname;
         auto c_str = to_c_string(name);
         if (!lib->is_framework) {

@@ -218,9 +218,11 @@ extern "C" {
             args.add(to_string("/nologo"));
             args.add(to_string("/DEBUG"));
             
-            args.add(to_string("output.o"));
+            String exec_name = compiler->build_options.executable_name;
+            String obj_name = mprintf("%.*s.o", exec_name.length, exec_name.data);
+            args.add(obj_name);
             
-            String output_name = compiler->build_options.executable_name;
+            String output_name = exec_name;
             char executable_name[LINE_SIZE];
             snprintf(executable_name, LINE_SIZE, "/OUT:%.*s.exe", output_name.length, output_name.data);
             convert_to_back_slashes(executable_name + 1);
@@ -245,12 +247,19 @@ extern "C" {
             PROCESS_INFORMATION process_info;
             CreateProcessA(nullptr, (char *) cmd_line, nullptr, nullptr, TRUE, 0, nullptr, nullptr, &startup, &process_info);
             WaitForSingleObject(process_info.hProcess, INFINITE);
+
+            free(cmd_line);
+            free(obj_name.data);
         }
 #else
         // @Incomplete should use the execpve family
         Array<String> args;
         args.add(to_string("ld"));
-        args.add(to_string("output.o"));
+
+        String exec_name = compiler->build_options.executable_name;
+        String obj_name = mprintf("%.*s.o", exec_name.length, exec_name.data);
+
+        args.add(obj_name);
         
         args.add(to_string("-o"));
         args.add(compiler->build_options.executable_name);
@@ -268,6 +277,9 @@ extern "C" {
         auto cmd_line = get_command_line(&args);
         printf("Linker line: %s\n", cmd_line);
         system((char *)cmd_line);
+
+        free(cmd_line);
+        free(obj_name.data);
 #endif
         
         // @TODO make sure we successfully launch the link command and that it returns a success code
@@ -368,7 +380,9 @@ String get_jiyu_work_directory(String exe_dir_path) {
 
 int main(int argc, char **argv) {
     String filename;
+    String output_name;
     bool is_metaprogram = false;
+    bool only_want_obj_file = false;
     String target_triple;
 
     int metaprogram_arg_start = -1;
@@ -376,11 +390,22 @@ int main(int argc, char **argv) {
     for (int i = 1; i < argc; ++i) {
         if (to_string("-meta") == to_string(argv[i])) {
             is_metaprogram = true;
-        } else if (to_string("-triple") == to_string(argv[i])) {
+        } else if (to_string("-c") == to_string(argv[i])) {
+            only_want_obj_file = true;
+        } else if (to_string("-o") == to_string(argv[i])) {
+            if (i+1 < argc) {
+                output_name = to_string(argv[i+1]);
+                i++;
+            } else {
+                printf("error: No output name specified, following -o switch.\n");
+                return -1;
+            }
+        } else if (to_string("-target") == to_string(argv[i])) {
             if (i+1 < argc) {
                 target_triple = to_string(argv[i+1]);
+                i++;
             } else {
-                printf("error: No target triple specified, following -triple switch.\n");
+                printf("error: No target triple specified, following -target switch.\n");
                 return -1;
             }
         } else if (to_string("--") == to_string(argv[i])) {
@@ -402,8 +427,13 @@ int main(int argc, char **argv) {
     }
 
     Build_Options options;
-    options.executable_name = to_string("output");
+    options.executable_name = output_name;
+    if (options.executable_name == to_string("")) {
+        options.executable_name = to_string("output");
+    }
+
     options.target_triple = target_triple;
+    options.only_want_obj_file = only_want_obj_file;
     
     auto compiler = create_compiler_instance(&options);
     compiler->is_metaprogram = is_metaprogram;
