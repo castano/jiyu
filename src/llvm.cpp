@@ -198,13 +198,15 @@ void LLVM_Generator::init() {
     }
 
     assert(llvm_types.count == compiler->type_table.count);
+
+    // @Incomplete do this for llvm_debug_types as well..
 }
 
 void LLVM_Generator::finalize() {
     dib->finalize();
 
-    // @Cleanup duplicate
-    std::string TargetTriple = llvm::sys::getDefaultTargetTriple();
+    std::string TargetTriple = TargetMachine->getTargetTriple().str();
+    // printf("TRIPLE: %s\n", TargetTriple.c_str());
     
     llvm_module->setDataLayout(TargetMachine->createDataLayout());
     llvm_module->setTargetTriple(TargetTriple);
@@ -283,12 +285,12 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
     }
     
     if (type->type == Ast_Type_Info::POINTER) {
-        auto pointee = get_type(type->pointer_to);
+        auto pointee = make_llvm_type(type->pointer_to);
         return pointee->getPointerTo();
     }
     
     if (type->type == Ast_Type_Info::ARRAY) {
-        auto element = get_type(type->array_element);
+        auto element = make_llvm_type(type->array_element);
         if (type->array_element_count >= 0) {
             assert(type->is_dynamic == false);
             
@@ -321,7 +323,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         for (auto member : type->struct_members) {
             if (member.is_let) continue;
             
-            member_types.add(get_type(member.type_info));
+            member_types.add(make_llvm_type(member.type_info));
         }
 
         final_type->setBody(ArrayRef<Type *>(member_types.data, member_types.count), false/*is packed*/);
@@ -340,7 +342,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         for (auto arg_type : type->arguments) {
             if (arg_type == compiler->type_void) continue;
             
-            Type *type = get_type(arg_type);
+            Type *type = make_llvm_type(arg_type);
             
             if (is_c_function && is_win32 && is_aggregate_type(arg_type)) {
                 assert(arg_type->size >= 0);
@@ -359,15 +361,13 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
             arguments.add(type);
         }
         
-        Type *return_type = get_type(type->return_type);
+        Type *return_type = make_llvm_type(type->return_type);
         if (type->return_type->type == Ast_Type_Info::VOID) {
             return_type = type_void;
         }
         
         return FunctionType::get(return_type, ArrayRef<Type *>(arguments.data, arguments.count), type->is_c_varargs)->getPointerTo();
     }
-
-    printf("%d\n\n", type->type);
     
     assert(false);
     return nullptr;
@@ -1511,7 +1511,7 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
 
         auto di_type = get_debug_type(get_type_info(decl));
         bool always_preserve = true; // @TODO should be based on desired optimization.
-        auto param = dib->createParameterVariable(di_subprogram, string_ref(name), i,
+        auto param = dib->createParameterVariable(di_subprogram, string_ref(name), i+1,
                             get_debug_file(llvm_context, decl), get_line_number(decl),
                             di_type, always_preserve);
         auto declare = dib->insertDeclare(storage, param, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(decl), 0, di_subprogram),
