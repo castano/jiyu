@@ -86,7 +86,7 @@ void LLVM_Generator::preinit() {
     // This generally occurs if we've forgotten to initialise the
     // TargetRegistry or we have a bogus target triple.
     if (!Target) {
-        errs() << Error;
+        compiler->report_error((Ast *)nullptr, "LLVM error: %s\n", Error.c_str());
         return;
     }
     
@@ -204,7 +204,7 @@ void LLVM_Generator::finalize() {
     raw_fd_ostream dest(string_ref(obj_name), EC, sys::fs::F_None);
     
     if (EC) {
-        errs() << "Could not open file: " << EC.message();
+        compiler->report_error((Ast *)nullptr, "Could not open file: %s\n", EC.message().c_str());
         return;
     }
     
@@ -215,7 +215,7 @@ void LLVM_Generator::finalize() {
     
     pass.add(createVerifierPass(false));
     if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, FileType)) {
-        errs() << "TargetMachine can't emit a file of this type";
+        compiler->report_error((Ast *)nullptr, "TargetMachine can't emit a file of this type"); // @TODO this error message is unclear for the user.
         return;
     }
     
