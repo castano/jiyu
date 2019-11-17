@@ -236,4 +236,25 @@ Ast_Type_Info *get_final_type(Ast_Type_Info *info) {
     return info;
 }
 
+inline
+bool is_a_type_declaration(Ast_Expression *expression) {
+    return expression->type == AST_STRUCT || expression->type == AST_TYPE_ALIAS;
+}
+
+inline
+Ast_Type_Info *
+get_type_declaration_resolved_type(Ast_Expression *expression) {
+    assert(is_a_type_declaration(expression));
+
+    if (expression->type == AST_STRUCT) {
+        auto _struct = static_cast<Ast_Struct *>(expression);
+        return _struct->type_value;
+    } else if (expression->type == AST_TYPE_ALIAS) {
+        auto alias = static_cast<Ast_Type_Alias *>(expression);
+        return alias->type_value;
+    }
+
+    return nullptr;
+}
+
 #endif

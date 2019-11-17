@@ -224,6 +224,9 @@ void Compiler::init() {
     
     type_info_type = new Ast_Type_Info();
     type_info_type->type = Ast_Type_Info::TYPE;
+    type_info_type->size = this->pointer_size;
+    type_info_type->stride = type_info_type->size;
+    type_info_type->alignment = type_info_type->size;
     add_to_type_table(type_info_type);
     
     type_ptr_void = make_pointer_type(type_void);

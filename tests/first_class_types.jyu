@@ -1,0 +1,25 @@
+
+#import "LibC";
+
+struct My_Struct {
+
+}
+
+typealias T = uint8;
+
+func main() {
+    var type = T;
+    var type_struct = My_Struct;
+
+    if (type == T) {
+        printf("type == T: %d\n", type);
+    } else {
+        printf("type != T: %d\n", type);
+    }
+
+    if (type_struct != My_Struct) {
+        printf("type_struct != My_Struct: %d\n", type_struct);
+    } else {
+        printf("type_struct == My_Struct: %d\n", type_struct);
+    }
+}

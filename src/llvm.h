@@ -88,6 +88,7 @@ struct LLVM_Generator {
 
     llvm::DIType *di_type_string;
     llvm::DIType *di_type_string_length;
+    llvm::DIType *di_type_type;
     
     Array<Tuple<Ast_Declaration *, llvm::Value *>> decl_value_map;
 

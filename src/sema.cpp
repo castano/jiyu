@@ -1277,8 +1277,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
                 if (!is_int_type(left_type) && !is_float_type(left_type) &&
-                    left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type) && left_type->type != Ast_Type_Info::BOOL) {
-                    compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, and string operands.\n");
+                    left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
+                    && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE) {
+                    compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, and Type operands.\n");
                     return;
                 }
             }

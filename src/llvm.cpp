@@ -176,15 +176,24 @@ void LLVM_Generator::init() {
 
         auto type = compiler->type_string;
         di_type_string = dib->createStructType(di_compile_unit, "string", debug_file,
-                            line_number, type->size * BYTES_TO_BITS, type->alignment & BYTES_TO_BITS,
+                            line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
                             flags, nullptr, elements);
+    }
+
+    {
+        auto debug_file = DIFile::get(*llvm_context, "", "");
+        unsigned line_number = 0;
+        DINode::DIFlags flags = DINode::DIFlags();
+
+        auto info = compiler->type_info_type;
+        auto elements = dib->getOrCreateArray({});
+        di_type_type = dib->createStructType(di_compile_unit, "Type", debug_file, line_number,
+                        info->size * BYTES_TO_BITS, info->alignment * BYTES_TO_BITS, flags, nullptr, elements);
     }
 
     di_current_scope = di_compile_unit;
 
-    assert(llvm_types.count == 0);
     llvm_types.resize(compiler->type_table.count);
-    for (auto t: llvm_types) assert(t == nullptr);
 
     for (auto entry: compiler->type_table) {
         if (llvm_types[entry->type_table_index]) continue;
@@ -196,8 +205,6 @@ void LLVM_Generator::init() {
 
         llvm_types[entry->type_table_index] = make_llvm_type(entry);
     }
-
-    assert(llvm_types.count == compiler->type_table.count);
 
     // @Incomplete do this for llvm_debug_types as well..
 }
@@ -519,6 +526,10 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
 
         // Always return a pointer here. Code that doesn't want a pointer should call get_debug_subroutine_type directly.
         return dib->createPointerType(subroutine_type, TargetMachine->getPointerSizeInBits(0));
+    }
+
+    if (type->type == Ast_Type_Info::TYPE) {
+        return di_type_type;
     }
     
     assert(false);
@@ -975,6 +986,12 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 auto func = static_cast<Ast_Function *>(ident->resolved_declaration);
                 
                 return get_or_create_function(func);
+            } else if (is_a_type_declaration(ident->resolved_declaration)) {
+                Ast_Type_Info *type_value = get_type_declaration_resolved_type(ident->resolved_declaration);
+
+                // @Incomplete just stuff the type table index in here for now.. until are able to emit a full type table.
+                auto const_int = ConstantInt::get(type_intptr, type_value->type_table_index, true);
+                return ConstantExpr::getIntToPtr(const_int, type_i8->getPointerTo());
             } else {
                 assert(false);
             }
