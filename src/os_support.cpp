@@ -52,7 +52,22 @@ String get_executable_path() {
 }
 #endif
 
-// @Incomplete get_executable_path for Linux
+#ifdef LINUX
+#include <unistd.h>
+
+String get_executable_path() {
+    const u32 BUFFER_SIZE = 512;
+    char buf[BUFFER_SIZE];
+
+    u32 bufsize = BUFFER_SIZE;
+    auto result = readlink("/proc/self/exe", buf, bufsize);
+    if (result < 0) return String();
+
+    return copy_string(to_string(buf));
+}
+
+#endif // LINUX
+
 
 #ifdef UNIX
 #include <unistd.h>
