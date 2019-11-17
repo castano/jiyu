@@ -46,7 +46,7 @@ String get_executable_path() {
 
     u32 bufsize = BUFFER_SIZE;
     auto result = _NSGetExecutablePath(buf, &bufsize);
-    if (result != 0) return to_string("");
+    if (result != 0) return String();
 
     return copy_string(to_string(buf));
 }
