@@ -7,8 +7,6 @@
 
 #include <stdarg.h>
 
-struct Lexer;
-struct Parser;
 struct Token;
 struct Span;
 struct LLVM_Generator;
@@ -126,17 +124,21 @@ struct Compiler {
     Array<Ast_Directive   *> directive_queue;
 
     Array<Ast_Type_Info   *> type_table;
+
+    Pool memory_pool;
     
     Compiler() {
-        atom_table = new Atom_Table();
-        preload_scope = new Ast_Scope();
-        global_scope  = new Ast_Scope();
+        atom_table = new Atom_Table();   // @Leak
+        preload_scope = new Ast_Scope(); // @Leak
+        global_scope  = new Ast_Scope(); // @Leak
         global_scope->parent = preload_scope;
     }
     
     char *get_temp_c_string(String s);
     
     void init();
+
+    void *get_memory(array_count_type amount);
 
     // All these functions add to the type table before returning. Their results should not be modified!
     Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee);

@@ -75,6 +75,9 @@ void perform_load_from_string(Compiler *compiler, String source, Ast_Scope *targ
     
     Parser *parser = new Parser(lexer);
     parser->parse_scope(target_scope, false);
+
+    delete lexer;
+    delete parser;
 }
 
 void perform_load(Compiler *compiler, Ast *ast, String filename, Ast_Scope *target_scope) {
@@ -92,6 +95,9 @@ void perform_load(Compiler *compiler, Ast *ast, String filename, Ast_Scope *targ
     
     Parser *parser = new Parser(lexer);
     parser->parse_scope(target_scope, false);
+    
+    delete lexer;
+    delete parser;
 }
 
 u8 *get_command_line(Array<String> *strings) {

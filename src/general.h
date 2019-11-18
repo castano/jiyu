@@ -519,14 +519,53 @@ struct String_Builder {
     }
 };
 
-// @Incomplete
-// struct Pool {
-//     struct Chunk {
-//         void *data = nullptr;
-//         s64 used = 0;
-//         s64 allocated = 0;
-//     };
-//     Array<>
-// };
+struct Pool {
+    struct Chunk {
+        void *data = nullptr;
+        s64 used = 0;
+        s64 allocated = 0;
+    };
+    
+    const array_count_type DEFAULT_NEW_CHUNK_SIZE = 4096 * 4;
+    Array<Chunk> chunks;
+
+    ~Pool() {
+        reset();
+    }
+
+    void *allocate(array_count_type amount) {
+        for (auto &chunk : chunks) {
+            auto available = chunk.allocated - chunk.used;
+            assert(available >= 0);
+
+            if (available >= amount) {
+                void *result = (char *)chunk.data + chunk.used;
+                chunk.used += amount;
+
+                return result;
+            }
+        }
+
+        // All chunks exhauted or amount simply doesnt fit..
+        auto ammount_to_allocate = DEFAULT_NEW_CHUNK_SIZE;
+        if (ammount_to_allocate < amount) ammount_to_allocate = amount;
+
+        Chunk c;
+        c.data = malloc(ammount_to_allocate);
+        c.used = amount;
+        c.allocated = ammount_to_allocate;
+        chunks.add(c);
+
+        return c.data;
+    }
+
+    void reset() {
+        for (auto &chunk : chunks) {
+            free(chunk.data);
+        }
+
+        chunks.reset();
+    }
+};
 
 #endif

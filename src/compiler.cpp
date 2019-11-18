@@ -54,6 +54,10 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
     return true;
 }
 
+void *Compiler::get_memory(array_count_type amount) {
+    return memory_pool.allocate(amount);
+}
+
 Ast_Type_Info *Compiler::make_array_type(Ast_Type_Info *element, array_count_type count, bool is_dynamic) {
     Ast_Type_Info *info = new Ast_Type_Info();
     info->type = Ast_Type_Info::ARRAY;

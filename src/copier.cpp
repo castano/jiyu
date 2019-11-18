@@ -4,12 +4,13 @@
 #include "compiler.h"
 #include "sema.h"
 
-#define COPIER_NEW(type) ((type *)init_copy(new type(), old))
+#define COPIER_NEW(type) ((type *)init_copy(new (compiler->get_memory(sizeof(type))) type(), old))
 
 #define COPY_ARRAY(name) do { for (auto i : old->name) {_new->name.add((decltype(i))copy(i)); } } while (0) 
 #define COPY_P(name)     ( _new->name = old->name )
 #define COPY(name)       ( _new->name = (decltype(_new->name))copy(old->name) )
 
+static
 Ast *init_copy(Ast* _new, Ast *old) {
     _new->text_span = old->text_span;
     _new->filename = old->filename;

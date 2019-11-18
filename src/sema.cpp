@@ -6,6 +6,8 @@
 
 #include <stdio.h>
 
+#define SEMA_NEW(type) (new (compiler->get_memory(sizeof(type))) type())
+
 void add_type(String_Builder *builder, Ast_Type_Info *type) {
     if (type->type == Ast_Type_Info::INTEGER) {
         if (type->is_signed) builder->putchar('s');
@@ -231,7 +233,7 @@ String type_to_string(Ast_Type_Info *info) {
     return builder.to_string();
 }
 
-Ast_Expression *cast_int_to_int(Ast_Expression *expr, Ast_Type_Info *target) {
+Ast_Expression *cast_int_to_int(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
     
     assert(expr->type_info->type == Ast_Type_Info::INTEGER);
@@ -239,7 +241,7 @@ Ast_Expression *cast_int_to_int(Ast_Expression *expr, Ast_Type_Info *target) {
     
     if (target->size == expr->type_info->size) return expr;
     
-    Ast_Cast *cast = new Ast_Cast();
+    Ast_Cast *cast = SEMA_NEW(Ast_Cast);
     copy_location_info(cast, expr);
     cast->expression = expr;
     // cast->target_type_inst = nullptr;
@@ -247,7 +249,7 @@ Ast_Expression *cast_int_to_int(Ast_Expression *expr, Ast_Type_Info *target) {
     return cast;
 }
 
-Ast_Expression *cast_float_to_float(Ast_Expression *expr, Ast_Type_Info *target) {
+Ast_Expression *cast_float_to_float(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
     
     assert(expr->type_info->type == Ast_Type_Info::FLOAT);
@@ -255,7 +257,7 @@ Ast_Expression *cast_float_to_float(Ast_Expression *expr, Ast_Type_Info *target)
     
     if (target->size == expr->type_info->size) return expr;
     
-    Ast_Cast *cast = new Ast_Cast();
+    Ast_Cast *cast = SEMA_NEW(Ast_Cast);
     copy_location_info(cast, expr);
     cast->expression = expr;
     // cast->target_type_info = nullptr;
@@ -263,13 +265,13 @@ Ast_Expression *cast_float_to_float(Ast_Expression *expr, Ast_Type_Info *target)
     return cast;
 }
 
-Ast_Expression *cast_int_to_float(Ast_Expression *expr, Ast_Type_Info *target) {
+Ast_Expression *cast_int_to_float(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
     
     assert(expr->type_info->type == Ast_Type_Info::INTEGER);
     assert(target->type == Ast_Type_Info::FLOAT);
     
-    Ast_Cast *cast = new Ast_Cast();
+    Ast_Cast *cast = SEMA_NEW(Ast_Cast);
     copy_location_info(cast, expr);
     cast->expression = expr;
     // cast->target_type_info = nullptr;
@@ -278,13 +280,13 @@ Ast_Expression *cast_int_to_float(Ast_Expression *expr, Ast_Type_Info *target) {
     
 }
 
-Ast_Expression *cast_ptr_to_ptr(Ast_Expression *expr, Ast_Type_Info *target) {
+Ast_Expression *cast_ptr_to_ptr(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
     
     assert(expr->type_info->type == Ast_Type_Info::POINTER);
     assert(target->type == Ast_Type_Info::POINTER);
     
-    Ast_Cast *cast = new Ast_Cast();
+    Ast_Cast *cast = SEMA_NEW(Ast_Cast);
     copy_location_info(cast, expr);
     cast->expression = expr;
     cast->type_info = target;
@@ -292,8 +294,8 @@ Ast_Expression *cast_ptr_to_ptr(Ast_Expression *expr, Ast_Type_Info *target) {
 }
 
 
-Ast_Literal *make_integer_literal(s64 value, Ast_Type_Info *type_info, Ast *source_loc = nullptr) {
-    Ast_Literal *lit = new Ast_Literal();
+Ast_Literal *make_integer_literal(Compiler *compiler, s64 value, Ast_Type_Info *type_info, Ast *source_loc = nullptr) {
+    Ast_Literal *lit = SEMA_NEW(Ast_Literal);
     lit->literal_type = Ast_Literal::INTEGER;
     lit->integer_value = value;
     lit->type_info = type_info;
@@ -302,8 +304,8 @@ Ast_Literal *make_integer_literal(s64 value, Ast_Type_Info *type_info, Ast *sour
     return lit;
 }
 
-Ast_Literal *make_float_literal(double value, Ast_Type_Info *type_info, Ast *source_loc = nullptr) {
-    Ast_Literal *lit = new Ast_Literal();
+Ast_Literal *make_float_literal(Compiler *compiler, double value, Ast_Type_Info *type_info, Ast *source_loc = nullptr) {
+    Ast_Literal *lit = SEMA_NEW(Ast_Literal);
     lit->literal_type = Ast_Literal::FLOAT;
     lit->float_value = value;
     lit->type_info = type_info;
@@ -312,8 +314,8 @@ Ast_Literal *make_float_literal(double value, Ast_Type_Info *type_info, Ast *sou
     return lit;
 }
 
-Ast_Literal *make_bool_literal(bool value, Ast_Type_Info *bool_type_info, Ast *source_loc = nullptr) {
-    Ast_Literal *lit = new Ast_Literal();
+Ast_Literal *make_bool_literal(Compiler *compiler, bool value, Ast_Type_Info *bool_type_info, Ast *source_loc = nullptr) {
+    Ast_Literal *lit = SEMA_NEW(Ast_Literal);
     lit->literal_type = Ast_Literal::BOOL;
     lit->bool_value = value;
     lit->type_info = bool_type_info;
@@ -323,26 +325,26 @@ Ast_Literal *make_bool_literal(bool value, Ast_Type_Info *bool_type_info, Ast *s
 }
 
 
-Ast_Identifier *make_identifier(Atom *name) {
-    Ast_Identifier *ident = new Ast_Identifier();
+Ast_Identifier *make_identifier(Compiler *compiler, Atom *name) {
+    Ast_Identifier *ident = SEMA_NEW(Ast_Identifier);
     ident->name = name;
     return ident;
 }
 
 // @Note MUST typecheck the return value of this!!!
-Ast_Array_Dereference *make_array_index(Ast_Expression *array, Ast_Expression *index) {
-    Ast_Array_Dereference *deref = new Ast_Array_Dereference();
+Ast_Array_Dereference *make_array_index(Compiler *compiler, Ast_Expression *array, Ast_Expression *index) {
+    Ast_Array_Dereference *deref = SEMA_NEW(Ast_Array_Dereference);
     deref->array_or_pointer_expression = array;
     deref->index_expression = index;
     return deref;
 }
 
 // @Note MUST typecheck the return value of this!!!
-Ast_Dereference *make_dereference(Ast_Expression *aggregate_expression, Atom *field) {
-    auto ident = make_identifier(field);
+Ast_Dereference *make_dereference(Compiler *compiler, Ast_Expression *aggregate_expression, Atom *field) {
+    auto ident = make_identifier(compiler, field);
     copy_location_info(ident, aggregate_expression);
     
-    Ast_Dereference *deref = new Ast_Dereference();
+    Ast_Dereference *deref = SEMA_NEW(Ast_Dereference);
     copy_location_info(deref, aggregate_expression);
     deref->left = aggregate_expression;
     deref->field_selector = ident;
@@ -350,15 +352,15 @@ Ast_Dereference *make_dereference(Ast_Expression *aggregate_expression, Atom *fi
 }
 
 // @Note MUST typecheck the return value of this!!!
-Ast_Unary_Expression *make_unary(Token::Type op, Ast_Expression *subexpr) {
-    Ast_Unary_Expression *un = new Ast_Unary_Expression();
+Ast_Unary_Expression *make_unary(Compiler *compiler, Token::Type op, Ast_Expression *subexpr) {
+    Ast_Unary_Expression *un = SEMA_NEW(Ast_Unary_Expression);
     un->operator_type = op;
     un->expression = subexpr;
     return un;
 }
 
-Ast_Binary_Expression *make_binary(Token::Type op, Ast_Expression *left, Ast_Expression *right, Ast *location) {
-    Ast_Binary_Expression *bin = new Ast_Binary_Expression();
+Ast_Binary_Expression *make_binary(Compiler *compiler, Token::Type op, Ast_Expression *left, Ast_Expression *right, Ast *location) {
+    Ast_Binary_Expression *bin = SEMA_NEW(Ast_Binary_Expression);
     bin->operator_type = op;
     bin->left = left;
     bin->right = right;
@@ -482,16 +484,16 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
     if (!types_match(ltype, rtype)) {
         if (is_int_type(ltype) && is_int_type(rtype) && (ltype->is_signed == rtype->is_signed)) {
             if (ltype->size > rtype->size) {
-                right = cast_int_to_int(right, ltype);
+                right = cast_int_to_int(compiler, right, ltype);
                 viability_score += 1;
             }
         } else if (is_float_type(ltype) && is_float_type(rtype)) {
             if (ltype->size > rtype->size) {
-                right = cast_float_to_float(right, ltype);
+                right = cast_float_to_float(compiler, right, ltype);
                 viability_score += 1;
             }
         } else if (is_float_type(ltype) && is_int_type(rtype)) {
-            right = cast_int_to_float(right, ltype);
+            right = cast_int_to_float(compiler, right, ltype);
             viability_score += 10;
         } else if (allow_coerce_to_ptr_void && is_pointer_type(ltype) && is_pointer_type(rtype)) {
             
@@ -501,7 +503,7 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
                 auto right_indir = get_levels_of_indirection(rtype);
                 
                 if (left_indir == right_indir) {
-                    right = cast_ptr_to_ptr(right, ltype);
+                    right = cast_ptr_to_ptr(compiler, right, ltype);
                 }
             }
             
@@ -512,7 +514,7 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
 
             // Only allow this for literals because this is a convinience for passing literal strings to C functions!
             if (auto literal = folds_to_literal(expression)) {
-                auto deref = make_dereference(literal, compiler->atom_data);
+                auto deref = make_dereference(compiler, literal, compiler->atom_data);
                 typecheck_expression(deref);
 
                 right = deref;
@@ -527,11 +529,11 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
 #define FOLD_COMPARE(op, lhs, rhs, type_info, site)                      \
 {                                                                        \
     if (type_info->is_signed) {                                          \
-        return make_bool_literal(lhs op rhs, compiler->type_bool, site); \
+        return make_bool_literal(compiler, lhs op rhs, compiler->type_bool, site); \
     } else {                                                             \
         u64 l = static_cast<u64>(lhs);                                   \
         u64 r = static_cast<u64>(rhs);                                   \
-        return make_bool_literal(l op r, compiler->type_bool, site);     \
+        return make_bool_literal(compiler, l op r, compiler->type_bool, site);     \
     }                                                                    \
 }
 
@@ -569,11 +571,11 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                 s64 right_int = right->integer_value;
                 switch (bin->operator_type) {
                     // @Incomplete I think. Should we be casting back and forth between the appropriate types and s64/u64?
-                    case Token::PLUS : return make_integer_literal(left_int + right_int, left_type, bin);
-                    case Token::MINUS: return make_integer_literal(left_int - right_int, left_type, bin);
-                    case Token::STAR : return make_integer_literal(left_int * right_int, left_type, bin);
-                    case Token::SLASH: return make_integer_literal(left_int / right_int, left_type, bin);
-                    case Token::VERTICAL_BAR: return make_integer_literal(left_int | right_int, left_type, bin);
+                    case Token::PLUS : return make_integer_literal(compiler, left_int + right_int, left_type, bin);
+                    case Token::MINUS: return make_integer_literal(compiler, left_int - right_int, left_type, bin);
+                    case Token::STAR : return make_integer_literal(compiler, left_int * right_int, left_type, bin);
+                    case Token::SLASH: return make_integer_literal(compiler, left_int / right_int, left_type, bin);
+                    case Token::VERTICAL_BAR: return make_integer_literal(compiler, left_int | right_int, left_type, bin);
                     
                     case Token::LE_OP: FOLD_COMPARE(<=, left_int, right_int, left_type, bin);
                     case Token::GE_OP: FOLD_COMPARE(>=, left_int, right_int, left_type, bin);
@@ -589,17 +591,17 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                 double r = right->float_value;
                 
                 switch (bin->operator_type) {
-                    case Token::PLUS : return make_float_literal(l + r, left_type, bin);
-                    case Token::MINUS: return make_float_literal(l - r, left_type, bin);
-                    case Token::STAR : return make_float_literal(l * r, left_type, bin);
-                    case Token::SLASH: return make_float_literal(l / r, left_type, bin);
+                    case Token::PLUS : return make_float_literal(compiler, l + r, left_type, bin);
+                    case Token::MINUS: return make_float_literal(compiler, l - r, left_type, bin);
+                    case Token::STAR : return make_float_literal(compiler, l * r, left_type, bin);
+                    case Token::SLASH: return make_float_literal(compiler, l / r, left_type, bin);
                     
-                    case Token::LE_OP: make_bool_literal(l <= r, compiler->type_bool, bin);
-                    case Token::GE_OP: make_bool_literal(l >= r, compiler->type_bool, bin);
-                    case Token::EQ_OP: make_bool_literal(l == r, compiler->type_bool, bin);
-                    case Token::NE_OP: make_bool_literal(l != r, compiler->type_bool, bin);
-                    case Token::LEFT_ANGLE : make_bool_literal(l <  r, compiler->type_bool, bin);
-                    case Token::RIGHT_ANGLE: make_bool_literal(l >  r, compiler->type_bool, bin);
+                    case Token::LE_OP: make_bool_literal(compiler, l <= r, compiler->type_bool, bin);
+                    case Token::GE_OP: make_bool_literal(compiler, l >= r, compiler->type_bool, bin);
+                    case Token::EQ_OP: make_bool_literal(compiler, l == r, compiler->type_bool, bin);
+                    case Token::NE_OP: make_bool_literal(compiler, l != r, compiler->type_bool, bin);
+                    case Token::LEFT_ANGLE : make_bool_literal(compiler, l <  r, compiler->type_bool, bin);
+                    case Token::RIGHT_ANGLE: make_bool_literal(compiler, l >  r, compiler->type_bool, bin);
                     
                     default: assert(false);
                 }
@@ -622,10 +624,10 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                 if (left_type->type == Ast_Type_Info::INTEGER) {
                     assert(rhs->literal_type == Ast_Literal::INTEGER);
                     // @Incomplete if we need to work about casting between the target type sizes and s64, the we probably need to do that here too.
-                    return make_integer_literal(-rhs->integer_value, left_type, un);
+                    return make_integer_literal(compiler, -rhs->integer_value, left_type, un);
                 } else if (left_type->type == Ast_Type_Info::FLOAT) {
                     assert(rhs->literal_type == Ast_Literal::FLOAT);
-                    return make_float_literal(-rhs->float_value, left_type, un);
+                    return make_float_literal(compiler, -rhs->float_value, left_type, un);
                 } else {
                     return nullptr;
                 }
@@ -712,25 +714,25 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
     if (!types_match(ltype, rtype)) {
         if (is_int_type(ltype) && is_int_type(rtype) && (ltype->is_signed == rtype->is_signed)) {
             if (ltype->size < rtype->size) {
-                left = cast_int_to_int(left, rtype);
+                left = cast_int_to_int(compiler, left, rtype);
                 left_viability_score += 1;
             } else if (ltype->size > rtype->size) {
-                right = cast_int_to_int(right, ltype);
+                right = cast_int_to_int(compiler, right, ltype);
                 right_viability_score += 1;
             }
         } else if (is_float_type(ltype) && is_float_type(rtype)) {
             if (ltype->size < rtype->size) {
-                left = cast_float_to_float(left, rtype);
+                left = cast_float_to_float(compiler, left, rtype);
                 left_viability_score += 1;
             } else if (ltype->size > rtype->size) {
-                right = cast_float_to_float(right, ltype);
+                right = cast_float_to_float(compiler, right, ltype);
                 right_viability_score += 1;
             }
         } else if (is_float_type(ltype) && is_int_type(rtype)) {
-            right = cast_int_to_float(right, ltype);
+            right = cast_int_to_float(compiler, right, ltype);
             right_viability_score += 10;
         } else if (is_int_type(ltype) && is_float_type(rtype)) {
-            left = cast_int_to_float(left, rtype);
+            left = cast_int_to_float(compiler, left, rtype);
             left_viability_score += 10;
         }else if (allow_coerce_to_ptr_void && is_pointer_type(ltype) && is_pointer_type(rtype)) {
             
@@ -740,7 +742,7 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
                 auto right_indir = get_levels_of_indirection(rtype);
                 
                 if (left_indir == right_indir) {
-                    right = cast_ptr_to_ptr(right, ltype);
+                    right = cast_ptr_to_ptr(compiler, right, ltype);
                 }
             }
             
@@ -1187,8 +1189,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     default: assert(false);
                 }
 
-                auto operation = make_binary(op, bin->left, bin->right, bin);
-                auto assignment = make_binary(Token::EQUALS, bin->left, operation, bin);
+                auto operation = make_binary(compiler, op, bin->left, bin->right, bin);
+                auto assignment = make_binary(compiler, Token::EQUALS, bin->left, operation, bin);
 
                 bin->substitution = assignment;
                 bin = assignment;
@@ -1321,10 +1323,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             
             if (bin->operator_type == Token::EQ_OP) {
                 if (left_type->type == Ast_Type_Info::STRING) {
-                    Ast_Function_Call *call = new Ast_Function_Call();
+                    Ast_Function_Call *call = SEMA_NEW(Ast_Function_Call);
                     copy_location_info(call, bin);
 
-                    auto identifier = make_identifier(compiler->atom___strings_match);
+                    auto identifier = make_identifier(compiler, compiler->atom___strings_match);
                     copy_location_info(identifier, bin);
                     identifier->enclosing_scope = compiler->global_scope;
                     
@@ -1468,7 +1470,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         return;
                     }
                     
-                    Ast_Os *os = new Ast_Os();
+                    Ast_Os *os = SEMA_NEW(Ast_Os);
                     copy_location_info(os, call);
                     os->expression = call->argument_list[0];
                     typecheck_expression(os);
@@ -1575,7 +1577,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 // we allow you to dereference once through a pointer
                 // here we insert some desugaring that expands pointer.field into (<<pointer).field
                 
-                auto un = make_unary(Token::DEREFERENCE_OR_SHIFT, deref->left);
+                auto un = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, deref->left);
                 copy_location_info(un, deref);
 
                 typecheck_expression(un);
@@ -1673,19 +1675,19 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     assert(left_type->is_dynamic == false);
                     
                     if (field_atom == compiler->atom_data) {
-                        auto index_lit = make_integer_literal(0, compiler->type_array_count);
+                        auto index_lit = make_integer_literal(compiler, 0, compiler->type_array_count);
                         copy_location_info(index_lit, deref);
                         
-                        auto index = make_array_index(deref->left, index_lit);
+                        auto index = make_array_index(compiler, deref->left, index_lit);
                         copy_location_info(index, deref);
                         
-                        auto addr = make_unary(Token::STAR, index);
+                        auto addr = make_unary(compiler, Token::STAR, index);
                         copy_location_info(addr, deref);
                         
                         typecheck_expression(addr);
                         deref->substitution = addr;
                     } else if (field_atom == compiler->atom_count) {
-                        auto lit = make_integer_literal(left_type->array_element_count, compiler->type_array_count);
+                        auto lit = make_integer_literal(compiler, left_type->array_element_count, compiler->type_array_count);
                         copy_location_info(lit, deref);
                         deref->substitution = lit;
                     } else {
@@ -1839,15 +1841,15 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
             
             if (!is_int_type(init_type)) {
-                auto count_expr = make_dereference(_for->initial_iterator_expression, compiler->atom_count);
+                auto count_expr = make_dereference(compiler, _for->initial_iterator_expression, compiler->atom_count);
                 typecheck_expression(count_expr);
                 
-                auto zero = make_integer_literal(0, get_type_info(count_expr));
-                auto it_index_ident = make_identifier(compiler->atom_it_index);
+                auto zero = make_integer_literal(compiler, 0, get_type_info(count_expr));
+                auto it_index_ident = make_identifier(compiler, compiler->atom_it_index);
                 copy_location_info(it_index_ident, _for);
                 it_index_ident->enclosing_scope = &_for->body;
                 {
-                    Ast_Declaration *decl = new Ast_Declaration();
+                    Ast_Declaration *decl = SEMA_NEW(Ast_Declaration);
                     copy_location_info(decl, _for);
                     decl->identifier = it_index_ident;
                     copy_location_info(decl->identifier, _for);
@@ -1862,11 +1864,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
                 
                 {
-                    auto indexed = make_array_index(_for->initial_iterator_expression, it_index_ident);
+                    auto indexed = make_array_index(compiler, _for->initial_iterator_expression, it_index_ident);
                     
-                    Ast_Declaration *decl = new Ast_Declaration();
+                    Ast_Declaration *decl = SEMA_NEW(Ast_Declaration);
                     copy_location_info(decl, _for);
-                    decl->identifier = make_identifier(compiler->atom_it);
+                    decl->identifier = make_identifier(compiler, compiler->atom_it);
                     copy_location_info(decl->identifier, decl);
                     decl->initializer_expression = indexed;
                     decl->is_let = true;
@@ -1882,9 +1884,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             
             if (!_for->iterator_decl) {
                 // for integer ranges only
-                Ast_Declaration *decl = new Ast_Declaration();
+                Ast_Declaration *decl = SEMA_NEW(Ast_Declaration);
                 copy_location_info(decl, _for);
-                decl->identifier = make_identifier(compiler->atom_it);
+                decl->identifier = make_identifier(compiler, compiler->atom_it);
                 copy_location_info(decl->identifier, _for);
                 decl->identifier->enclosing_scope = &_for->body;
                 decl->initializer_expression = _for->initial_iterator_expression;
@@ -2147,7 +2149,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             auto type = resolve_type_inst(size->target_type_inst);
             assert(type->size >= 0);
             
-            auto lit = make_integer_literal(type->size, compiler->type_int32);
+            auto lit = make_integer_literal(compiler, type->size, compiler->type_int32);
             copy_location_info(lit, size);
 
             size->type_info = lit->type_info;
@@ -2171,7 +2173,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
             
             auto ident = static_cast<Ast_Identifier *>(expr);
-            Ast_Literal *lit = new Ast_Literal();
+            Ast_Literal *lit = SEMA_NEW(Ast_Literal);
             copy_location_info(lit, os);
             lit->literal_type = Ast_Literal::BOOL;
             lit->type_info = compiler->type_bool;

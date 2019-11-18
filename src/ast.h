@@ -365,6 +365,4 @@ struct Ast_Library : Ast_Expression {
     String libname;
 };
 
-#define AST_NEW(type) (type *)ast_init(this, new type());
-
 #endif

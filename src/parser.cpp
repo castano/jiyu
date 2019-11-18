@@ -2,7 +2,9 @@
 #include "parser.h"
 #include "compiler.h"
 
+#define PARSER_NEW(type) (type *)ast_init(this, new (compiler->get_memory(sizeof(type))) type() );
 
+static
 Ast *ast_init(Parser *parser, Ast *ast) {
     Token *token = parser->peek_token();
     ast->text_span = token->text_span;
@@ -60,7 +62,7 @@ bool Parser::expect_and_eat(Token::Type type) {
 
 Ast_Identifier *Parser::parse_identifier() {
     if (!expect(Token::IDENTIFIER)) return nullptr;
-    Ast_Identifier *ident = AST_NEW(Ast_Identifier);
+    Ast_Identifier *ident = PARSER_NEW(Ast_Identifier);
     
     Token *token = next_token();
     String name = token->string;
@@ -82,7 +84,7 @@ Ast_Expression *Parser::parse_primary_expression() {
     }
     
     if (token->type == Token::INTEGER) {
-        Ast_Literal *lit = AST_NEW(Ast_Literal);
+        Ast_Literal *lit = PARSER_NEW(Ast_Literal);
         next_token();
         
         lit->literal_type = Ast_Literal::INTEGER;
@@ -91,7 +93,7 @@ Ast_Expression *Parser::parse_primary_expression() {
     }
     
     if (token->type == Token::FLOAT) {
-        Ast_Literal *lit = AST_NEW(Ast_Literal);
+        Ast_Literal *lit = PARSER_NEW(Ast_Literal);
         next_token();
         
         lit->literal_type = Ast_Literal::FLOAT;
@@ -100,7 +102,7 @@ Ast_Expression *Parser::parse_primary_expression() {
     }
     
     if (token->type == Token::KEYWORD_TRUE || token->type == Token::KEYWORD_FALSE) {
-        Ast_Literal *lit = AST_NEW(Ast_Literal);
+        Ast_Literal *lit = PARSER_NEW(Ast_Literal);
         next_token();
         
         lit->literal_type = Ast_Literal::BOOL;
@@ -109,7 +111,7 @@ Ast_Expression *Parser::parse_primary_expression() {
     }
     
     if (token->type == Token::STRING) {
-        Ast_Literal *lit = AST_NEW(Ast_Literal);
+        Ast_Literal *lit = PARSER_NEW(Ast_Literal);
         next_token();
         
         lit->literal_type = Ast_Literal::STRING;
@@ -118,7 +120,7 @@ Ast_Expression *Parser::parse_primary_expression() {
     }
     
     if (token->type == Token::KEYWORD_NULL) {
-        Ast_Literal *lit = AST_NEW(Ast_Literal);
+        Ast_Literal *lit = PARSER_NEW(Ast_Literal);
         next_token();
         
         lit->literal_type = Ast_Literal::NULLPTR;
@@ -136,7 +138,7 @@ Ast_Expression *Parser::parse_primary_expression() {
     }
     
     if (token->type == Token::KEYWORD_SIZEOF) {
-        Ast_Sizeof *size = AST_NEW(Ast_Sizeof);
+        Ast_Sizeof *size = PARSER_NEW(Ast_Sizeof);
         next_token();
         
         if (!expect_and_eat((Token::Type) '(')) return size;
@@ -160,7 +162,7 @@ Ast_Expression *Parser::parse_postfix_expression() {
         
         if (token->type == Token::LEFT_PAREN) {
             // transform this into a function call
-            Ast_Function_Call *call = AST_NEW(Ast_Function_Call);
+            Ast_Function_Call *call = PARSER_NEW(Ast_Function_Call);
             copy_location_info(call, sub_expression);
             next_token();
             
@@ -194,7 +196,7 @@ Ast_Expression *Parser::parse_postfix_expression() {
             
             sub_expression = call;
         } else if (token->type == Token::DOT) {
-            Ast_Dereference *deref = AST_NEW(Ast_Dereference);
+            Ast_Dereference *deref = PARSER_NEW(Ast_Dereference);
             next_token();
             
             // @TODO do other languages let you use anything other than an identifier for a field selection?
@@ -206,7 +208,7 @@ Ast_Expression *Parser::parse_postfix_expression() {
             
             sub_expression = deref;
         } else if (token->type == '[') {
-            Ast_Array_Dereference *deref = AST_NEW(Ast_Array_Dereference);
+            Ast_Array_Dereference *deref = PARSER_NEW(Ast_Array_Dereference);
             
             next_token();
             deref->array_or_pointer_expression = sub_expression;
@@ -232,7 +234,7 @@ Ast_Expression *Parser::parse_unary_expression() {
     if (token->type == Token::STAR ||
         token->type == Token::DEREFERENCE_OR_SHIFT ||
         token->type == Token::MINUS) {
-        Ast_Unary_Expression *ref = AST_NEW(Ast_Unary_Expression);
+        Ast_Unary_Expression *ref = PARSER_NEW(Ast_Unary_Expression);
         ref->operator_type = token->type;
         
         
@@ -248,7 +250,7 @@ Ast_Expression *Parser::parse_unary_expression() {
         ref->expression = expression;
         return ref;
     } else if (token->type == Token::KEYWORD_CAST) {
-        Ast_Cast *cast = AST_NEW(Ast_Cast);
+        Ast_Cast *cast = PARSER_NEW(Ast_Cast);
         
         next_token();
         
@@ -279,7 +281,7 @@ Ast_Expression *Parser::parse_multiplicative_expression() {
         if (token->type == Token::STAR
             || token->type == Token::SLASH
             || token->type == Token::PERCENT) {
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             next_token();
             
             bin->operator_type = token->type;
@@ -312,7 +314,7 @@ Ast_Expression *Parser::parse_additive_expression() {
         
         if (token->type == Token::PLUS
             || token->type == Token::MINUS) {
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             next_token();
             
             bin->operator_type = token->type;
@@ -346,7 +348,7 @@ Ast_Expression *Parser::parse_shift_expression() {
             || token->type == Token::RIGHT_SHIFT) {
             next_token();
             
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
             
@@ -380,7 +382,7 @@ Ast_Expression *Parser::parse_relational_expression() {
             || token->type == Token::GE_OP) {
             next_token();
             
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
             
@@ -412,7 +414,7 @@ Ast_Expression *Parser::parse_equality_expression() {
             || token->type == Token::NE_OP) {
             next_token();
             
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
             
@@ -441,7 +443,7 @@ Ast_Expression *Parser::parse_and_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::AMPERSAND) {
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             next_token();
             
             bin->operator_type = token->type;
@@ -472,7 +474,7 @@ Ast_Expression *Parser::parse_exclusive_or_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::CARET) {
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             next_token();
             
             bin->operator_type = token->type;
@@ -503,7 +505,7 @@ Ast_Expression *Parser::parse_inclusive_or_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::VERTICAL_BAR) {
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             next_token();
             
             bin->operator_type = token->type;
@@ -536,7 +538,7 @@ Ast_Expression *Parser::parse_logical_and_expression() {
         if (token->type == Token::AND_OP) {
             next_token();
             
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
             
@@ -567,7 +569,7 @@ Ast_Expression *Parser::parse_logical_xor_expression() {
         if (token->type == Token::XOR_OP) {
             next_token();
             
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
             
@@ -598,7 +600,7 @@ Ast_Expression *Parser::parse_logical_or_expression() {
         if (token->type == Token::OR_OP) {
             next_token();
             
-            Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
             
@@ -632,7 +634,7 @@ Ast_Expression *Parser::parse_statement() {
     }
 
     if (token->type == Token::KEYWORD_LIBRARY || token->type == Token::KEYWORD_FRAMEWORK) {
-        Ast_Library *lib = AST_NEW(Ast_Library);
+        Ast_Library *lib = PARSER_NEW(Ast_Library);
         lib->is_framework = (token->type == Token::KEYWORD_FRAMEWORK);
 
         next_token();
@@ -647,7 +649,7 @@ Ast_Expression *Parser::parse_statement() {
     }
     
     if (token->type == Token::KEYWORD_TYPEALIAS) {
-        Ast_Type_Alias *alias = AST_NEW(Ast_Type_Alias);
+        Ast_Type_Alias *alias = PARSER_NEW(Ast_Type_Alias);
         next_token();
         alias->identifier = parse_identifier();
         
@@ -666,7 +668,7 @@ Ast_Expression *Parser::parse_statement() {
     }
     
     if (token->type == Token::KEYWORD_STRUCT) {
-        Ast_Struct *_struct = AST_NEW(Ast_Struct);
+        Ast_Struct *_struct = PARSER_NEW(Ast_Struct);
         next_token();
         
         _struct->identifier = parse_identifier();
@@ -693,7 +695,7 @@ Ast_Expression *Parser::parse_statement() {
     }
     
     if (token->type == Token::KEYWORD_IF) {
-        Ast_If *_if = AST_NEW(Ast_If);
+        Ast_If *_if = PARSER_NEW(Ast_If);
         next_token();
         
         _if->condition = parse_expression();
@@ -718,7 +720,7 @@ Ast_Expression *Parser::parse_statement() {
     }
     
     if (token->type == Token::KEYWORD_FOR) {
-        Ast_For *_for = AST_NEW(Ast_For);
+        Ast_For *_for = PARSER_NEW(Ast_For);
         next_token();
         
         _for->initial_iterator_expression = parse_expression();
@@ -742,7 +744,7 @@ Ast_Expression *Parser::parse_statement() {
     }
     
     if (token->type == Token::KEYWORD_WHILE) {
-        Ast_While *loop = AST_NEW(Ast_While);
+        Ast_While *loop = PARSER_NEW(Ast_While);
         next_token();
         
         loop->condition = parse_expression();
@@ -757,7 +759,7 @@ Ast_Expression *Parser::parse_statement() {
     }
     
     if (token->type == Token::KEYWORD_RETURN) {
-        Ast_Return *ret = AST_NEW(Ast_Return);
+        Ast_Return *ret = PARSER_NEW(Ast_Return);
         next_token();
         
         ret->owning_function = currently_parsing_function;
@@ -775,7 +777,7 @@ Ast_Expression *Parser::parse_statement() {
         if (token->type == Token::IDENTIFIER && token->string == to_string("load")) {
             if (!expect_and_eat(Token::IDENTIFIER)) return nullptr;
             
-            Ast_Directive_Load *load = AST_NEW(Ast_Directive_Load);
+            Ast_Directive_Load *load = PARSER_NEW(Ast_Directive_Load);
             load->scope_i_belong_to = get_current_canonical_scope();
             compiler->queue_directive(load);
             
@@ -796,7 +798,7 @@ Ast_Expression *Parser::parse_statement() {
         } else if (token->type == Token::IDENTIFIER && token->string == to_string("import")) {
             if (!expect_and_eat(Token::IDENTIFIER)) return nullptr;
             
-            Ast_Directive_Import *import = AST_NEW(Ast_Directive_Import);
+            Ast_Directive_Import *import = PARSER_NEW(Ast_Directive_Import);
             import->scope_i_belong_to = get_current_canonical_scope();
             compiler->queue_directive(import);
             
@@ -812,14 +814,14 @@ Ast_Expression *Parser::parse_statement() {
         } else if (token->type == Token::KEYWORD_IF) {
             if (!expect_and_eat(Token::KEYWORD_IF)) return nullptr;
             
-            Ast_Directive_Static_If *_if = AST_NEW(Ast_Directive_Static_If);
+            Ast_Directive_Static_If *_if = PARSER_NEW(Ast_Directive_Static_If);
             _if->scope_i_belong_to = get_current_canonical_scope();
             compiler->queue_directive(_if); // queue the directive early so that further directives that depend on this arent queued first.
             
             token = peek_token();
             _if->condition = parse_expression();
             
-            _if->then_scope = AST_NEW(Ast_Scope);
+            _if->then_scope = PARSER_NEW(Ast_Scope);
             _if->then_scope->parent = get_current_canonical_scope();
             
             canonical_scope_stack.add(_if->then_scope);
@@ -830,7 +832,7 @@ Ast_Expression *Parser::parse_statement() {
             if (token->type == Token::KEYWORD_ELSE) {
                 next_token();
                 
-                _if->else_scope = AST_NEW(Ast_Scope);
+                _if->else_scope = PARSER_NEW(Ast_Scope);
                 _if->else_scope->parent = get_current_canonical_scope();
                 
                 canonical_scope_stack.add(_if->else_scope);
@@ -848,7 +850,7 @@ Ast_Expression *Parser::parse_statement() {
     
     if (token->type == '{') {
         auto parent = get_current_scope();
-        Ast_Scope *scope = AST_NEW(Ast_Scope);
+        Ast_Scope *scope = PARSER_NEW(Ast_Scope);
         scope->parent = parent;
         parse_scope(scope, true);
         return scope;
@@ -878,7 +880,7 @@ Ast_Expression *Parser::parse_statement() {
             }
         }
         
-        Ast_Binary_Expression *bin = AST_NEW(Ast_Binary_Expression);
+        Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
         bin->operator_type = token->type;
         bin->left = left;
         bin->right = right;
@@ -936,7 +938,7 @@ Ast_Declaration *Parser::parse_variable_declaration(bool expect_var_keyword) {
         return nullptr;
     }
     
-    Ast_Declaration *decl = AST_NEW(Ast_Declaration);
+    Ast_Declaration *decl = PARSER_NEW(Ast_Declaration);
     decl->identifier = ident;
     
     Token *token = peek_token();
@@ -983,7 +985,7 @@ Ast_Type_Instantiation *Parser::wrap_primitive_type(Ast_Type_Info *info) {
            info->type == Ast_Type_Info::FLOAT   ||
            info->type == Ast_Type_Info::STRING);
     
-    auto type_inst = AST_NEW(Ast_Type_Instantiation);
+    auto type_inst = PARSER_NEW(Ast_Type_Instantiation);
     type_inst->builtin_primitive = info;
     return type_inst;
 }
@@ -1029,13 +1031,13 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
             return nullptr;
         }
         
-        Ast_Type_Instantiation *type_inst = AST_NEW(Ast_Type_Instantiation);
+        Ast_Type_Instantiation *type_inst = PARSER_NEW(Ast_Type_Instantiation);
         type_inst->pointer_to = pointee;
         return type_inst;
     }
     
     if (token->type == Token::IDENTIFIER) {
-        Ast_Type_Instantiation *type_inst = AST_NEW(Ast_Type_Instantiation);
+        Ast_Type_Instantiation *type_inst = PARSER_NEW(Ast_Type_Instantiation);
         
         auto ident = parse_identifier();
         type_inst->typename_identifier = ident;
@@ -1043,7 +1045,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
     }
     
     if (token->type == '[') {
-        Ast_Type_Instantiation *type_inst = AST_NEW(Ast_Type_Instantiation);
+        Ast_Type_Instantiation *type_inst = PARSER_NEW(Ast_Type_Instantiation);
         next_token();
         
         token = peek_token();
@@ -1099,7 +1101,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
     }
     
     if (token->type == '(') {
-        Ast_Type_Instantiation *final_type_inst = AST_NEW(Ast_Type_Instantiation);
+        Ast_Type_Instantiation *final_type_inst = PARSER_NEW(Ast_Type_Instantiation);
         next_token();
         
         Array<Ast_Declaration *> members;
@@ -1142,7 +1144,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
         if (!expect_and_eat((Token::Type) ')')) return nullptr;
         
         if (peek_token()->type == Token::ARROW) {
-            Ast_Function *function = AST_NEW(Ast_Function);
+            Ast_Function *function = PARSER_NEW(Ast_Function);
             function->is_c_varargs = is_c_varargs;
             
             for (auto arg: members) function->arguments.add(arg);
@@ -1157,7 +1159,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
             }
             
             // @Cleanup change this from a declaration to just the type-instantiation?
-            Ast_Declaration *decl = AST_NEW(Ast_Declaration);
+            Ast_Declaration *decl = PARSER_NEW(Ast_Declaration);
             // decl->identifier = nullptr;
             decl->type_inst = type_inst;
             
@@ -1187,7 +1189,7 @@ bool is_tag_token(Token *token) {
 Ast_Function *Parser::parse_function() {
     expect_and_eat(Token::KEYWORD_FUNC);
     
-    Ast_Function *function = AST_NEW(Ast_Function);
+    Ast_Function *function = PARSER_NEW(Ast_Function);
     function->arguments_scope.parent = get_current_scope();
     
     Ast_Function *old_function = currently_parsing_function;
@@ -1228,7 +1230,7 @@ Ast_Function *Parser::parse_function() {
     
     token = peek_token();
     if (token->type == Token::LEFT_ANGLE) {
-        Ast_Scope *polymorphic_scope = AST_NEW(Ast_Scope);
+        Ast_Scope *polymorphic_scope = PARSER_NEW(Ast_Scope);
         polymorphic_scope->is_template_argument_block = true;
         polymorphic_scope->parent = get_current_scope();
         function->polymorphic_type_alias_scope = polymorphic_scope;
@@ -1238,7 +1240,7 @@ Ast_Function *Parser::parse_function() {
         
         token = peek_token();
         while (token->type != Token::END) {
-            Ast_Type_Alias *alias = AST_NEW(Ast_Type_Alias);
+            Ast_Type_Alias *alias = PARSER_NEW(Ast_Type_Alias);
             alias->identifier = parse_identifier();
             
             if (!alias->identifier) {
@@ -1322,7 +1324,7 @@ Ast_Function *Parser::parse_function() {
         }
         
         // @Cleanup change this from a declaration to just the type-instantiation?
-        Ast_Declaration *decl = AST_NEW(Ast_Declaration);
+        Ast_Declaration *decl = PARSER_NEW(Ast_Declaration);
         // decl->identifier = nullptr;
         decl->type_inst = type_inst;
         
@@ -1333,7 +1335,7 @@ Ast_Function *Parser::parse_function() {
     
     
     if (peek_token()->type == '{') {
-        Ast_Scope *scope = AST_NEW(Ast_Scope);
+        Ast_Scope *scope = PARSER_NEW(Ast_Scope);
         scope->parent = &function->arguments_scope;
         parse_scope(scope, true);
         function->scope = scope;
