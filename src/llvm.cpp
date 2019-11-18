@@ -890,71 +890,17 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto lit = static_cast<Ast_Literal *>(expression);
             
             auto type_info = get_type_info(lit);
-
-            Value *value = nullptr;
+            auto type = get_type(type_info);
 
             switch (lit->literal_type) {
                 case Ast_Literal::STRING:  return create_string_literal(lit, is_lvalue);
 
-                case Ast_Literal::INTEGER: value = ConstantInt::get(get_type(type_info), lit->integer_value, type_info->is_signed); break;
-                case Ast_Literal::FLOAT:   value = ConstantFP::get(get_type(type_info),  lit->float_value); break;
-                case Ast_Literal::BOOL:    value = ConstantInt::get(get_type(type_info), (lit->bool_value ? 1 : 0)); break;
-                case Ast_Literal::NULLPTR: value = ConstantPointerNull::get(static_cast<PointerType *>(get_type(type_info))); break;
+                case Ast_Literal::INTEGER: return ConstantInt::get(type, lit->integer_value, type_info->is_signed);
+                case Ast_Literal::FLOAT:   return ConstantFP::get(type,  lit->float_value);
+                case Ast_Literal::BOOL:    return ConstantInt::get(type, (lit->bool_value ? 1 : 0));
+                case Ast_Literal::NULLPTR: return ConstantPointerNull::get(static_cast<PointerType *>(type));
                 default: return nullptr;
             }
-
-            assert(value);
-
-#ifdef WIN32
-            // @Hack to prevent IR from directly emitting a floating-point constant.
-            // There's an LLVM bug on Windows when running code via the Orc jitter:
-            // if there is a float-literal, then LLVM creates a symbol "_real@<unique_hash?>"
-            // that stores the value of the float, the Orc jitter on Windows seems to always
-            // trip an assert here "Resolving symbol outside this responsibility set".
-            // So we first store the bits of the float as an integer-literal then
-            // convert the value on the stack using standard runtime IR (if we're not careful
-            // here, LLVM will automatically fold the integer into a float-literal; hoever,
-            // it cannot do this if we first store the integer in an alloca).
-            // -josh 16 November 2019
-
-            // Someone on Stack Overflow has also run into this bug and documented this weird behavior:
-            // https://stackoverflow.com/questions/57733912/llvm-asserts-resolving-symbol-outside-this-responsibility-set#comment101934807_57733912
-            // Reproduced in case the link goes dead:
-            /*
-                I have figured out the symbol causing the assertion is not "test", but rather "__real@402e99999999999a",
-                which apparently corresponds to the constant 13.5 that appears in the body. Here's what I see happening in
-                the bowels or LLVM. doMaterialize() sets up a MaterializationUnit using the ES, which has 1 JD containing
-                only 1 symbol, 'test'. This triggers the ObjectLayer to emit(). During this, onObjLoad calls notifyResolved()
-                on the MU with 2 symbols, "test" AND "_real@....". But the MU doesn't know about "_real@" and asserts. LLVM
-                bug? I don't know how it is supposed to work. - Lonnie Chrisman
-            */
-
-            if (compiler->is_metaprogram) {
-                if (lit->literal_type == Ast_Literal::FLOAT) {
-                    if (types_match(type_info, compiler->type_float32)) {
-                        float float_value = static_cast<float>(lit->float_value);
-                        value = ConstantInt::get(type_i32, reinterpret_cast<u32 &>(float_value), false);
-                    } else if (types_match(type_info, compiler->type_float64)) {
-                        value = ConstantInt::get(type_i64, reinterpret_cast<u64 &>(lit->float_value), false);
-                    } else {
-                        assert(false);
-                    }
-
-                    // Store the int, then load the alloca, prevents LLVM from trying to do trivial constant folding.
-                    Value *storage = create_alloca_in_entry(irb, value->getType());
-                    irb->CreateStore(value, storage);
-                    value = irb->CreateLoad(storage);
-
-                    value = irb->CreateBitCast(value, get_type(type_info));
-                    return value;
-                }
-                Value *storage = create_alloca_in_entry(irb, get_type(type_info));
-                irb->CreateStore(value, storage);
-                return irb->CreateLoad(storage);
-            }
-#endif
-
-            return value;
         }
         
         case AST_IDENTIFIER: {
@@ -1695,12 +1641,19 @@ void LLVM_Jitter::init() {
         DL.takeError();
         return;
     }
-    
+
     ExecutionSession ES;
     RTDyldObjectLinkingLayer ObjectLayer(ES, []() { return llvm::make_unique<SectionMemoryManager>(); });
     
 #ifdef WIN32
     ObjectLayer.setOverrideObjectFlagsWithResponsibilityFlags(true);
+
+    // Sigh, I dont know why but setting this works around an LLVM bug that trips this assert on Windows:
+    // "Resolving symbol outside this responsibility set"
+    // There's a Stack Overflow thread discussing the issue here:
+    // https://stackoverflow.com/questions/57733912/llvm-asserts-resolving-symbol-outside-this-responsibility-set#comment101934807_57733912
+    // -josh 18 November 2019
+    ObjectLayer.setAutoClaimResponsibilityForObjectSymbols(true);
 #endif
     
     IRCompileLayer CompileLayer(ES, ObjectLayer, ConcurrentIRCompiler(*JTMB));
