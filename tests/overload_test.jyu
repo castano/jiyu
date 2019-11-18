@@ -1,5 +1,6 @@
 
 func literal_overload_test(x: float) -> int64 {
+    printf("Float %f\n", x);
 	return 1;
 }
 
@@ -22,7 +23,7 @@ func main() {
 	assert(value2 == 1);
 
 	var value3 = literal_overload_test(-1); // should select int64 variant
-	var value4 = literal_overload_test(-1.0); // should select float variant
+	var value4 = literal_overload_test(-1.5); // should select float variant
 	assert(value3 == 2);
 	assert(value4 == 1);
 

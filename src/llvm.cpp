@@ -1652,6 +1652,7 @@ void LLVM_Jitter::init() {
     // "Resolving symbol outside this responsibility set"
     // There's a Stack Overflow thread discussing the issue here:
     // https://stackoverflow.com/questions/57733912/llvm-asserts-resolving-symbol-outside-this-responsibility-set#comment101934807_57733912
+    // For now, the jiyu-game project runs as a metaprogram with this flag set. 
     // -josh 18 November 2019
     ObjectLayer.setAutoClaimResponsibilityForObjectSymbols(true);
 #endif
