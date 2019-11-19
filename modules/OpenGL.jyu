@@ -6,7 +6,7 @@
 }
 
 #if os(Linux) {
-    
+    library "GL";
 }
 
 #if os(MacOSX) {
