@@ -4,6 +4,7 @@
     library "legacy_stdio_definitions";
 } else {
     library "c";
+    library "m";
 }
 
 typealias c_string = *uint8;
