@@ -576,6 +576,10 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     case Token::STAR : return make_integer_literal(compiler, left_int * right_int, left_type, bin);
                     case Token::SLASH: return make_integer_literal(compiler, left_int / right_int, left_type, bin);
                     case Token::VERTICAL_BAR: return make_integer_literal(compiler, left_int | right_int, left_type, bin);
+
+                    case Token::DEREFERENCE_OR_SHIFT: return make_integer_literal(compiler, left_int << right_int, left_type, bin);
+                    // @Incomplete right-shift actually relies heavily on signedness...
+                    // case Token::RIGHT_SHIFT: return make_integer_literal(compiler, left_int >> right_int, left_type, bin);
                     
                     case Token::LE_OP: FOLD_COMPARE(<=, left_int, right_int, left_type, bin);
                     case Token::GE_OP: FOLD_COMPARE(>=, left_int, right_int, left_type, bin);
@@ -2218,6 +2222,41 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 #endif
             
             compiler->libraries.add(lib);
+            return;
+        }
+
+        case AST_CONTROL_FLOW: {
+            auto flow = static_cast<Ast_Control_Flow *>(expression);
+
+            Ast_Expression *target_statement = nullptr;
+            auto scope = flow->current_scope;
+            while (scope) {
+                if (scope->owning_statement) {
+                    auto stmt = scope->owning_statement;
+
+                    if (stmt->type == AST_FOR || stmt->type == AST_WHILE) {
+                        target_statement = stmt;
+                        break;
+                    }
+                } else if (scope->owning_function) {
+                    // We hit the top-level scope of the function we're in, so break, otherwise we'll mistakenly be valid for loops of outer functions.
+                    break;
+                }
+
+                scope = scope->parent;
+            }
+
+            if (!target_statement) {
+                String name;
+                if      (flow->control_type == Token::KEYWORD_BREAK)    name = to_string("break");
+                else if (flow->control_type == Token::KEYWORD_CONTINUE) name = to_string("continue");
+                else assert(false);
+
+                compiler->report_error(flow, "%.*s statement not made within a loop.\n", name.length, name.data);
+                return;
+            }
+
+            flow->target_statement = target_statement;
             return;
         }
     }

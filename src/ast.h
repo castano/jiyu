@@ -40,6 +40,7 @@ enum Ast_Type {
     AST_SCOPE_EXPANSION,
     AST_OS,
     AST_LIBRARY,
+    AST_CONTROL_FLOW,
 };
 
 struct Ast {
@@ -125,9 +126,9 @@ struct Ast_Scope : Ast_Expression {
     bool rejected_by_static_if = false;
     
     Ast_Struct *owning_struct = nullptr;
-    
-    // Ast_Function   *owning_function = nullptr;
-    // Ast_Expression *owning_statement = nullptr;
+
+    Ast_Function   *owning_function = nullptr; // Only set for the top-level scope of a function body. scope->owning_function == scope->owning_function->scope.
+    Ast_Expression *owning_statement = nullptr;
 };
 
 // Used to specify a scope that was inserted due to the compiler resolving a static_if.
@@ -286,7 +287,7 @@ struct Ast_Function : Ast_Expression {
     
     Ast_Scope *polymorphic_type_alias_scope = nullptr;
     Ast_Scope arguments_scope;
-    Ast_Scope *scope = nullptr;
+    Ast_Scope *scope = nullptr; // Function body. @Cleanup Maybe this should be renamed "body".
     
     Array<Ast_Function *> polymorphed_overloads;
     
@@ -329,6 +330,17 @@ struct Ast_For : Ast_Expression {
     Ast_Scope body;
 };
 
+struct Ast_Control_Flow : Ast_Expression {
+    Ast_Control_Flow() { type = AST_CONTROL_FLOW; }
+
+    Token::Type control_type;
+
+    Ast_Scope *current_scope = nullptr; // Scope that the statement was made in, not necessarily the scope that target_statement may own...
+
+    // Filled in by sema
+    Ast_Expression *target_statement = nullptr;
+};
+
 struct Ast_Directive : Ast_Expression {
     
     Ast_Scope *scope_i_belong_to = nullptr;
@@ -357,6 +369,7 @@ struct Ast_Directive_Static_If : Ast_Directive {
     Ast_Scope *then_scope = nullptr;
     Ast_Scope *else_scope = nullptr;
 };
+
 
 struct Ast_Library : Ast_Expression {
     Ast_Library() { type = AST_LIBRARY; }

@@ -1155,6 +1155,9 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             BasicBlock *next_block = BasicBlock::Create(*llvm_context, "loop_exit", current_block->getParent());
             BasicBlock *loop_header = BasicBlock::Create(*llvm_context, "loop_header", current_block->getParent());
             BasicBlock *loop_body = BasicBlock::Create(*llvm_context, "loop_body", current_block->getParent());
+
+            loop_header_map.add(MakeTuple(static_cast<Ast_Expression *>(loop), loop_header));
+            loop_exit_map.add(MakeTuple(static_cast<Ast_Expression *>(loop), next_block));
             
             
             irb->CreateBr(loop_header);
@@ -1205,6 +1208,12 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             BasicBlock *next_block = BasicBlock::Create(*llvm_context, "for_exit", current_block->getParent());
             BasicBlock *loop_header = BasicBlock::Create(*llvm_context, "for_header", current_block->getParent());
             BasicBlock *loop_body = BasicBlock::Create(*llvm_context, "for_body", current_block->getParent());
+
+            // Where the iterator increment happens. This is factored out to be the target of _continue_ statements.
+            BasicBlock *loop_body_end = BasicBlock::Create(*llvm_context, "for_body_end", current_block->getParent());
+
+            loop_header_map.add(MakeTuple(static_cast<Ast_Expression *>(_for), loop_body_end));
+            loop_exit_map.add(MakeTuple(static_cast<Ast_Expression *>(_for), next_block));
             
             
             irb->CreateBr(loop_header);
@@ -1243,8 +1252,11 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             
             emit_scope(&_for->body);
             
+            if (!irb->GetInsertBlock()->getTerminator()) irb->CreateBr(loop_body_end);
+
+            irb->SetInsertPoint(loop_body_end);
             irb->CreateStore(irb->CreateAdd(it_index, ConstantInt::get(get_type(it_index_type), 1)), it_index_alloca);
-            if (!irb->GetInsertBlock()->getTerminator()) irb->CreateBr(loop_header);
+            irb->CreateBr(loop_header);
             
             irb->SetInsertPoint(next_block);
             break;
@@ -1323,7 +1335,23 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             
             // we only need the header to be generated when we come here, only the compiler instance can choose to emit a function.
             return get_or_create_function(func);
-            
+        }
+
+        case AST_CONTROL_FLOW: {
+            auto flow = static_cast<Ast_Control_Flow *>(expression);
+
+            if (flow->control_type == Token::KEYWORD_BREAK) {
+                for (auto &entry : loop_exit_map) {
+                    if (entry.item1 == flow->target_statement) return irb->CreateBr(entry.item2);
+                }
+            } else if (flow->control_type == Token::KEYWORD_CONTINUE) {
+                for (auto &entry : loop_header_map) {
+                    if (entry.item1 == flow->target_statement) return irb->CreateBr(entry.item2);
+                }
+            }
+
+            assert(false && "Could not find LLVM BasicBlock for control-flow statement.");
+            return nullptr;
         }
     }
     
@@ -1558,6 +1586,8 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
     }
 
     decl_value_map.clear();
+    loop_header_map.clear();
+    loop_exit_map.clear();
 
     di_current_scope = old_di_scope;
 }

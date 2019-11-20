@@ -739,8 +739,21 @@ Ast_Expression *Parser::parse_statement() {
         
         _for->iterator_declaration_scope.parent = get_current_scope();
         _for->body.parent = &_for->iterator_declaration_scope;
+        _for->body.owning_statement = _for;
         parse_scope(&_for->body, false, true);
         return _for;
+    }
+
+    if (token->type == Token::KEYWORD_BREAK || token->type == Token::KEYWORD_CONTINUE) {
+        Ast_Control_Flow *flow = PARSER_NEW(Ast_Control_Flow);
+        flow->control_type  = token->type;
+        flow->current_scope = get_current_scope();
+
+        // @Incomplete parse possible identifier for break-ing to some scope outside the most immediate loop.
+
+        next_token();
+        if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
+        return flow;
     }
     
     if (token->type == Token::KEYWORD_WHILE) {
@@ -1339,6 +1352,7 @@ Ast_Function *Parser::parse_function() {
         scope->parent = &function->arguments_scope;
         parse_scope(scope, true);
         function->scope = scope;
+        function->scope->owning_function = function;
     } else {
         if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
     }

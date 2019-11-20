@@ -14,7 +14,8 @@ namespace llvm {
     class FunctionType;
     class StructType;
     class Function;
-    
+    class BasicBlock;
+
     class TargetMachine;
     class ConstantFolder;
     class IRBuilderDefaultInserter;
@@ -90,7 +91,11 @@ struct LLVM_Generator {
     llvm::DIType *di_type_string_length;
     llvm::DIType *di_type_type;
     
-    Array<Tuple<Ast_Declaration *, llvm::Value *>> decl_value_map;
+    Array<Tuple<Ast_Declaration *, llvm::Value *>>     decl_value_map;
+
+    // Used for looking up the target BasicBlock for _continue_ and _break_. We probably want something more robust than this later on.
+    Array<Tuple<Ast_Expression *, llvm::BasicBlock *>> loop_header_map; // Jump target for _continue_
+    Array<Tuple<Ast_Expression *, llvm::BasicBlock *>> loop_exit_map;    // Jump target for _break_
 
     llvm::DIScope *di_current_scope = nullptr;
 
