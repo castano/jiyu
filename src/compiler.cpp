@@ -317,7 +317,6 @@ void Compiler::resolve_directives() {
 
             bool success = false;
             for (auto &module_path : this->module_search_paths) {
-                String mprintf(char *c_fmt, ...);
                 String fullpath = mprintf("%.*s/%.*s.jyu", module_path.length, module_path.data, name.length, name.data);
 
                 if (file_exists(fullpath)) {

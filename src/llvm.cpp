@@ -44,8 +44,6 @@
 using namespace llvm;
 using namespace llvm::orc;
 
-String mprintf(char *c_fmt, ...);
-
 static StringRef string_ref(String s) {
     return StringRef(s.data, s.length);
 }

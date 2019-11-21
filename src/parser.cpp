@@ -38,11 +38,97 @@ void Parser::pop_scopes() {
     canonical_scope_stack.pop();
 }
 
+String token_type_to_string(Token::Type type) {
+    if (type < Token::END) {
+        return mprintf("%c", type);
+    }
+
+    switch(type) {
+        // These are all copies due to the single-character tokens needing the mprintf above...
+        case Token::END:        return copy_string(to_string("eof"));
+        case Token::INTEGER:    return copy_string(to_string("integer-literal"));
+        case Token::FLOAT:      return copy_string(to_string("float-literal"));
+        case Token::IDENTIFIER: return copy_string(to_string("identifier"));
+        case Token::STRING:     return copy_string(to_string("string-literal"));
+        
+        case Token::KEYWORD_FUNC:      return copy_string(to_string("func"));
+        case Token::KEYWORD_VAR:       return copy_string(to_string("var"));
+        case Token::KEYWORD_LET:       return copy_string(to_string("let"));
+        case Token::KEYWORD_TYPEALIAS: return copy_string(to_string("typealias"));
+        case Token::KEYWORD_STRUCT:    return copy_string(to_string("struct"));
+        case Token::KEYWORD_LIBRARY:   return copy_string(to_string("library"));
+        case Token::KEYWORD_FRAMEWORK: return copy_string(to_string("framework"));
+        
+        case Token::KEYWORD_IF:     return copy_string(to_string("if"));
+        case Token::KEYWORD_ELSE:   return copy_string(to_string("else"));
+        
+        case Token::KEYWORD_WHILE:    return copy_string(to_string("while"));
+        case Token::KEYWORD_BREAK:    return copy_string(to_string("break"));
+        case Token::KEYWORD_CONTINUE: return copy_string(to_string("continue"));
+        case Token::KEYWORD_FOR:      return copy_string(to_string("for"));
+        
+        case Token::KEYWORD_RETURN: return copy_string(to_string("return"));
+        
+        case Token::KEYWORD_VOID:   return copy_string(to_string("void"));
+        case Token::KEYWORD_STRING: return copy_string(to_string("string"));
+        case Token::KEYWORD_INT:    return copy_string(to_string("int"));
+        case Token::KEYWORD_UINT:   return copy_string(to_string("uint"));
+        case Token::KEYWORD_UINT8:  return copy_string(to_string("uint8"));
+        case Token::KEYWORD_UINT16: return copy_string(to_string("uint16"));
+        case Token::KEYWORD_UINT32: return copy_string(to_string("uint32"));
+        case Token::KEYWORD_UINT64: return copy_string(to_string("uint64"));
+        case Token::KEYWORD_INT8:   return copy_string(to_string("int8"));
+        case Token::KEYWORD_INT16:  return copy_string(to_string("int16"));
+        case Token::KEYWORD_INT32:  return copy_string(to_string("int32"));
+        case Token::KEYWORD_INT64:  return copy_string(to_string("int64"));
+        case Token::KEYWORD_FLOAT:  return copy_string(to_string("float"));
+        case Token::KEYWORD_DOUBLE: return copy_string(to_string("double"));
+        case Token::KEYWORD_BOOL:   return copy_string(to_string("bool"));
+        case Token::KEYWORD_TRUE:   return copy_string(to_string("true"));
+        case Token::KEYWORD_FALSE:  return copy_string(to_string("false"));
+        case Token::KEYWORD_NULL:   return copy_string(to_string("null"));
+        
+        case Token::KEYWORD_CAST:   return copy_string(to_string("cast"));
+        case Token::KEYWORD_SIZEOF: return copy_string(to_string("sizeof"));
+        
+        case Token::TAG_C_FUNCTION: return copy_string(to_string("@c_function"));
+        case Token::TAG_META:       return copy_string(to_string("@metaprogram"));
+        case Token::TAG_EXPORT:     return copy_string(to_string("@export"));
+        
+        case Token::TEMPORARY_KEYWORD_C_VARARGS: return copy_string(to_string("temporary_c_vararg"));
+        
+        case Token::GE_OP:                return copy_string(to_string(">="));
+        case Token::LE_OP:                return copy_string(to_string("<="));
+        case Token::NE_OP:                return copy_string(to_string("!="));
+        case Token::EQ_OP:                return copy_string(to_string("=="));
+        case Token::AND_OP:               return copy_string(to_string("&&"));
+        case Token::XOR_OP:               return copy_string(to_string("^^"));
+        case Token::OR_OP:                return copy_string(to_string("||"));
+        case Token::ARROW:                return copy_string(to_string("->"));
+        case Token::DEREFERENCE_OR_SHIFT: return copy_string(to_string("<<"));
+        case Token::RIGHT_SHIFT:          return copy_string(to_string(">>"));
+
+        case Token::PLUS_EQ:              return copy_string(to_string("+="));
+        case Token::MINUS_EQ:             return copy_string(to_string("-="));
+        case Token::STAR_EQ:              return copy_string(to_string("*="));
+        case Token::SLASH_EQ:             return copy_string(to_string("/="));
+        case Token::PERCENT_EQ:           return copy_string(to_string("%="));
+        case Token::AMPERSAND_EQ:         return copy_string(to_string("&="));
+        case Token::VERTICAL_BAR_EQ:      return copy_string(to_string("|="));
+        case Token::CARET_EQ:             return copy_string(to_string("^="));
+        
+        case Token::DOTDOT:               return copy_string(to_string(".."));
+        default: return String(); // error ?
+    }
+}
+
 bool Parser::expect(Token::Type type) {
     Token *token = peek_token();
     
     if (token->type != type) {
-        compiler->report_error(token, "Expected token of type '%d' but got '%d'.\n", type, token->type);
+        String wanted = token_type_to_string(type);
+        String got    = token_type_to_string(token->type);
+        compiler->report_error(token, "Expected '%.*s' but got '%.*s'.\n", wanted.length, wanted.data, got.length, got.data);
         return false;
     }
     
@@ -50,14 +136,9 @@ bool Parser::expect(Token::Type type) {
 }
 
 bool Parser::expect_and_eat(Token::Type type) {
-    Token *token = next_token();
-    
-    if (token->type != type) {
-        compiler->report_error(token, "Expected token of type '%d' but got '%d'.\n", type, token->type);
-        return false;
-    }
-    
-    return true;
+    bool result = expect(type);
+    next_token();
+    return result;
 }
 
 Ast_Identifier *Parser::parse_identifier() {
@@ -127,12 +208,12 @@ Ast_Expression *Parser::parse_primary_expression() {
         return lit;
     }
     
-    if (token->type == '(') {
+    if (token->type == Token::LEFT_PAREN) {
         next_token();
         
         auto expr = parse_expression();
         
-        if (!expect_and_eat((Token::Type) ')')) return nullptr;
+        if (!expect_and_eat(Token::RIGHT_PAREN)) return nullptr;
         
         return expr;
     }
@@ -141,11 +222,11 @@ Ast_Expression *Parser::parse_primary_expression() {
         Ast_Sizeof *size = PARSER_NEW(Ast_Sizeof);
         next_token();
         
-        if (!expect_and_eat((Token::Type) '(')) return size;
+        if (!expect_and_eat(Token::LEFT_PAREN)) return size;
         
         size->target_type_inst = parse_type_inst();
         
-        if (!expect_and_eat((Token::Type) ')')) return size;
+        if (!expect_and_eat(Token::RIGHT_PAREN)) return size;
         
         return size;
     }
@@ -172,11 +253,11 @@ Ast_Expression *Parser::parse_postfix_expression() {
             token = peek_token();
             while (token->type != Token::END) {
                 
-                if (call->argument_list.count > 0 && token->type == ',') {
+                if (call->argument_list.count > 0 && token->type == Token::COMMA) {
                     next_token();
-                } else if (token->type == ')') {
+                } else if (token->type == Token::RIGHT_PAREN) {
                     break;
-                } else if (call->argument_list.count > 0 && token->type != ',') {
+                } else if (call->argument_list.count > 0 && token->type != Token::COMMA) {
                     compiler->report_error(call->argument_list[call->argument_list.count-1], "Expected ',' while parsing function-call argument list, but got something else.\n");
                     return call;
                 }
@@ -192,7 +273,7 @@ Ast_Expression *Parser::parse_postfix_expression() {
                 token = peek_token(); 
             }
             
-            if (!expect_and_eat((Token::Type) ')')) return nullptr;
+            if (!expect_and_eat(Token::RIGHT_PAREN)) return nullptr;
             
             sub_expression = call;
         } else if (token->type == Token::DOT) {
@@ -254,11 +335,11 @@ Ast_Expression *Parser::parse_unary_expression() {
         
         next_token();
         
-        if (!expect_and_eat((Token::Type) '(')) return nullptr;
+        if (!expect_and_eat(Token::LEFT_PAREN)) return nullptr;
         
         cast->target_type_inst = parse_type_inst();
         
-        if (!expect_and_eat((Token::Type) ')')) return nullptr;
+        if (!expect_and_eat(Token::RIGHT_PAREN)) return nullptr;
         
         cast->expression = parse_unary_expression();
         if (!cast->expression) {
@@ -870,35 +951,36 @@ Ast_Expression *Parser::parse_statement() {
     }
     
     Ast_Expression *left = parse_expression();
-    if (!left) return nullptr;
-    
-    token = peek_token();
-    if (token->type == Token::EQUALS          ||     // =
-        token->type == Token::PLUS_EQ         ||     // +=
-        token->type == Token::MINUS_EQ        ||     // -=
-        token->type == Token::STAR_EQ         ||     // *=
-        token->type == Token::SLASH_EQ        ||     // /=
-        token->type == Token::PERCENT_EQ      ||     // %=
-        token->type == Token::AMPERSAND_EQ    ||     // &=
-        token->type == Token::VERTICAL_BAR_EQ ||     // |=
-        token->type == Token::CARET_EQ               // ^=
-        ) {
-        next_token();
-        
-        Ast_Expression *right = parse_expression();
-        if (!right) {
-            if (!compiler->errors_reported) {
-                compiler->report_error(token, "Right-hand-side of assignment-statement must contain an expression.\n");
-                return nullptr;
+
+    if (left) {
+        token = peek_token();
+        if (token->type == Token::EQUALS          ||     // =
+            token->type == Token::PLUS_EQ         ||     // +=
+            token->type == Token::MINUS_EQ        ||     // -=
+            token->type == Token::STAR_EQ         ||     // *=
+            token->type == Token::SLASH_EQ        ||     // /=
+            token->type == Token::PERCENT_EQ      ||     // %=
+            token->type == Token::AMPERSAND_EQ    ||     // &=
+            token->type == Token::VERTICAL_BAR_EQ ||     // |=
+            token->type == Token::CARET_EQ               // ^=
+            ) {
+            next_token();
+            
+            Ast_Expression *right = parse_expression();
+            if (!right) {
+                if (!compiler->errors_reported) {
+                    compiler->report_error(token, "Right-hand-side of assignment-statement must contain an expression.\n");
+                    return nullptr;
+                }
             }
+            
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
+            bin->operator_type = token->type;
+            bin->left = left;
+            bin->right = right;
+            
+            left = bin;
         }
-        
-        Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
-        bin->operator_type = token->type;
-        bin->left = left;
-        bin->right = right;
-        
-        left = bin;
     }
     
     if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
@@ -1123,10 +1205,10 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
         token = peek_token();
         while (token->type != Token::END) {
             
-            if (members.count > 0 && token->type == ',') {
+            if (members.count > 0 && token->type == Token::COMMA) {
                 next_token();
                 token = peek_token();
-            } else  if (token->type == ')') break;
+            } else  if (token->type == Token::RIGHT_PAREN) break;
             
             // @Temporary
             // @Temporary
@@ -1136,7 +1218,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
                 is_c_varargs = true;
                 
                 token = peek_token();
-                if (token->type != ')') {
+                if (token->type != Token::RIGHT_PAREN) {
                     compiler->report_error(token, "Expected ')' following 'temporary_c_vararg' declarator.\n");
                     return nullptr;
                 }
@@ -1154,7 +1236,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
             token = peek_token();
         }
         
-        if (!expect_and_eat((Token::Type) ')')) return nullptr;
+        if (!expect_and_eat(Token::RIGHT_PAREN)) return nullptr;
         
         if (peek_token()->type == Token::ARROW) {
             Ast_Function *function = PARSER_NEW(Ast_Function);
@@ -1221,7 +1303,7 @@ Ast_Function *Parser::parse_function() {
             next_token();
         } else if (token->type == Token::TAG_EXPORT) {
             next_token();
-            if (!expect_and_eat((Token::Type) '(')) return nullptr;
+            if (!expect_and_eat(Token::LEFT_PAREN)) return nullptr;
             
             // We expect an identifier here but don't call parse_identifier since we only care about the value typed in.
             // func @export(linkage_name) my_function() {}
@@ -1231,7 +1313,7 @@ Ast_Function *Parser::parse_function() {
             function->linkage_name = token->string;
             next_token();
 
-            if (!expect_and_eat((Token::Type) ')')) return nullptr;
+            if (!expect_and_eat(Token::RIGHT_PAREN)) return nullptr;
         }
 
         token = peek_token();
@@ -1283,17 +1365,17 @@ Ast_Function *Parser::parse_function() {
         function->is_template_function = true;
     }
     
-    if (!expect_and_eat((Token::Type) '(')) return nullptr;
+    if (!expect_and_eat(Token::LEFT_PAREN)) return nullptr;
     
     push_scopes(&function->arguments_scope);
     
     token = peek_token();
     while (token->type != Token::END) {
         
-        if (function->arguments.count > 0 && token->type == ',') {
+        if (function->arguments.count > 0 && token->type == Token::COMMA) {
             next_token();
             token = peek_token();
-        } else  if (token->type == ')') break;
+        } else  if (token->type == Token::RIGHT_PAREN) break;
         
         // @Temporary
         // @Temporary
@@ -1303,7 +1385,7 @@ Ast_Function *Parser::parse_function() {
             function->is_c_varargs = true;
             
             token = peek_token();
-            if (token->type != ')') {
+            if (token->type != Token::RIGHT_PAREN) {
                 compiler->report_error(token, "Expected ')' following 'temporary_c_vararg' declarator.\n");
                 return nullptr;
             }
@@ -1324,7 +1406,7 @@ Ast_Function *Parser::parse_function() {
     
     pop_scopes();
     
-    if (!expect_and_eat((Token::Type) ')')) return nullptr;
+    if (!expect_and_eat(Token::RIGHT_PAREN)) return nullptr;
     
     if (peek_token()->type == Token::ARROW) {
         token = peek_token();

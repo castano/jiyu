@@ -147,6 +147,8 @@ inline String basename(String s) {
     return s;
 }
 
+String mprintf(char *fmt, ...);
+
 inline void convert_to_back_slashes(char *c) {
     while (*c) {
         if (*c == '/') {
