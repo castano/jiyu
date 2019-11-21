@@ -129,6 +129,8 @@ bool Parser::expect(Token::Type type) {
         String wanted = token_type_to_string(type);
         String got    = token_type_to_string(token->type);
         compiler->report_error(token, "Expected '%.*s' but got '%.*s'.\n", wanted.length, wanted.data, got.length, got.data);
+        free(wanted.data);
+        free(got.data);
         return false;
     }
     
