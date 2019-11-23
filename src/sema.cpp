@@ -645,16 +645,7 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             auto decl = static_cast<Ast_Declaration *>(ident->resolved_declaration);
 
             if (decl->type == AST_DECLARATION) {
-                if (decl->is_let && !decl->is_readonly_variable && decl->initializer_expression) {
-                    auto literal = folds_to_literal(decl->initializer_expression);
-                    if (literal) {
-                        assert(literal->type == AST_LITERAL);
-                        literal = static_cast<Ast_Literal *>(compiler->copier->copy(literal)); // Make a copy in case the user code wants to mutate the literal itself.
-                        assert(literal);
-                        literal->type_info = get_type_info(decl->initializer_expression);
-                    }
-                    return nullptr;
-                }
+                return folds_to_literal(decl);
             }
 
             return nullptr;
@@ -662,8 +653,9 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
 
         case AST_DECLARATION: {
             auto decl = static_cast<Ast_Declaration *>(expression);
+            // @Incomplete should we typecheck decl first?
+            assert(get_type_info(decl));
 
-            // @Copynpaste from the AST_IDENTIFIER case.
             if (decl->is_let && !decl->is_readonly_variable && decl->initializer_expression) {
                 auto literal = folds_to_literal(decl->initializer_expression);
                 if (literal) {
@@ -672,7 +664,7 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     assert(literal);
                     literal->type_info = get_type_info(decl->initializer_expression);
                 }
-                return nullptr;
+                return literal;
             }
 
             return nullptr;

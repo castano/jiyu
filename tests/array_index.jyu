@@ -8,4 +8,15 @@ func main() {
     dat[1] = 10;
 
     printf("%d\n".data, dat[1]);
+
+    let ARRAY_SIZE = 4;
+    var my_array: [ARRAY_SIZE] int;
+
+    for 0..my_array.count-1 {
+        my_array[it] = it * 2;
+    }
+
+    for my_array {
+        printf("my_array[%d] = %d\n", it_index, it);
+    }
 }

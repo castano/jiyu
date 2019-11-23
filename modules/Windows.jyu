@@ -121,7 +121,7 @@ typealias SOCKET = UINT_PTR;
 let WSADESCRIPTION_LEN = 256;
 let WSASYS_STATUS_LEN  = 128;
 
-/*
+
 struct WSADATA {
     var wVersion: WORD;
     var wHighVersion: WORD;
@@ -132,7 +132,7 @@ struct WSADATA {
     var szDescription : [WSADESCRIPTION_LEN+1] uint8;
     var szSystemStatus: [WSASYS_STATUS_LEN+1]  uint8;
 }
-*/
+
 struct sockaddr {
     var sa_family: ADDRESS_FAMILY;
     var sa_data: [14] uint8;
