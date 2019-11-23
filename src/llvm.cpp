@@ -597,7 +597,7 @@ Value *LLVM_Generator::create_string_literal(Ast_Literal *lit, bool want_lvalue)
 
 Value *LLVM_Generator::dereference(Value *value, s64 element_path_index, bool is_lvalue) {
     // @TODO I think ideally, the front-end would change and dereferences of constant values with replaecments of literals of the value so that we can simplify LLVM code generation
-    if (auto constant = dyn_cast<Constant>(value)) {
+    if (auto constant = dyn_cast<ConstantAggregate>(value)) {
         return irb->CreateExtractValue(constant, element_path_index);
     } else {
         // @Cleanup type_i32 use for array indexing?
