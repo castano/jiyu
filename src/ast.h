@@ -320,6 +320,8 @@ struct Ast_Os : Ast_Expression {
 struct Ast_For : Ast_Expression {
     Ast_For() { type = AST_FOR; }
     
+    bool is_element_pointer_iteration = false; // for * my_array { /*..*/ } // "it" is a writable pointer instead of a readonly copy.
+
     Ast_Declaration *iterator_decl       = nullptr;
     Ast_Declaration *iterator_index_decl = nullptr;
     

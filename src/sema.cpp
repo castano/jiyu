@@ -1860,8 +1860,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
                 
                 {
-                    auto indexed = make_array_index(compiler, _for->initial_iterator_expression, it_index_ident);
+                    Ast_Expression *indexed = make_array_index(compiler, _for->initial_iterator_expression, it_index_ident);
                     
+                    if (_for->is_element_pointer_iteration) {
+                        indexed = make_unary(compiler, Token::STAR, indexed);
+                    }
+
                     Ast_Declaration *decl = SEMA_NEW(Ast_Declaration);
                     copy_location_info(decl, _for);
                     decl->identifier = make_identifier(compiler, compiler->atom_it);

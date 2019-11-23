@@ -19,4 +19,14 @@ func main() {
     for my_array {
         printf("my_array[%d] = %d\n", it_index, it);
     }
+
+    printf("Doing pointer-for thing.\n");
+
+    for * my_array {
+        <<it = (<<it) * 3;
+    }
+
+    for my_array {
+        printf("my_array[%d] = %d\n", it_index, it);
+    }
 }

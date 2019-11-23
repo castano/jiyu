@@ -805,6 +805,13 @@ Ast_Expression *Parser::parse_statement() {
     if (token->type == Token::KEYWORD_FOR) {
         Ast_For *_for = PARSER_NEW(Ast_For);
         next_token();
+
+        token = peek_token();
+        if (token->type == Token::STAR) {
+            next_token();
+
+            _for->is_element_pointer_iteration = true;
+        }
         
         _for->initial_iterator_expression = parse_expression();
         
