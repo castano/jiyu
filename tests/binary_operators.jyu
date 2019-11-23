@@ -1,4 +1,4 @@
-
+#import "LibC";
 
 func int_func(val: int8) -> void {
 
@@ -27,6 +27,24 @@ func promotion() -> void {
     float_func(f32);
 }
 
+func coerce_to_bool() {
+    var test = 1.0;
+    var ptr = *test;
+    if ptr {
+        printf("ptr\n");
+    }
+
+    var i = 1;
+    if i {
+        printf("int\n");
+    }
+
+    var str = "a";
+    if str {
+        printf("String\n");
+    }
+}
+
 func main() -> void {
     var i = 1;
     var j = 2;
@@ -34,4 +52,6 @@ func main() -> void {
 
     // i = i * j + ;
     // i = i / j;
+
+    coerce_to_bool();
 }

@@ -27,9 +27,11 @@ func @metaprogram main() {
     var as_metaprogram = true;
     compile_single_test_file("tests/array_index.jyu", as_metaprogram);
     compile_single_test_file("tests/conditional_compilation.jyu", as_metaprogram);
+    compile_single_test_file("tests/first_class_types.jyu", as_metaprogram);
     compile_single_test_file("tests/template_argument_test.jyu", as_metaprogram);
     compile_single_test_file("tests/function_pointers.jyu", as_metaprogram);
     compile_single_test_file("tests/overload_test.jyu", as_metaprogram);
     compile_single_test_file("tests/primitive_types.jyu", as_metaprogram);
+    compile_single_test_file("tests/binary_operators.jyu", as_metaprogram);
     compile_single_test_file("tests/operators.jyu", as_metaprogram);
 }

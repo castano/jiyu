@@ -293,6 +293,15 @@ Ast_Expression *cast_ptr_to_ptr(Compiler *compiler, Ast_Expression *expr, Ast_Ty
     return cast;
 }
 
+Ast_Literal *make_string_literal(Compiler *compiler, String value, Ast *source_loc = nullptr) {
+    Ast_Literal *lit = SEMA_NEW(Ast_Literal);
+    lit->literal_type = Ast_Literal::STRING;
+    lit->string_value = value;
+    lit->type_info = compiler->type_string;
+    
+    if (source_loc) copy_location_info(lit, source_loc);
+    return lit;
+}
 
 Ast_Literal *make_integer_literal(Compiler *compiler, s64 value, Ast_Type_Info *type_info, Ast *source_loc = nullptr) {
     Ast_Literal *lit = SEMA_NEW(Ast_Literal);
@@ -314,11 +323,20 @@ Ast_Literal *make_float_literal(Compiler *compiler, double value, Ast_Type_Info 
     return lit;
 }
 
-Ast_Literal *make_bool_literal(Compiler *compiler, bool value, Ast_Type_Info *bool_type_info, Ast *source_loc = nullptr) {
+Ast_Literal *make_bool_literal(Compiler *compiler, bool value, Ast *source_loc = nullptr) {
     Ast_Literal *lit = SEMA_NEW(Ast_Literal);
     lit->literal_type = Ast_Literal::BOOL;
     lit->bool_value = value;
-    lit->type_info = bool_type_info;
+    lit->type_info = compiler->type_bool;
+    
+    if (source_loc) copy_location_info(lit, source_loc);
+    return lit;
+}
+
+Ast_Literal *make_null_literal(Compiler *compiler, Ast_Type_Info *pointer_type, Ast *source_loc = nullptr) {
+    Ast_Literal *lit = SEMA_NEW(Ast_Literal);
+    lit->literal_type = Ast_Literal::NULLPTR;
+    lit->type_info = pointer_type;
     
     if (source_loc) copy_location_info(lit, source_loc);
     return lit;
@@ -461,7 +479,10 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_t
     return viability_score;
 }
 
-Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression(Ast_Expression *expression, Ast_Type_Info *target_type_info, bool allow_coerce_to_ptr_void) {
+const u32 ALLOW_COERCE_TO_PTR_VOID = (1 << 0);
+const u32 ALLOW_COERCE_TO_BOOL     = (1 << 1);
+
+Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression(Ast_Expression *expression, Ast_Type_Info *target_type_info, u32 allow_flags) {
     typecheck_expression(expression, target_type_info);
     
     if (compiler->errors_reported) return MakeTuple<u64, Ast_Expression *>(0, nullptr);
@@ -495,7 +516,7 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
         } else if (is_float_type(ltype) && is_int_type(rtype)) {
             right = cast_int_to_float(compiler, right, ltype);
             viability_score += 10;
-        } else if (allow_coerce_to_ptr_void && is_pointer_type(ltype) && is_pointer_type(rtype)) {
+        } else if ((allow_flags & ALLOW_COERCE_TO_PTR_VOID) && is_pointer_type(ltype) && is_pointer_type(rtype)) {
             
             // @Note you're only allowed to coerce right-to-left here, meaning if the right-expression is *void, the left-expression cannot coerce away from whatever ptr type it is.
             if (type_points_to_void_eventually(ltype)) {
@@ -508,6 +529,32 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
             }
             
             viability_score += 1;
+        } else if (ltype->type == Ast_Type_Info::BOOL && (allow_flags & ALLOW_COERCE_TO_BOOL)) {
+            if (is_pointer_type(rtype)) {
+                auto null_expression = make_null_literal(compiler, rtype, /*location=*/expression);
+                auto not_equal_null = make_binary(compiler, Token::NE_OP, expression, null_expression, /*location=*/expression);
+                // @Speed we can probably just assign not_equal_null->type_info to ltype here...
+                typecheck_expression(not_equal_null);
+                
+                right = not_equal_null;
+                viability_score += 1;
+            } else if (is_int_type(rtype)) {
+                auto zero_expression = make_integer_literal(compiler, 0, rtype, /*location=*/expression);
+                auto not_equal_zero = make_binary(compiler, Token::NE_OP, expression, zero_expression, /*location=*/expression);
+                // @Speed we can probably just assign not_equal_null->type_info to ltype here...
+                typecheck_expression(not_equal_zero);
+                
+                right = not_equal_zero;
+                viability_score += 1;
+            } else if (rtype->type == Ast_Type_Info::STRING) {
+                auto empty_string_expression = make_string_literal(compiler, String(), /*location=*/expression);
+                auto not_equal_empty_string = make_binary(compiler, Token::NE_OP, expression, empty_string_expression, /*location=*/expression);
+                // @Speed we can probably just assign not_equal_null->type_info to ltype/compiler->type_bool here...
+                typecheck_expression(not_equal_empty_string);
+                
+                right = not_equal_empty_string;
+                viability_score += 1;
+            }
         } else if (is_pointer_type(ltype) && types_match(ltype->pointer_to, compiler->type_uint8) && types_match(rtype, compiler->type_string)) {
             // Implicity dereference string when the left-type is *uint8.
             // @TODO maybe have an allow parameter for this in case this should only be allowed in certain situations.
@@ -529,11 +576,11 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
 #define FOLD_COMPARE(op, lhs, rhs, type_info, site)                      \
 {                                                                        \
     if (type_info->is_signed) {                                          \
-        return make_bool_literal(compiler, lhs op rhs, compiler->type_bool, site); \
+        return make_bool_literal(compiler, lhs op rhs, site); \
     } else {                                                             \
         u64 l = static_cast<u64>(lhs);                                   \
         u64 r = static_cast<u64>(rhs);                                   \
-        return make_bool_literal(compiler, l op r, compiler->type_bool, site);     \
+        return make_bool_literal(compiler, l op r, site);     \
     }                                                                    \
 }
 
@@ -600,12 +647,12 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     case Token::STAR : return make_float_literal(compiler, l * r, left_type, bin);
                     case Token::SLASH: return make_float_literal(compiler, l / r, left_type, bin);
                     
-                    case Token::LE_OP: make_bool_literal(compiler, l <= r, compiler->type_bool, bin);
-                    case Token::GE_OP: make_bool_literal(compiler, l >= r, compiler->type_bool, bin);
-                    case Token::EQ_OP: make_bool_literal(compiler, l == r, compiler->type_bool, bin);
-                    case Token::NE_OP: make_bool_literal(compiler, l != r, compiler->type_bool, bin);
-                    case Token::LEFT_ANGLE : make_bool_literal(compiler, l <  r, compiler->type_bool, bin);
-                    case Token::RIGHT_ANGLE: make_bool_literal(compiler, l >  r, compiler->type_bool, bin);
+                    case Token::LE_OP: make_bool_literal(compiler, l <= r, bin);
+                    case Token::GE_OP: make_bool_literal(compiler, l >= r, bin);
+                    case Token::EQ_OP: make_bool_literal(compiler, l == r, bin);
+                    case Token::NE_OP: make_bool_literal(compiler, l != r, bin);
+                    case Token::LEFT_ANGLE : make_bool_literal(compiler, l <  r, bin);
+                    case Token::RIGHT_ANGLE: make_bool_literal(compiler, l >  r, bin);
                     
                     default: assert(false);
                 }
@@ -832,8 +879,7 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
         if (i < function_type->arguments.count) {
             // use null for morphed param because we don't care about the modified value because function parameter declarations can't be mutated here
             auto param_type = function_type->arguments[i];
-            bool allow_coerce_to_ptr_void = true;
-            auto tuple = typecheck_and_implicit_cast_single_expression(value, param_type, allow_coerce_to_ptr_void);
+            auto tuple = typecheck_and_implicit_cast_single_expression(value, param_type, ALLOW_COERCE_TO_PTR_VOID);
             u64 right_viability_score = tuple.item1;
             
             if (compiler->errors_reported) return MakeTuple<bool, u64>(false, 0);
@@ -1141,8 +1187,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             if (compiler->errors_reported) return;
             
             if (decl->type_info && decl->initializer_expression) {
-                bool allow_coerce_to_ptr_void = true;
-                auto result = typecheck_and_implicit_cast_single_expression(decl->initializer_expression, get_type_info(decl), allow_coerce_to_ptr_void);
+                auto result = typecheck_and_implicit_cast_single_expression(decl->initializer_expression, get_type_info(decl), ALLOW_COERCE_TO_PTR_VOID);
                 
                 if (decl->initializer_expression != result.item2) decl->initializer_expression = result.item2; // Don't do a substitution here, otherwise we can cause a loop
                 if (!types_match(get_type_info(decl), get_type_info(decl->initializer_expression))) {
@@ -1192,17 +1237,19 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 bin = assignment;
             }
             
-            bool allow_coerce_to_ptr_void = (bin->operator_type == Token::EQUALS);
+            u32 allow_coerce_to_ptr_void_flag = ((bin->operator_type == Token::EQUALS) ? ALLOW_COERCE_TO_PTR_VOID : 0);
             
             if (bin->operator_type == Token::EQUALS) {
                 // we're only allowed to cast on the rhs of an assignment.
                 typecheck_expression(bin->left);
                 if (compiler->errors_reported) return;
                 
-                auto tuple = typecheck_and_implicit_cast_single_expression(bin->right, get_type_info(bin->left), allow_coerce_to_ptr_void);
+                auto tuple = typecheck_and_implicit_cast_single_expression(bin->right, get_type_info(bin->left), allow_coerce_to_ptr_void_flag);
                 
                 bin->right = tuple.item2;
             } else {
+                // @Incomplete change typecheck_and_implicit_cast_expression_pair to use flags
+                bool allow_coerce_to_ptr_void = (allow_coerce_to_ptr_void_flag & ALLOW_COERCE_TO_PTR_VOID);
                 typecheck_and_implicit_cast_expression_pair(bin->left, bin->right, &bin->left, &bin->right, allow_coerce_to_ptr_void);
             }
             
@@ -1317,7 +1364,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
             }
             
-            if (bin->operator_type == Token::EQ_OP) {
+            if ((bin->operator_type == Token::EQ_OP) || (bin->operator_type == Token::NE_OP)) {
                 if (left_type->type == Ast_Type_Info::STRING) {
                     Ast_Function_Call *call = SEMA_NEW(Ast_Function_Call);
                     copy_location_info(call, bin);
@@ -1332,6 +1379,15 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     
                     typecheck_expression(call);
                     bin->substitution = call;
+
+                    if (bin->operator_type == Token::NE_OP) {
+                        auto _not = make_binary(compiler, Token::NE_OP, call, make_bool_literal(compiler, true, /*location=*/bin), /*location=*/bin);
+
+                        // @Speed we can probably just assign _not->type_info to compiler->type_bool.
+                        typecheck_expression(_not);
+
+                        bin->substitution = _not;
+                    }
                     return;
                 }
             }
@@ -1747,10 +1803,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         case AST_IF: {
             auto _if = static_cast<Ast_If *>(expression);
             
-            typecheck_expression(_if->condition);
+            auto result = typecheck_and_implicit_cast_single_expression(_if->condition, compiler->type_bool, ALLOW_COERCE_TO_BOOL);
+            _if->condition = result.item2;
             
             if (compiler->errors_reported) return;
-            
+
             auto cond = _if->condition;
             if (get_type_info(cond)->type != Ast_Type_Info::BOOL) {
                 // @TODO check for coercion to bool
