@@ -1,6 +1,4 @@
 
-#import "GLFW"; // for glfwGetProcAddress
-
 #if os(Windows) {
     library "opengl32";
 }
@@ -331,13 +329,7 @@ var glGetUniformLocation: (program: GLuint, name: *GLchar) -> GLint;
 var glUniformMatrix4fv: (location: GLint, count: GLsizei, transpose: GLboolean, value: *GLfloat) -> void;
 var glUniform3fv: (location: GLint, count: GLsizei, value: *GLfloat) -> void;
 
-
-func get_proc(name: string) -> *void {
-    return glfwGetProcAddress(name.data);
-}
-
-// @TODO maybe we should take in a get_proc parameter to not have the GLFW dependency here..
-func init_gl_functions() {
+func init_gl_functions(get_proc: (name: string) -> *void) {
     glBindVertexArray          = cast() get_proc("glBindVertexArray");
     glGenVertexArrays          = cast() get_proc("glGenVertexArrays");
     glGenBuffers               = cast() get_proc("glGenBuffers");

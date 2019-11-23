@@ -54,6 +54,19 @@ void add_type(String_Builder *builder, Ast_Type_Info *type) {
         // @Incomplete anonymous structs?
         String name = type->struct_decl->identifier->name->name;
         builder->print("%d%.*s", name.length, name.length, name.data);
+    } else if (type->type == Ast_Type_Info::FUNCTION) {
+        builder->putchar('L');
+
+        builder->print("%d", type->arguments.count);
+        for (auto arg: type->arguments) {
+            add_type(builder, arg);
+        }
+
+        add_type(builder, type->return_type);
+        builder->putchar('_');
+        if (type->is_c_function) builder->putchar('C');
+        if (type->is_c_function) builder->putchar('V');
+        builder->putchar('_');
     } else {
         assert(false && "Internal error: unhandled type when creating function mangled name.");
     }
