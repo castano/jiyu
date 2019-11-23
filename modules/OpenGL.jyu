@@ -336,6 +336,7 @@ func get_proc(name: string) -> *void {
     return glfwGetProcAddress(name.data);
 }
 
+// @TODO maybe we should take in a get_proc parameter to not have the GLFW dependency here..
 func init_gl_functions() {
     glBindVertexArray          = cast() get_proc("glBindVertexArray");
     glGenVertexArrays          = cast() get_proc("glGenVertexArrays");
