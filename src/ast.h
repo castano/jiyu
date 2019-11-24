@@ -204,7 +204,8 @@ struct Ast_Dereference : Ast_Expression {
     
     Ast_Expression *left = nullptr;
     Ast_Identifier *field_selector = nullptr;
-    
+
+    bool is_type_dereference = false;
     s64 element_path_index = -1; // 0-based element into the list of declarations or fields within the outer type
     s64 byte_offset = -1; // byte-offset from the start of the the memory occupied by the outer type
 };
@@ -221,6 +222,8 @@ struct Ast_Function_Call : Ast_Expression {
     
     Ast_Expression *function_or_function_ptr = nullptr;
     Array<Ast_Expression *> argument_list;
+
+    bool implicit_argument_inserted = false;
 };
 
 struct Ast_If : Ast_Expression {

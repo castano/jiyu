@@ -323,6 +323,14 @@ struct Array {
         // that we grew by?
     }
     
+    void insert(array_count_type index, T element) {
+        auto old_count = count;
+        resize(count + 1);
+        memcpy((char *)data + ((index+1) * sizeof(T)), (char *)data + (index * sizeof(T)), old_count-index);
+
+        data[index] = element;
+    }
+
     void add(T element) {
         if (count+1 >= allocated) reserve(allocated + NEW_MEM_CHUNK_ELEMENT_COUNT);
         

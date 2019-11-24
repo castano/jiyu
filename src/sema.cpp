@@ -1546,6 +1546,34 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             
             typecheck_expression(subexpression, want_numeric_type, true);
             if (compiler->errors_reported) return;
+
+            Ast_Expression *implicit_argument = nullptr;
+            if (subexpression->type == AST_DEREFERENCE) {
+                auto deref = static_cast<Ast_Dereference *>(subexpression);
+                if (!deref->is_type_dereference) {
+                    auto left_type = get_type_info(deref->left);
+                    if ((is_pointer_type(left_type) && is_struct_type(left_type->pointer_to))
+                        || is_struct_type(left_type)) {
+                        implicit_argument = deref->left;
+
+                        if (is_struct_type(left_type)) {
+                            // Turn this struct into a pointer
+                            auto unary = make_unary(compiler, Token::STAR, implicit_argument);
+                            // @Speed we can probably just assign the right type here.
+                            typecheck_expression(unary);
+
+                            implicit_argument = unary;
+                        }
+                    }
+                }
+            }
+
+            if (implicit_argument) {
+                call->argument_list.insert(0, implicit_argument);
+                call->implicit_argument_inserted = true;
+            }
+
+            while (subexpression->substitution) subexpression = subexpression->substitution;
             
             if (subexpression->type == AST_IDENTIFIER) {
                 auto identifier = static_cast<Ast_Identifier *>(subexpression);
@@ -1680,6 +1708,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     assert(left_type);
                 }
             }
+
+            deref->is_type_dereference = is_type_use;
             
             if (left_type->type != Ast_Type_Info::STRING &&
                 left_type->type != Ast_Type_Info::ARRAY  &&
@@ -1792,6 +1822,42 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         
                         // this is not supposed to happen because regular var's should be handled by the above code.
                         if (is_type_use) assert(declaration->is_let);
+                    } else if (decl && decl->type == AST_FUNCTION) {
+                        // @Hack substitute to an identifier to get the quick benefit of the overloading sytem.
+
+                        auto ident = make_identifier(compiler, field_atom);
+                        ident->enclosing_scope = &_struct->member_scope;
+
+                        // @Cutnpaste from the identifier stuff
+                        // @Cleanup the only difference in this version is that we're only
+                        // checking the struct scope instead of looking up through all parent scopes.
+                        assert(ident->overload_set.count == 0);
+                        collect_function_overloads_for_atom_in_scope(ident->name, ident->enclosing_scope, &ident->overload_set);
+                        
+                        if (!overload_set_allowed && ident->overload_set.count > 1) {
+                            String name = ident->name->name;
+                            compiler->report_error(ident, "Ambiguous use of overloaded function '%.*s' (%d overloads).\n", name.length, name.data, ident->overload_set.count);
+                            
+                            
+                            for (auto overload: ident->overload_set) {
+                                compiler->report_error(overload, "DEBUG: here\n");
+                            }
+                            
+                            return;
+                        } else if (!overload_set_allowed) {
+                            assert(ident->overload_set.count == 1);
+                            
+                            typecheck_expression(decl);
+                            ident->resolved_declaration = decl;
+                            ident->type_info = get_type_info(decl);
+                            return;
+                        }
+
+                        // resolved_declaration and type_info will be resolved by the Ast_Function_Call code.
+                        // Set to void for now, Ast_Function_Call code will either error or fix this up.
+                        ident->type_info = compiler->type_void;
+
+                        decl = ident;
                     }
                     
                     if (decl) {

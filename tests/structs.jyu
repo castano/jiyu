@@ -1,0 +1,23 @@
+#import "LibC";
+
+struct My_Struct {
+    var i: int64;
+
+    func my_cool_func() {
+        printf("Hello, World!\n");
+    }
+
+    func my_cool_func(my_struct: *My_Struct) {
+        printf("Hello, Sailor! %d\n", my_struct.i);
+    }
+}
+
+
+func main() {
+    var whatever: My_Struct;
+    whatever.i = 10;
+
+    whatever.my_cool_func();
+    My_Struct.my_cool_func();
+    My_Struct.my_cool_func(*whatever);
+}

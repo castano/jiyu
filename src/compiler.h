@@ -165,21 +165,33 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right);
 
 inline
 bool is_int_type(Ast_Type_Info *info) {
+    if (info->type == Ast_Type_Info::ALIAS) return is_int_type(info->alias_of);
     return info->type == Ast_Type_Info::INTEGER;
 }
 
 inline
 bool is_float_type(Ast_Type_Info *info) {
+    if (info->type == Ast_Type_Info::ALIAS) return is_float_type(info->alias_of);
     return info->type == Ast_Type_Info::FLOAT;
 }
 
 inline
 bool is_pointer_type(Ast_Type_Info *info) {
+    if (info->type == Ast_Type_Info::ALIAS) return is_pointer_type(info->alias_of);
+
     return info->type == Ast_Type_Info::POINTER;
 }
 
 inline
+bool is_struct_type(Ast_Type_Info *info) {
+    if (info->type == Ast_Type_Info::ALIAS) return is_struct_type(info->alias_of);
+
+    return info->type == Ast_Type_Info::STRUCT;
+}
+
+inline
 bool is_aggregate_type(Ast_Type_Info *info) {
+    if (info->type == Ast_Type_Info::ALIAS) return is_aggregate_type(info->alias_of);
     // @TODO arrays
     return info->type == Ast_Type_Info::STRUCT || info->type == Ast_Type_Info::STRING;
 }

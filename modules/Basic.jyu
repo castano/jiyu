@@ -300,3 +300,81 @@ func get_command_line(strings: [] string) -> *uint8 {
         return copy_string(to_string(buf.data));
     }
 }
+
+// @Incomplete, we need some sort of print function here..
+struct String_Builder {
+    typealias array_count_type = int64; // @TODO @FixMe array_count_type
+
+    let BUCKET_ALLOC_SIZE = 4096;
+    
+    typealias Bucket = [..] uint8;
+    
+    var buckets: [..] Bucket;
+    
+    func init(builder: *String_Builder) {
+        make_bucket(builder, BUCKET_ALLOC_SIZE);
+    }
+
+    func reset(builder: *String_Builder) {
+        for * builder.buckets {
+            if (it.data) free(it.data);
+            it.data = null;
+        }
+        
+        array_reset(*builder.buckets);
+    }
+
+    func make_bucket(builder: *String_Builder, amount: array_count_type) {
+        var b: Bucket;
+        b.data = cast(*uint8) malloc(cast(size_t) amount);
+        b.allocated = amount;
+        b.count = 0;
+        array_add(*builder.buckets, b);
+    }
+    
+    func putchar(builder: *String_Builder, c: uint8) {
+        var bucket = *builder.buckets[builder.buckets.count-1];
+        
+        if (bucket.count < bucket.allocated) {
+            bucket.data[bucket.count] = c;
+            bucket.count += 1;
+        } else {
+            make_bucket(builder, BUCKET_ALLOC_SIZE);
+            putchar(builder, c);
+        }
+    }
+    
+    func append(builder: *String_Builder, s: string) {
+        for 0..s.length-1 {
+            putchar(builder, s[it]);
+        }
+    }
+    
+    func append(builder: *String_Builder, s: c_string) {
+        var o = to_string(s);
+        append(builder, o);
+    }
+    
+
+    
+    func to_string(builder: *String_Builder) -> string {
+        var total_data: array_count_type = 0;
+        for builder.buckets {
+            total_data += it.count;
+        }
+        
+        var data = cast(*uint8) malloc(cast(size_t) total_data);
+        var cursor: array_count_type = 0;
+        for builder.buckets {
+            memcpy(data+cursor, it.data, cast(size_t) it.count);
+            cursor += it.count;
+        }
+        
+        assert(cursor == total_data);
+        
+        var s: string;
+        s.data = data;
+        s.length = total_data;
+        return s;
+    }
+}
