@@ -326,7 +326,7 @@ struct Array {
     void insert(array_count_type index, T element) {
         auto old_count = count;
         resize(count + 1);
-        memcpy((char *)data + ((index+1) * sizeof(T)), (char *)data + (index * sizeof(T)), old_count-index);
+        memmove((char *)data + ((index+1) * sizeof(T)), (char *)data + (index * sizeof(T)), (old_count-index) * sizeof(T));
 
         data[index] = element;
     }
