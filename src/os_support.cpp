@@ -16,7 +16,7 @@
 
 
 String get_executable_path() {
-    const DWORD BUFFER_SIZE = 512;
+    const DWORD BUFFER_SIZE = 512;  // @@ Fixed buffers.
     char buf[BUFFER_SIZE];
 
     auto module = GetModuleHandleA(nullptr);
@@ -39,31 +39,38 @@ bool file_exists(String path) {
 
 #ifdef MACOSX
 #include <mach-o/dyld.h>
+#include <stdlib.h>
 
 String get_executable_path() {
-    const u32 BUFFER_SIZE = 512;
-    char buf[BUFFER_SIZE];
+    u32 bufsize = 0;
+    auto result = _NSGetExecutablePath(nullptr, &bufsize);
 
-    u32 bufsize = BUFFER_SIZE;
-    auto result = _NSGetExecutablePath(buf, &bufsize);
+    char * path = (char *)malloc(bufsize);
+    defer { free(path); };
+
+    result = _NSGetExecutablePath(path, &bufsize);
     if (result != 0) return String();
 
-    return copy_string(to_string(buf));
+    char * real_path = realpath(path, nullptr);
+
+    return to_string(real_path);
 }
-#endif
+#endif // MACOSX
 
 #ifdef LINUX
 #include <unistd.h>
 
 String get_executable_path() {
-    const u32 BUFFER_SIZE = 512;
+    const u32 BUFFER_SIZE = 512;    // @@ Fixed buffers.
     char buf[BUFFER_SIZE];
 
     u32 bufsize = BUFFER_SIZE;
     auto result = readlink("/proc/self/exe", buf, bufsize);
     if (result < 0) return String();
 
-    return copy_string(to_string(buf));
+    char * real_path = realpath(buf, nullptr);
+
+    return to_string(real_path);
 }
 
 #endif // LINUX
