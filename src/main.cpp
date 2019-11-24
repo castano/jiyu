@@ -204,6 +204,11 @@ extern "C" {
                 snprintf(libpath, LINE_SIZE, "/libpath:%S", win32_sdk.windows_sdk_ucrt_library_path);
                 args.add(copy_string(to_string(libpath)));
             }
+
+            for (auto path: compiler->library_search_paths) {
+                snprintf(libpath, LINE_SIZE, "/libpath:%.*s", path.length, path.data);
+                args.add(copy_string(to_string(libpath)));
+            }
             
             args.add(to_string("/NODEFAULTLIB:libcmt"));
             
@@ -224,6 +229,7 @@ extern "C" {
             
             String exec_name = compiler->build_options.executable_name;
             String obj_name = mprintf("%.*s.o", exec_name.length, exec_name.data);
+            convert_to_back_slashes(obj_name);
             args.add(obj_name);
             
             String output_name = exec_name;
@@ -267,6 +273,11 @@ extern "C" {
         
         args.add(to_string("-o"));
         args.add(compiler->build_options.executable_name);
+
+        for (auto path: compiler->library_search_paths) {
+            args.add(to_string("-L"));
+            args.add(path);
+        }
         
         for (auto lib: compiler->libraries) {
             if (lib->is_framework) {

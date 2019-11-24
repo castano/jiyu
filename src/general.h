@@ -39,7 +39,7 @@ struct String {
     //     this->length = strlen(str)
     // }
     
-    char operator[](string_length_type index) const {
+    char &operator[](string_length_type index) const {
         assert(index >= 0 && index < length);
         
         return data[index];
@@ -156,6 +156,15 @@ inline void convert_to_back_slashes(char *c) {
         }
         
         ++c;
+    }
+}
+
+inline void convert_to_back_slashes(String s) {
+    for (string_length_type i = 0; i < s.length; ++i) {
+        char c = s[i];
+        if (c == '/') {
+            s[i] = '\\';
+        }
     }
 }
 
