@@ -1,6 +1,7 @@
 
 #include "parser.h"
 #include "compiler.h"
+#include <new> // for placement new
 
 #define PARSER_NEW(type) (type *)ast_init(this, new (compiler->get_memory(sizeof(type))) type() );
 

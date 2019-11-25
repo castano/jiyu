@@ -4,6 +4,8 @@
 #include "compiler.h"
 #include "sema.h"
 
+#include <new> // for placement new
+
 #define COPIER_NEW(type) ((type *)init_copy(new (compiler->get_memory(sizeof(type))) type(), old))
 
 #define COPY_ARRAY(name) do { for (auto i : old->name) {_new->name.add((decltype(i))copy(i)); } } while (0) 

@@ -5,6 +5,7 @@
 #include "copier.h"
 
 #include <stdio.h>
+#include <new> // for placement new
 
 #define SEMA_NEW(type) (new (compiler->get_memory(sizeof(type))) type())
 
