@@ -10,6 +10,11 @@
 #include "llvm/Target/TargetMachine.h"
 
 #include <stdio.h> // for vprintf
+#include <new> // for placement new
+
+#define COMPILER_NEW(type)  (new (this->get_memory(sizeof(type))) type())
+// sigh, c++
+#define COMPILER_NEW2(type) (new (compiler->get_memory(sizeof(type))) type())
 
 
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
@@ -58,8 +63,20 @@ void *Compiler::get_memory(array_count_type amount) {
     return memory_pool.allocate(amount);
 }
 
+String Compiler::copy_string(String s) {
+    String out;
+    out.length = s.length;
+    
+    auto length = s.length;
+    if (s.data && s.length) {
+        out.data = (char *)this->get_memory(length);
+        memcpy(out.data, s.data, length);
+    }
+    return out;
+}
+
 Ast_Type_Info *Compiler::make_array_type(Ast_Type_Info *element, array_count_type count, bool is_dynamic) {
-    Ast_Type_Info *info = new Ast_Type_Info();
+    Ast_Type_Info *info = COMPILER_NEW(Ast_Type_Info);
     info->type = Ast_Type_Info::ARRAY;
     info->array_element       = element;
     info->array_element_count = count;
@@ -84,7 +101,7 @@ Ast_Type_Info *Compiler::make_array_type(Ast_Type_Info *element, array_count_typ
 }
 
 Ast_Type_Info *Compiler::make_pointer_type(Ast_Type_Info *pointee) {
-    Ast_Type_Info *info = new Ast_Type_Info();
+    Ast_Type_Info *info = COMPILER_NEW(Ast_Type_Info);
     info->type = Ast_Type_Info::POINTER;
     info->pointer_to = pointee;
     info->size = this->pointer_size; // @TargetInfo
@@ -95,15 +112,15 @@ Ast_Type_Info *Compiler::make_pointer_type(Ast_Type_Info *pointee) {
     return info;
 }
 
-Ast_Type_Info *make_struct_type(Ast_Struct *_struct) {
-    Ast_Type_Info *info = new Ast_Type_Info();
+Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct) {
+    Ast_Type_Info *info = COMPILER_NEW2(Ast_Type_Info);
     info->type = Ast_Type_Info::STRUCT;
     info->struct_decl = _struct;
     return info;
 }
 
 Ast_Type_Info *Compiler::make_function_type(Ast_Function *function) {
-    Ast_Type_Info *info = new Ast_Type_Info();
+    Ast_Type_Info *info = COMPILER_NEW(Ast_Type_Info);
     info->type   = Ast_Type_Info::FUNCTION;
     info->size   = this->type_ptr_void->size;
     info->stride = this->type_ptr_void->stride;
@@ -139,7 +156,7 @@ Ast_Type_Info *Compiler::make_enum_type(Ast_Enum *_enum) {
 }
 
 static Ast_Type_Info *make_int_type(Compiler *compiler, bool is_signed, s64 size) {
-    Ast_Type_Info *info = new Ast_Type_Info();
+    Ast_Type_Info *info = COMPILER_NEW2(Ast_Type_Info);
     info->type = Ast_Type_Info::INTEGER;
     info->is_signed = is_signed;
     info->size = size;
@@ -151,7 +168,7 @@ static Ast_Type_Info *make_int_type(Compiler *compiler, bool is_signed, s64 size
 }
 
 static Ast_Type_Info *make_float_type(Compiler *compiler, s64 size) {
-    Ast_Type_Info *info = new Ast_Type_Info();
+    Ast_Type_Info *info = COMPILER_NEW2(Ast_Type_Info);
     info->type = Ast_Type_Info::FLOAT;
     info->size = size;
     info->alignment = info->size;
@@ -188,11 +205,11 @@ void Compiler::init() {
         // or a 16 or 8-bit machine..
     }
 
-    type_void = new Ast_Type_Info();
+    type_void = COMPILER_NEW(Ast_Type_Info);
     type_void->type = Ast_Type_Info::VOID;
     add_to_type_table(type_void);
 
-    type_bool = new Ast_Type_Info();
+    type_bool = COMPILER_NEW(Ast_Type_Info);
     type_bool->type = Ast_Type_Info::BOOL;
     type_bool->size   = 1;
     type_bool->stride = 1;
@@ -220,7 +237,7 @@ void Compiler::init() {
         type_string_length = type_int32; // @TargetInfo
     }
     
-    type_string = new Ast_Type_Info();
+    type_string = COMPILER_NEW(Ast_Type_Info);
     type_string->type = Ast_Type_Info::STRING;
     type_string->size = type_string_length->size + type_string_data->size;
     type_string->stride = type_string->size;
@@ -233,7 +250,7 @@ void Compiler::init() {
         type_array_count = type_int32; // @TargetInfo
     }
     
-    type_info_type = new Ast_Type_Info();
+    type_info_type = COMPILER_NEW(Ast_Type_Info);
     type_info_type->type = Ast_Type_Info::TYPE;
     type_info_type->size = this->pointer_size;
     type_info_type->stride = type_info_type->size;
@@ -351,7 +368,7 @@ void Compiler::resolve_directives() {
             }
 
             if (!success) {
-                Ast_Scope *scope = new Ast_Scope();
+                Ast_Scope *scope = COMPILER_NEW(Ast_Scope);
                 scope->parent = this->preload_scope;
                 import->imported_scope = scope;
 
@@ -363,7 +380,7 @@ void Compiler::resolve_directives() {
                 this->loaded_imports.add(import);
             }
 
-            Ast_Scope_Expansion *exp = new Ast_Scope_Expansion();
+            Ast_Scope_Expansion *exp = COMPILER_NEW(Ast_Scope_Expansion);
             exp->text_span = import->imported_scope->text_span;
             exp->filename = import->imported_scope->filename;
             
@@ -438,7 +455,7 @@ void Compiler::resolve_directives() {
             if (chosen_block) {
                 chosen_block->rejected_by_static_if = false;
                 
-                Ast_Scope_Expansion *exp = new Ast_Scope_Expansion();
+                Ast_Scope_Expansion *exp = COMPILER_NEW(Ast_Scope_Expansion);
                 exp->text_span = chosen_block->text_span;
                 exp->filename = chosen_block->filename;
 
@@ -458,8 +475,8 @@ void Compiler::resolve_directives() {
 Atom *Compiler::make_atom(String name) {
     Atom *atom = atom_table->find_atom(name);
     if (!atom) {
-        atom = new Atom();
-        atom->name = copy_string(name);
+        atom = COMPILER_NEW(Atom);
+        atom->name = this->copy_string(name);
         atom->hash = atom_table->hash_key(name);
         
         atom_table->data.add(atom);
@@ -584,4 +601,164 @@ bool Compiler::is_toplevel_scope(Ast_Scope *scope) {
     }
 
     return false;
+}
+
+// Expression construction stuff, primarily used by sema and clang_import
+
+Ast_Expression *cast_int_to_int(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
+    while (expr->substitution) expr = expr->substitution;
+    
+    assert(expr->type_info->type == Ast_Type_Info::INTEGER);
+    assert(target->type == Ast_Type_Info::INTEGER);
+    
+    if (target->size == expr->type_info->size) return expr;
+    
+    Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
+    copy_location_info(cast, expr);
+    cast->expression = expr;
+    // cast->target_type_inst = nullptr;
+    cast->type_info = target;
+    return cast;
+}
+
+Ast_Expression *cast_float_to_float(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
+    while (expr->substitution) expr = expr->substitution;
+    
+    assert(expr->type_info->type == Ast_Type_Info::FLOAT);
+    assert(target->type == Ast_Type_Info::FLOAT);
+    
+    if (target->size == expr->type_info->size) return expr;
+    
+    Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
+    copy_location_info(cast, expr);
+    cast->expression = expr;
+    // cast->target_type_info = nullptr;
+    cast->type_info = target;
+    return cast;
+}
+
+Ast_Expression *cast_int_to_float(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
+    while (expr->substitution) expr = expr->substitution;
+    
+    assert(expr->type_info->type == Ast_Type_Info::INTEGER);
+    assert(target->type == Ast_Type_Info::FLOAT);
+    
+    Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
+    copy_location_info(cast, expr);
+    cast->expression = expr;
+    // cast->target_type_info = nullptr;
+    cast->type_info = target;
+    return cast;
+    
+}
+
+Ast_Expression *cast_ptr_to_ptr(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
+    while (expr->substitution) expr = expr->substitution;
+    
+    assert(expr->type_info->type == Ast_Type_Info::POINTER);
+    assert(target->type == Ast_Type_Info::POINTER);
+    
+    Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
+    copy_location_info(cast, expr);
+    cast->expression = expr;
+    cast->type_info = target;
+    return cast;
+}
+
+Ast_Literal *make_string_literal(Compiler *compiler, String value, Ast *source_loc) {
+    Ast_Literal *lit = COMPILER_NEW2(Ast_Literal);
+    lit->literal_type = Ast_Literal::STRING;
+    lit->string_value = value;
+    lit->type_info = compiler->type_string;
+    
+    if (source_loc) copy_location_info(lit, source_loc);
+    return lit;
+}
+
+Ast_Literal *make_integer_literal(Compiler *compiler, s64 value, Ast_Type_Info *type_info, Ast *source_loc) {
+    Ast_Literal *lit = COMPILER_NEW2(Ast_Literal);
+    lit->literal_type = Ast_Literal::INTEGER;
+    lit->integer_value = value;
+    lit->type_info = type_info;
+    
+    if (source_loc) copy_location_info(lit, source_loc);
+    return lit;
+}
+
+Ast_Literal *make_float_literal(Compiler *compiler, double value, Ast_Type_Info *type_info, Ast *source_loc) {
+    Ast_Literal *lit = COMPILER_NEW2(Ast_Literal);
+    lit->literal_type = Ast_Literal::FLOAT;
+    lit->float_value = value;
+    lit->type_info = type_info;
+    
+    if (source_loc) copy_location_info(lit, source_loc);
+    return lit;
+}
+
+Ast_Literal *make_bool_literal(Compiler *compiler, bool value, Ast *source_loc) {
+    Ast_Literal *lit = COMPILER_NEW2(Ast_Literal);
+    lit->literal_type = Ast_Literal::BOOL;
+    lit->bool_value = value;
+    lit->type_info = compiler->type_bool;
+    
+    if (source_loc) copy_location_info(lit, source_loc);
+    return lit;
+}
+
+Ast_Literal *make_null_literal(Compiler *compiler, Ast_Type_Info *pointer_type, Ast *source_loc) {
+    Ast_Literal *lit = COMPILER_NEW2(Ast_Literal);
+    lit->literal_type = Ast_Literal::NULLPTR;
+    lit->type_info = pointer_type;
+    
+    if (source_loc) copy_location_info(lit, source_loc);
+    return lit;
+}
+
+
+Ast_Identifier *make_identifier(Compiler *compiler, Atom *name) {
+    Ast_Identifier *ident = COMPILER_NEW2(Ast_Identifier);
+    ident->name = name;
+    return ident;
+}
+
+// @Note MUST typecheck the return value of this!!!
+Ast_Array_Dereference *make_array_index(Compiler *compiler, Ast_Expression *array, Ast_Expression *index) {
+    Ast_Array_Dereference *deref = COMPILER_NEW2(Ast_Array_Dereference);
+    deref->array_or_pointer_expression = array;
+    deref->index_expression = index;
+
+    copy_location_info(deref, array);
+    return deref;
+}
+
+// @Note MUST typecheck the return value of this!!!
+Ast_Dereference *make_dereference(Compiler *compiler, Ast_Expression *aggregate_expression, Atom *field) {
+    auto ident = make_identifier(compiler, field);
+    copy_location_info(ident, aggregate_expression);
+    
+    Ast_Dereference *deref = COMPILER_NEW2(Ast_Dereference);
+    copy_location_info(deref, aggregate_expression);
+    deref->left = aggregate_expression;
+    deref->field_selector = ident;
+    return deref;
+}
+
+// @Note MUST typecheck the return value of this!!!
+Ast_Unary_Expression *make_unary(Compiler *compiler, Token::Type op, Ast_Expression *subexpr) {
+    Ast_Unary_Expression *un = COMPILER_NEW2(Ast_Unary_Expression);
+    un->operator_type = op;
+    un->expression = subexpr;
+
+    copy_location_info(un, subexpr);
+    return un;
+}
+
+Ast_Binary_Expression *make_binary(Compiler *compiler, Token::Type op, Ast_Expression *left, Ast_Expression *right, Ast *location) {
+    Ast_Binary_Expression *bin = COMPILER_NEW2(Ast_Binary_Expression);
+    bin->operator_type = op;
+    bin->left = left;
+    bin->right = right;
+    if (location) copy_location_info(bin, location);
+
+    return bin;
 }

@@ -64,9 +64,9 @@ inline void advance(String *s, s64 amount = 1) {
     }
 }
 
-inline String to_string(char *c_string) {
+inline String to_string(const char *c_string) {
     String s;
-    s.data = c_string;
+    s.data = const_cast<char *>(c_string);
     s.length = strlen(c_string);
     return s;
 }
@@ -99,6 +99,8 @@ inline bool operator!=(const String &s, const String &t) {
     return !(s == t);
 }
 
+// New code should use Compiler::copy_string as it allocates from the Compiler's memory pool,
+// use this only as necessary, or when the lifetime of the string is known and short.
 inline String copy_string(String s) {
     String out;
     out.length = s.length;

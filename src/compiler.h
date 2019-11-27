@@ -139,6 +139,7 @@ struct Compiler {
     void init();
 
     void *get_memory(array_count_type amount);
+    String copy_string(String s);
 
     // All these functions add to the type table before returning. Their results should not be modified!
     Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee);
@@ -147,6 +148,7 @@ struct Compiler {
     Ast_Type_Info *make_enum_type(Ast_Enum *_enum);
     void add_to_type_table(Ast_Type_Info *info);
     
+    // _name_ is internally copied.
     Atom *make_atom(String name);
     
     void queue_directive(Ast_Directive *directive);
@@ -160,7 +162,7 @@ struct Compiler {
 };
 
 // Structs must be added to the type table manually
-Ast_Type_Info *make_struct_type(Ast_Struct *_struct);
+Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct);
 
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right);
 
@@ -271,5 +273,37 @@ get_type_declaration_resolved_type(Ast_Expression *expression) {
 
     return nullptr;
 }
+
+
+Ast_Expression *cast_int_to_int(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target);
+
+Ast_Expression *cast_float_to_float(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target);
+
+Ast_Expression *cast_int_to_float(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target);
+
+Ast_Expression *cast_ptr_to_ptr(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target);
+
+Ast_Literal *make_string_literal(Compiler *compiler, String value, Ast *source_loc = nullptr);
+
+Ast_Literal *make_integer_literal(Compiler *compiler, s64 value, Ast_Type_Info *type_info, Ast *source_loc = nullptr);
+
+Ast_Literal *make_float_literal(Compiler *compiler, double value, Ast_Type_Info *type_info, Ast *source_loc = nullptr);
+
+Ast_Literal *make_bool_literal(Compiler *compiler, bool value, Ast *source_loc = nullptr);
+
+Ast_Literal *make_null_literal(Compiler *compiler, Ast_Type_Info *pointer_type, Ast *source_loc = nullptr);
+
+Ast_Identifier *make_identifier(Compiler *compiler, Atom *name);
+
+// @Note MUST typecheck the return value of this!!!
+Ast_Array_Dereference *make_array_index(Compiler *compiler, Ast_Expression *array, Ast_Expression *index);
+
+// @Note MUST typecheck the return value of this!!!
+Ast_Dereference *make_dereference(Compiler *compiler, Ast_Expression *aggregate_expression, Atom *field);
+
+// @Note MUST typecheck the return value of this!!!
+Ast_Unary_Expression *make_unary(Compiler *compiler, Token::Type op, Ast_Expression *subexpr);
+
+Ast_Binary_Expression *make_binary(Compiler *compiler, Token::Type op, Ast_Expression *left, Ast_Expression *right, Ast *location);
 
 #endif

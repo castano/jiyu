@@ -361,6 +361,7 @@ Ast_Expression *Parser::parse_unary_expression() {
 
 Ast_Expression *Parser::parse_multiplicative_expression() {
     auto sub_expression = parse_unary_expression();
+    if (!sub_expression) return nullptr;
     
     Token *token = peek_token();
     while (token->type != Token::END) {
@@ -427,6 +428,7 @@ Ast_Expression *Parser::parse_additive_expression() {
 
 Ast_Expression *Parser::parse_shift_expression() {
     auto sub_expression = parse_additive_expression();
+    if (!sub_expression) return nullptr;
     
     Token *token = peek_token();
     while (token->type != Token::END) {
@@ -459,6 +461,7 @@ Ast_Expression *Parser::parse_shift_expression() {
 
 Ast_Expression *Parser::parse_relational_expression() {
     auto sub_expression = parse_shift_expression();
+    if (!sub_expression) return nullptr;
     
     Token *token = peek_token();
     while (token->type != Token::END) {
@@ -493,6 +496,7 @@ Ast_Expression *Parser::parse_relational_expression() {
 
 Ast_Expression *Parser::parse_equality_expression() {
     auto sub_expression = parse_relational_expression();
+    if (!sub_expression) return nullptr;
     
     Token *token = peek_token();
     while (token->type != Token::END) {
@@ -525,6 +529,7 @@ Ast_Expression *Parser::parse_equality_expression() {
 
 Ast_Expression *Parser::parse_and_expression() {
     auto sub_expression = parse_equality_expression();
+    if (!sub_expression) return nullptr;
     
     Token *token = peek_token();
     while (token->type != Token::END) {
@@ -556,7 +561,8 @@ Ast_Expression *Parser::parse_and_expression() {
 
 Ast_Expression *Parser::parse_exclusive_or_expression() {
     auto sub_expression = parse_and_expression();
-    
+    if (!sub_expression) return nullptr;
+
     Token *token = peek_token();
     while (token->type != Token::END) {
         
@@ -587,6 +593,7 @@ Ast_Expression *Parser::parse_exclusive_or_expression() {
 
 Ast_Expression *Parser::parse_inclusive_or_expression() {
     auto sub_expression = parse_exclusive_or_expression();
+    if (!sub_expression) return nullptr;
     
     Token *token = peek_token();
     while (token->type != Token::END) {
@@ -618,6 +625,7 @@ Ast_Expression *Parser::parse_inclusive_or_expression() {
 
 Ast_Expression *Parser::parse_logical_and_expression() {
     auto sub_expression = parse_inclusive_or_expression();
+    if (!sub_expression) return nullptr;
     
     Token *token = peek_token();
     while (token->type != Token::END) {
@@ -649,6 +657,7 @@ Ast_Expression *Parser::parse_logical_and_expression() {
 
 Ast_Expression *Parser::parse_logical_xor_expression() {
     auto sub_expression = parse_logical_and_expression();
+    if (!sub_expression) return nullptr;
     
     Token *token = peek_token();
     while (token->type != Token::END) {
@@ -680,6 +689,7 @@ Ast_Expression *Parser::parse_logical_xor_expression() {
 
 Ast_Expression *Parser::parse_logical_or_expression() {
     auto sub_expression = parse_logical_xor_expression();
+    if (!sub_expression) return nullptr;
     
     Token *token = peek_token();
     while (token->type != Token::END) {

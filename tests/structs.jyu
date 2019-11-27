@@ -24,6 +24,26 @@ struct My_Struct {
     }
 }
 
+func main() {
+    var whatever: My_Struct;
+    var whatever_ptr = *whatever;
+    whatever.i = 10;
+
+    // Pilot
+    whatever.my_cool_func();
+    // World
+    My_Struct.my_cool_func();
+    // Morty
+    whatever.func3();
+    // Sailor
+    My_Struct.my_cool_func(*whatever);
+
+    // Sailor
+    whatever_ptr.my_cool_func();
+    // Moonmen
+    whatever_ptr.func2();
+}
+
 struct Vector3 {
     //var x, y, z: float;
     var x: float;
@@ -32,25 +52,9 @@ struct Vector3 {
     //var v: Vector3; // This is crashing.
 }
 
-var v: Vector3;
-var V: Vector3 = Vector3(1, 1, 1);
 
 
-/* 
-// This is not supported yet:
 
-var pair : struct {
-    var x;
-    var y;
-}
-*/
-
-/* 
-// This is crashing:
-
-struct Bla {
-    let bar = foo + 1;
-    let foo = 0;
 }
 
 func main() {
