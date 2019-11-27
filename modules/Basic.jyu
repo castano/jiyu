@@ -2,6 +2,21 @@
 #import "LibC";
 #import "Array";
 
+// Okay, so, there's nothing in the language right now to do something like new(My_Struct)
+// SO we take an initializer parameter so we can use the already established template system.
+// If this ends up sucking for everyone then we can figure something else out, but in the short
+// term I think I like this model.
+// -josh 27 November 2019
+func New<T>(initializer: T) -> *T {
+    var mem = cast(*T) malloc(sizeof(T));
+    <<mem = initializer;
+    return mem;
+}
+
+func Delete<T>(mem: *T) {
+    free(mem);
+}
+
 func assert(cond: bool) {
 
     if cond {
@@ -24,10 +39,10 @@ func basename(_s: string) -> string {
     var s = _s;
     while (s.length > 0) {
         if (s[s.length-1] == '/' || s[s.length-1] == '\\') return s;
-        
+
         s.length -= 1;
     }
-    
+
     return s;
 }
 
@@ -51,7 +66,7 @@ func strip_path_extension(_s: string) -> string {
 func copy_string(input: string) -> string {
     var data = cast(*uint8) malloc(cast(size_t) input.length);
     memcpy(data, input.data, cast(size_t) input.length);
-    
+
     var o: string;
     o.data = data;
     o.length = input.length;
@@ -70,7 +85,7 @@ func c_style_strlen(input: c_string) -> int64 {
     while <<cursor != 0 {
         cursor += 1;
     }
-    
+
     return cast(int64) (cursor - input);
 }
 
@@ -84,9 +99,9 @@ func to_string(input: c_string) -> string {
 func split(input: string, delim: uint8) -> [] string {
     var start = 0;
     var cursor = 0;
-    
+
     var output: [..] string;
-    
+
     while cursor < input.length {
         if input[cursor] == delim {
             var o: string;
@@ -94,18 +109,18 @@ func split(input: string, delim: uint8) -> [] string {
             o.length = cursor - start;
 
             array_add(*output, o);
-            
+
             start = cursor + 1;
         }
-        
+
         cursor += 1;
     }
-    
+
     var o: string;
     o.data = input.data + start;
     o.length = cursor - start;
     array_add(*output, o);
-    
+
     var static: [] string;
     static.data = output.data;
     static.count = output.count;
@@ -120,17 +135,17 @@ func read_entire_file(path: string) -> string {
     // @FixMe this only works if path points to a constant string
     var file = fopen(path.data, "rb".data);
     if file == null return "";
-    
+
     fseek(file, 0, SEEK_END);
     var length = ftell(file);
     fseek(file, 0, SEEK_SET);
-    
+
     var mem = cast(c_string) malloc(length);
     fread(mem, 1, length, file);
     // @TODO verify fread success
-    
+
     fclose(file);
-    
+
     var result: string;
     result.data = mem;
     result.length = length;
@@ -141,27 +156,27 @@ func get_command_line(strings: [] string) -> *uint8 {
     typealias string_length_type = int64; // @TODO
 
     var total_length: string_length_type = 0;
-    
+
     for strings total_length += it.length;
-    
+
     total_length += strings.count * 3 + 1; // enough space for quotes and a space around each argument
-    
+
     var cursor: string_length_type = 0;
     var final = cast(*uint8) malloc(cast() total_length);
-    
+
     for strings {
         final[cursor] = '\"'; // "
         cursor += 1;
 
         memcpy(final + cursor, it.data, cast() it.length);
         cursor += it.length;
-        
+
         final[cursor] = '\"'; // "
         cursor += 1;
         final[cursor] = ' ';
         cursor += 1;
     }
-    
+
     final[cursor] = 0;
     cursor += 1;
     return final;
@@ -198,7 +213,7 @@ func get_command_line(strings: [] string) -> *uint8 {
         startup.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
         startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
         startup.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
-        
+
         var process_info: PROCESS_INFORMATION;
 
         var cmd_line = get_command_line(command_strings);
@@ -226,7 +241,7 @@ func get_command_line(strings: [] string) -> *uint8 {
         startup.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
         startup.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
         startup.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
-        
+
         var process_info: PROCESS_INFORMATION;
         var success = CreateProcessA(null, cmd_line, null, null, TRUE, 0, null, null, *startup, *process_info);
         if success == 0 {
@@ -245,12 +260,12 @@ func get_command_line(strings: [] string) -> *uint8 {
 #if os(MacOSX) {
     func get_executable_path() -> string {
         func @c_function _NSGetExecutablePath(buf: *uint8, bufsize: *uint32) -> int32;
-    
+
         var buf: [512] uint8;
         var bufsize: uint32 = cast(uint32) buf.count;
         var result = _NSGetExecutablePath(buf.data, *bufsize);
         if (result != 0) return "";
-    
+
         return copy_string(to_string(buf.data));
     }
 
@@ -275,12 +290,12 @@ func get_command_line(strings: [] string) -> *uint8 {
 #if os(Linux) {
     func get_executable_path() -> string {
         func @c_function readlink(path: string, buf: *uint8, bufsize: uint32) -> int32;
-    
+
         var buf: [512] uint8;
         var bufsize: uint32 = cast(uint32) buf.count;
         var result = readlink("/proc/self/exe", buf.data, bufsize);
         if (result < 0) return "";
-    
+
         return copy_string(to_string(buf.data));
     }
 
@@ -306,11 +321,11 @@ struct String_Builder {
     typealias array_count_type = int64; // @TODO @FixMe array_count_type
 
     let BUCKET_ALLOC_SIZE = 4096;
-    
+
     typealias Bucket = [..] uint8;
-    
+
     var buckets: [..] Bucket;
-    
+
     func init(builder: *String_Builder) {
         make_bucket(builder, BUCKET_ALLOC_SIZE);
     }
@@ -320,7 +335,7 @@ struct String_Builder {
             if (it.data) free(it.data);
             it.data = null;
         }
-        
+
         array_reset(*builder.buckets);
     }
 
@@ -331,10 +346,10 @@ struct String_Builder {
         b.count = 0;
         array_add(*builder.buckets, b);
     }
-    
+
     func putchar(builder: *String_Builder, c: uint8) {
         var bucket = *builder.buckets[builder.buckets.count-1];
-        
+
         if (bucket.count < bucket.allocated) {
             bucket.data[bucket.count] = c;
             bucket.count += 1;
@@ -343,35 +358,35 @@ struct String_Builder {
             putchar(builder, c);
         }
     }
-    
+
     func append(builder: *String_Builder, s: string) {
         for 0..s.length-1 {
             putchar(builder, s[it]);
         }
     }
-    
+
     func append(builder: *String_Builder, s: c_string) {
         var o = to_string(s);
         append(builder, o);
     }
-    
 
-    
+
+
     func to_string(builder: *String_Builder) -> string {
         var total_data: array_count_type = 0;
         for builder.buckets {
             total_data += it.count;
         }
-        
+
         var data = cast(*uint8) malloc(cast(size_t) total_data);
         var cursor: array_count_type = 0;
         for builder.buckets {
             memcpy(data+cursor, it.data, cast(size_t) it.count);
             cursor += it.count;
         }
-        
+
         assert(cursor == total_data);
-        
+
         var s: string;
         s.data = data;
         s.length = total_data;
