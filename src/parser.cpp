@@ -119,6 +119,8 @@ String token_type_to_string(Token::Type type) {
         case Token::CARET_EQ:             return copy_string(to_string("^="));
         
         case Token::DOTDOT:               return copy_string(to_string(".."));
+        case Token::DOTDOTLT:             return copy_string(to_string("..<"));
+        
         default: return String(); // error ?
     }
 }
@@ -817,7 +819,8 @@ Ast_Expression *Parser::parse_statement() {
         _for->initial_iterator_expression = parse_expression();
         
         token = peek_token();
-        if (token->type == Token::DOTDOT) {
+        if (token->type == Token::DOTDOT || token->type == Token::DOTDOTLT) {
+            if (token->type == Token::DOTDOTLT) _for->is_exclusive_end = true;
             next_token();
             
             if (!_for->initial_iterator_expression) {
@@ -894,7 +897,7 @@ Ast_Expression *Parser::parse_statement() {
             
             const int MAX_PATH = 512;
             char fullname[MAX_PATH];
-            snprintf(fullname, MAX_PATH, "%.*s%.*s", base_path.length, base_path.data, name.length, name.data);
+            snprintf(fullname, MAX_PATH, "%.*s%.*s", PRINT_ARG(base_path), PRINT_ARG(name));
             
             load->target_filename = copy_string(to_string(fullname));
             load->target_scope    = get_current_scope();

@@ -308,9 +308,14 @@ Token Lexer::lex_token() {
         }
     } else if (text[current_char] == '.') {
         if (current_char+1 < text.length && text[current_char+1] == '.') {
-            string_length_type start = current_char;
-            current_char += 2;
-            return make_token(Token::DOTDOT, Span(start, 2));
+            if (current_char+2 < text.length && text[current_char+2] == '<') {
+                current_char += 3;
+                return make_token(Token::DOTDOTLT, Span(current_char, 3));
+            }
+            else {
+                current_char += 2;
+                return make_token(Token::DOTDOT, Span(current_char, 2));
+            }
         }
     } else if (text[current_char] == '/') {
         if (current_char+1 < text.length && text[current_char+1] == '*') {
