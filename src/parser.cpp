@@ -57,6 +57,7 @@ String token_type_to_string(Token::Type type) {
         case Token::KEYWORD_LET:       return copy_string(to_string("let"));
         case Token::KEYWORD_TYPEALIAS: return copy_string(to_string("typealias"));
         case Token::KEYWORD_STRUCT:    return copy_string(to_string("struct"));
+        case Token::KEYWORD_ENUM:      return copy_string(to_string("enum"));
         case Token::KEYWORD_LIBRARY:   return copy_string(to_string("library"));
         case Token::KEYWORD_FRAMEWORK: return copy_string(to_string("framework"));
         
@@ -763,6 +764,38 @@ Ast_Expression *Parser::parse_statement() {
         parse_scope(&_struct->member_scope, true);
         return _struct;
     }
+
+    if (token->type == Token::KEYWORD_ENUM) {
+        Ast_Enum *_enum = PARSER_NEW(Ast_Enum);
+        
+        next_token();
+        _enum->identifier = parse_identifier();
+
+        Token *token = peek_token();
+        if (token->type == Token::COLON) {
+            next_token();
+            
+            Ast_Type_Instantiation *type_inst = parse_type_inst();
+            if (!type_inst) return nullptr;
+
+            // Make sure it's an integer type.
+            if (!type_inst->builtin_primitive || type_inst->builtin_primitive->type != Ast_Type_Info::INTEGER) {
+                compiler->report_error(type_inst, "Expected integer type.\n");
+            }
+            
+            _enum->base_type = type_inst;
+        }
+        else {
+            // If not type provided, assume uint32.
+            _enum->base_type = wrap_primitive_type(compiler->type_uint32);
+        }
+
+        _enum->member_scope.parent = get_current_scope();
+        _enum->member_scope.owning_enum = _enum;
+        parse_enum_scope(&_enum->member_scope);
+
+        return _enum;
+    }
     
     if (token->type == Token::KEYWORD_VAR) {
         auto var = parse_variable_declaration(true);
@@ -1019,7 +1052,8 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
             if (stmt->type == AST_DECLARATION ||
                 stmt->type == AST_FUNCTION    ||
                 stmt->type == AST_TYPE_ALIAS  ||
-                stmt->type == AST_STRUCT) {
+                stmt->type == AST_STRUCT      || 
+                stmt->type == AST_ENUM) {
                 scope->declarations.add(stmt);
             }
         }
@@ -1036,7 +1070,42 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
     if (push_scope) pop_scopes();
 }
 
-Ast_Declaration *Parser::parse_variable_declaration(bool expect_var_keyword) {
+void Parser::parse_enum_scope(Ast_Scope *scope) {
+    assert(scope->owning_enum != nullptr);
+
+    if (!expect_and_eat((Token::Type) '{')) return;
+    
+    Ast_Declaration * prev_item = nullptr;
+    Token *token = peek_token();
+    while (token->type != Token::END) {
+        
+        if (token->type == '}') break;
+        
+        auto decl = parse_variable_declaration(false, /*enum_value_declaration=*/true);
+        if (!expect_and_eat(Token::SEMICOLON)) return;
+        
+        decl->is_let = true;
+
+        decl->type_inst = scope->owning_enum->base_type;
+
+        if (!decl->initializer_expression && prev_item) {
+            //decl->initializer_expression = prev_item + 1;
+        }
+        prev_item = decl;
+
+        scope->statements.add(decl);
+        scope->declarations.add(decl);
+        
+        if (compiler->errors_reported) return;
+                
+        token = peek_token();
+    }
+    
+    if (!expect_and_eat((Token::Type) '}')) return;
+}
+
+
+Ast_Declaration *Parser::parse_variable_declaration(bool expect_var_keyword, bool enum_value_declaration) {
     if (expect_var_keyword && !expect_and_eat(Token::KEYWORD_VAR)) return nullptr;
     
     Token *ident_token = peek_token(); // used for error below, @Cleanup we want to be able to report errors using an Ast
@@ -1075,7 +1144,7 @@ Ast_Declaration *Parser::parse_variable_declaration(bool expect_var_keyword) {
         decl->initializer_expression = expression;
     }
     
-    if (!decl->initializer_expression && !decl->type_inst) {
+    if (!decl->initializer_expression && !decl->type_inst && !enum_value_declaration) {
         // @TODO maybe this should be moved to semantic analysis
         compiler->report_error(ident_token, "Declared variable must be declared with a type or be initialized.\n");
         return nullptr;
@@ -1125,7 +1194,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
         
         case Token::KEYWORD_BOOL:   builtin_primitive = compiler->type_bool; break;
     }
-    
+
     if (builtin_primitive) {
         next_token();
         return wrap_primitive_type(builtin_primitive);

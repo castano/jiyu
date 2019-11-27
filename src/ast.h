@@ -12,6 +12,7 @@ struct Ast_Type_Info;
 struct Ast_Identifier;
 struct Ast_Scope;
 struct Ast_Struct;
+struct Ast_Enum;
 
 enum Ast_Type {
     AST_UNINITIALIZED,
@@ -34,6 +35,7 @@ enum Ast_Type {
     AST_SIZEOF,
     AST_FOR,
     AST_STRUCT,
+    AST_ENUM,
     AST_DIRECTIVE_LOAD,
     AST_DIRECTIVE_IMPORT,
     AST_DIRECTIVE_STATIC_IF,
@@ -70,6 +72,7 @@ struct Ast_Type_Info {
         
         // User defined (mostly)
         STRUCT,
+        ENUM,
     };
     
     Type type = UNINITIALIZED;
@@ -94,12 +97,22 @@ struct Ast_Type_Info {
         bool is_let = false;
     };
     Array<Struct_Member> struct_members; // for STRUCT
-    
+
     // FUNCTION
     Array<Ast_Type_Info *> arguments;
     Ast_Type_Info *return_type = nullptr;
     bool is_c_function = false;
     bool is_c_varargs  = false;
+
+    Ast_Enum *enum_decl = nullptr;
+    Ast_Type_Info *enum_base_type = nullptr;
+
+    // @@ Generate this info!
+    struct Enum_Member {
+        Atom *name;
+        u64 value;
+    };
+    Array<Enum_Member> enum_member;
     
     s64 stride = -1;
     s64 alignment = -1;
@@ -129,6 +142,8 @@ struct Ast_Scope : Ast_Expression {
 
     Ast_Function   *owning_function = nullptr; // Only set for the top-level scope of a function body. scope->owning_function == scope->owning_function->scope.
     Ast_Expression *owning_statement = nullptr;
+
+    Ast_Enum *owning_enum = nullptr;
 };
 
 // Used to specify a scope that was inserted due to the compiler resolving a static_if.
@@ -169,6 +184,16 @@ struct Ast_Struct : Ast_Expression {
     Ast_Struct() { type = AST_STRUCT; }
     
     Ast_Identifier *identifier = nullptr;
+    Ast_Scope member_scope;
+    
+    Ast_Type_Info *type_value = nullptr;
+};
+
+struct Ast_Enum : Ast_Expression {
+    Ast_Enum() { type = AST_ENUM; }
+    
+    Ast_Identifier *identifier = nullptr;
+    Ast_Type_Instantiation *base_type = nullptr;
     Ast_Scope member_scope;
     
     Ast_Type_Info *type_value = nullptr;
@@ -278,6 +303,7 @@ struct Ast_Declaration : Ast_Expression {
     bool is_let = false;
     bool is_readonly_variable = false;
     bool is_struct_member = false;
+    bool is_enum_member = false;
 };
 
 struct Ast_Function : Ast_Expression {
@@ -324,6 +350,7 @@ struct Ast_For : Ast_Expression {
     Ast_For() { type = AST_FOR; }
     
     bool is_element_pointer_iteration = false; // for * my_array { /*..*/ } // "it" is a writable pointer instead of a readonly copy.
+    bool is_exclusive_end = false;             // for ..< ranges
 
     Ast_Declaration *iterator_decl       = nullptr;
     Ast_Declaration *iterator_index_decl = nullptr;

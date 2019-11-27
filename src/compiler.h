@@ -144,6 +144,7 @@ struct Compiler {
     Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee);
     Ast_Type_Info *make_array_type(Ast_Type_Info *element, array_count_type count, bool is_dynamic);
     Ast_Type_Info *make_function_type(Ast_Function *function);
+    Ast_Type_Info *make_enum_type(Ast_Enum *_enum);
     void add_to_type_table(Ast_Type_Info *info);
     
     Atom *make_atom(String name);

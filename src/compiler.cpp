@@ -131,6 +131,13 @@ Ast_Type_Info *Compiler::make_function_type(Ast_Function *function) {
     return info;
 }
 
+Ast_Type_Info *Compiler::make_enum_type(Ast_Enum *_enum) {
+    Ast_Type_Info *info = new Ast_Type_Info();
+    info->type = Ast_Type_Info::ENUM;
+    info->enum_decl = _enum;
+    return info;    
+}
+
 static Ast_Type_Info *make_int_type(Compiler *compiler, bool is_signed, s64 size) {
     Ast_Type_Info *info = new Ast_Type_Info();
     info->type = Ast_Type_Info::INTEGER;
@@ -474,7 +481,7 @@ void Compiler::report_error_valist(String filename, String source, Span error_lo
     
     error_location.map_to_text_coordinates(source, &l0, &c0, &l1, &c1);
     
-    printf("w%lld:%.*s:%d,%d: ", this->instance_number, filename.length, filename.data, l0, c0);
+    printf("w%lld:%.*s:%d,%d: ", this->instance_number, PRINT_ARG(filename), l0, c0);
     vprintf(fmt, args);
     printf("\n");
     

@@ -59,8 +59,9 @@ struct Parser {
     
     Ast_Type_Instantiation *parse_type_inst();
     
-    Ast_Declaration *parse_variable_declaration(bool expect_var_keyword);
+    Ast_Declaration *parse_variable_declaration(bool expect_var_keyword, bool enum_value_declaration = false);
     void parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_statement = false, bool push_scope = true);
+    void parse_enum_scope(Ast_Scope *scope);
     
     Ast_Function *parse_function();
 };

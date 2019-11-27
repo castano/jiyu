@@ -1,5 +1,17 @@
 #import "LibC";
 
+
+
+func main() {
+    var whatever: My_Struct;
+    whatever.i = 10;
+
+    whatever.my_cool_func();
+    My_Struct.my_cool_func();
+    My_Struct.my_cool_func(*whatever);
+}
+
+
 struct My_Struct {
     var i: int64;
 
@@ -12,12 +24,38 @@ struct My_Struct {
     }
 }
 
+struct Vector3 {
+    //var x, y, z: float;
+    var x: float;
+    var y: float;
+    var z: float;
+    //var v: Vector3; // This is crashing.
+}
+
+var v: Vector3;
+var V: Vector3 = Vector3(1, 1, 1);
+
+
+/* 
+// This is not supported yet:
+
+var pair : struct {
+    var x;
+    var y;
+}
+*/
+
+/* 
+// This is crashing:
+
+struct Bla {
+    let bar = foo + 1;
+    let foo = 0;
+}
 
 func main() {
-    var whatever: My_Struct;
-    whatever.i = 10;
-
-    whatever.my_cool_func();
-    My_Struct.my_cool_func();
-    My_Struct.my_cool_func(*whatever);
+    printf("bar = %d, foo = %d\n", Bla.foo, Bla.foo);
 }
+*/
+
+

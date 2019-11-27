@@ -337,6 +337,23 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         
         return final_type;
     }
+
+    if (type->type == Ast_Type_Info::ENUM) {
+        // createEnumerationType(DIScope *   Scope,
+        //     StringRef   Name,
+        //     DIFile *    File,
+        //     unsigned    LineNumber,
+        //     uint64_t    SizeInBits,
+        //     uint32_t    AlignInBits,
+        //     DINodeArray     Elements,
+        //     DIType *    UnderlyingType,
+        //     StringRef   UniqueIdentifier = "",
+        //     bool    IsScoped = false 
+        // )
+
+        // @@ TODO! Do we need to add info about enum members to the Ast_Type_Info?
+        return make_llvm_type(type->enum_base_type);
+    }
     
     if (type->type == Ast_Type_Info::FUNCTION) {
         Array<Type *> arguments;

@@ -9,7 +9,7 @@
 
 #define SEMA_NEW(type) (new (compiler->get_memory(sizeof(type))) type())
 
-void add_type(String_Builder *builder, Ast_Type_Info *type) {
+static void add_type(String_Builder *builder, Ast_Type_Info *type) {
     if (type->type == Ast_Type_Info::INTEGER) {
         if (type->is_signed) builder->putchar('s');
         else                 builder->putchar('u');
@@ -997,6 +997,9 @@ Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom 
         } else if (it->type == AST_STRUCT) {
             auto _struct = static_cast<Ast_Struct *>(it);
             if (_struct->identifier->name == atom) return _struct;
+        } else if (it->type == AST_ENUM) {
+            auto _enum = static_cast<Ast_Enum *>(it);
+            if (_enum->identifier->name == atom) return _enum;
         } else if (it->type == AST_SCOPE_EXPANSION) {
             auto exp = static_cast<Ast_Scope_Expansion *>(it);
 
@@ -1010,30 +1013,33 @@ Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom 
 
     if (check_private_declarations) {
         for (auto it : scope->private_declarations) {
-        while (it->substitution) it = it->substitution;
-        
-        if (it->type == AST_DECLARATION) {
-            auto decl = static_cast<Ast_Declaration *>(it);
-            if (decl->identifier->name == atom) return it;
-        } else if (it->type == AST_FUNCTION) {
-            auto function = static_cast<Ast_Function *>(it);
-            if (function->identifier->name == atom) return function;
-        } else if (it->type == AST_TYPE_ALIAS) {
-            auto alias = static_cast<Ast_Type_Alias *>(it);
-            if (alias->identifier->name == atom) return alias;
-        } else if (it->type == AST_STRUCT) {
-            auto _struct = static_cast<Ast_Struct *>(it);
-            if (_struct->identifier->name == atom) return _struct;
-        } else if (it->type == AST_SCOPE_EXPANSION) {
-            auto exp = static_cast<Ast_Scope_Expansion *>(it);
+            while (it->substitution) it = it->substitution;
+            
+            if (it->type == AST_DECLARATION) {
+                auto decl = static_cast<Ast_Declaration *>(it);
+                if (decl->identifier->name == atom) return it;
+            } else if (it->type == AST_FUNCTION) {
+                auto function = static_cast<Ast_Function *>(it);
+                if (function->identifier->name == atom) return function;
+            } else if (it->type == AST_TYPE_ALIAS) {
+                auto alias = static_cast<Ast_Type_Alias *>(it);
+                if (alias->identifier->name == atom) return alias;
+            } else if (it->type == AST_STRUCT) {
+                auto _struct = static_cast<Ast_Struct *>(it);
+                if (_struct->identifier->name == atom) return _struct;
+            } else if (it->type == AST_ENUM) {
+                auto _enum = static_cast<Ast_Enum *>(it);
+                if (_enum->identifier->name == atom) return _enum;
+            } else if (it->type == AST_SCOPE_EXPANSION) {
+                auto exp = static_cast<Ast_Scope_Expansion *>(it);
 
-            bool check_private = (exp->expanded_via_import_directive == nullptr);
-            auto decl = find_declaration_for_atom_in_scope(exp->scope, atom, check_private);
-            if (decl) return decl;
-        } else {
-            assert(false);
+                bool check_private = (exp->expanded_via_import_directive == nullptr);
+                auto decl = find_declaration_for_atom_in_scope(exp->scope, atom, check_private);
+                if (decl) return decl;
+            } else {
+                assert(false);
+            }
         }
-    }
     }
     
     return nullptr;
@@ -1158,7 +1164,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 if (compiler->errors_reported) return;
             }
             
-            if (decl->is_let && !decl->is_readonly_variable && !decl->initializer_expression) {
+            if (decl->is_let && !decl->is_readonly_variable && !decl->initializer_expression && !decl->is_enum_member) {
                 compiler->report_error(decl, "let constant must be initialized by an expression.\n");
             }
             
@@ -1548,6 +1554,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             typecheck_expression(subexpression, want_numeric_type, true);
             if (compiler->errors_reported) return;
 
+            /*if (subexpression->type_info->type != Ast_Type_Info::FUNCTION) {
+                assert(false);
+                compiler->report_error(subexpression, "Expression is not a function.\n");
+                return;
+            }*/
+
             Ast_Expression *implicit_argument = nullptr;
             if (subexpression->type == AST_DEREFERENCE) {
                 auto deref = static_cast<Ast_Dereference *>(subexpression);
@@ -1584,6 +1596,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     compiler->report_error(call, "Function call identifier does not name a function.");
                     return;
                 }
+                // Is this right? I would expect the type to be FUNCTION, but instead I get VOID.
                 //assert(identifier->type_info->type == Ast_Type_Info::FUNCTION);
                 
                 Ast_Function *function = nullptr;
@@ -1710,8 +1723,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             
             if (left_type->type != Ast_Type_Info::STRING &&
                 left_type->type != Ast_Type_Info::ARRAY  &&
-                left_type->type != Ast_Type_Info::STRUCT) {
-                compiler->report_error(deref, "Attempt to dereference a type that is not a string, struct, or array!\n");
+                left_type->type != Ast_Type_Info::STRUCT &&
+                left_type->type != Ast_Type_Info::ENUM) {
+                compiler->report_error(deref, "Attempt to dereference a type that is not a string, struct, array, or enum!\n");
                 return;
             }
             
@@ -1870,6 +1884,26 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     String field_name = field_atom->name;
                     String name = left_type->struct_decl->identifier->name->name;
                     compiler->report_error(deref, "No member '%.*s' in struct %.*s.\n", field_name.length, field_name.data, name.length, name.data);
+                }
+            } else if (left_type->type == Ast_Type_Info::ENUM) {
+                auto _enum = left_type->enum_decl;
+
+                // @Incomplete this should perform a scope lookup for a declaration so we can handle
+                // lets, functions, typealiases, etc..
+                bool found = false;
+                int index = 0;
+                for (auto member : _enum->member_scope.declarations) {
+                    auto decl = static_cast<Ast_Declaration *>(member);
+                    if (decl->identifier->name == field_atom) {
+                        found = true;
+                        
+                        deref->element_path_index = index;
+                        //deref->type_info = member.type_info;
+                        deref->byte_offset = 0;
+                        break;
+                    }
+
+                    index += 1;
                 }
             }
             
@@ -2386,6 +2420,74 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
 
             flow->target_statement = target_statement;
+            return;
+        }
+
+        case AST_ENUM: {
+            //compiler->report_error(expression, "enum statements not supported yet.\n");
+
+            auto _enum = static_cast<Ast_Enum *>(expression);
+            
+            // Set this early so we dont recurse indefinitely
+            _enum->type_value = compiler->make_enum_type(_enum);
+            _enum->type_info = compiler->type_info_type;            // @@ What is this exactly?
+            
+            auto base_type_info = resolve_type_inst(_enum->base_type);
+            if (compiler->errors_reported) return;
+
+            // flag stuct member declarations
+            for (auto _decl : _enum->member_scope.declarations) {
+                assert (_decl->type == AST_DECLARATION);
+                auto decl = static_cast<Ast_Declaration *>(_decl);
+                decl->is_enum_member = true;
+            }
+            
+            {
+                auto info = _enum->type_value;
+                assert(info->type == Ast_Type_Info::ENUM);
+                assert(info->enum_decl == _enum);
+
+                info->enum_base_type = base_type_info;
+                
+                s64 size_cursor = 0;
+                s64 biggest_alignment = 1;
+                s64 element_path_index = 0;
+                
+                // This is likely super @Incomplete
+                for (auto expr : _enum->member_scope.declarations) {
+                    assert (expr->type == AST_DECLARATION);
+
+                    // @Cleanup @Hack we need to be able to handle other structs, functions, typealiases or at least punt on them.
+                    auto decl = static_cast<Ast_Declaration *>(expr);
+                    typecheck_expression(decl);
+                    if (compiler->errors_reported) return;
+                    
+                    assert(decl && decl->type_info);
+                    
+                    //Ast_Type_Info::Struct_Member member;
+                    //member.name = decl->identifier->name;
+                    //member.type_info = decl->type_info;
+                    //member.is_let = decl->is_let;
+
+                    if (!decl->is_let) {
+                        compiler->report_error(decl, "Enums only accept let declarations. %.*s must be invariant.\n", PRINT_ARG(decl->identifier->name->name));
+                        return;
+                    }
+                                        
+                    //info->enum_members.add(member);
+                }
+
+                // How to init _enum->type_value ?                
+                //info->alignment = _enum->base_type->type_value->alignment;
+                //info->size = _enum->base_type->type_value->size;
+                //info->stride = _enum->base_type->type_value->stride;
+
+                compiler->add_to_type_table(info);
+            }
+            
+            typecheck_scope(&_enum->member_scope);
+            if (compiler->errors_reported) return;
+
             return;
         }
     }
