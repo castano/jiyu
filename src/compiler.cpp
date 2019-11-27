@@ -16,10 +16,13 @@
 // sigh, c++
 #define COMPILER_NEW2(type) (new (compiler->get_memory(sizeof(type))) type())
 
-
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
     if (left->type != right->type) return false;
     if (left->size != right->size) return false;
+
+    if (left->type == Ast_Type_Info::INTEGER) {
+        return left->is_signed == right->is_signed;
+    }
     
     if (left->type == Ast_Type_Info::POINTER) {
         assert(left->pointer_to && right->pointer_to);
@@ -107,6 +110,18 @@ Ast_Type_Info *Compiler::make_pointer_type(Ast_Type_Info *pointee) {
     info->size = this->pointer_size; // @TargetInfo
     info->alignment = info->size;
     info->stride    = info->size;
+
+    add_to_type_table(info);
+    return info;
+}
+
+Ast_Type_Info *Compiler::make_type_alias(Ast_Type_Info *aliasee) {
+    Ast_Type_Info *info = COMPILER_NEW(Ast_Type_Info);
+    info->type = Ast_Type_Info::ALIAS;
+    info->alias_of  = aliasee;
+    info->size      = aliasee->size;
+    info->alignment = aliasee->alignment;
+    info->stride    = aliasee->stride;
 
     add_to_type_table(info);
     return info;
