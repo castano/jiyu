@@ -1449,78 +1449,75 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (subexpression->type == AST_IDENTIFIER) {
                 auto identifier = static_cast<Ast_Identifier *>(subexpression);
+                auto overload_set = identifier->overload_set;
 
-                if (identifier->overload_set.count) {
-                    auto overload_set = identifier->overload_set;
-
-                    if (overload_set.count == 0) {
-                        compiler->report_error(call, "Function call identifier does not name a function.");
-                        return;
-                    }
-
-                    // assert(identifier->type_info == compiler->type_void);
-
-                    Ast_Function *function = nullptr;
-                    // @Cleanup I'm not sure why I did this, but we can probably merge this with the general case for multiple overloads.
-                    if (overload_set.count == 1) {
-                        function = overload_set[0];
-                        typecheck_function_header(function);
-                        if (compiler->errors_reported) return;
-
-                        if (function->is_template_function) {
-                            function = get_polymorph_for_function_call(function, call);
-                            if (compiler->errors_reported) return;
-                        }
-                    } else {
-                        const u64 U64_MAX = 0xFFFFFFFFFFFFFFFF;
-                        u64 lowest_score = U64_MAX;
-                        for (auto overload : overload_set) {
-                            if (overload->is_template_function) {
-                                overload = get_polymorph_for_function_call(overload, call);
-                                if (compiler->errors_reported) return;
-
-                                if (!overload) continue; // no polymorphs that match this call, so skip it
-                            }
-
-                            typecheck_function_header(overload);
-                            if (compiler->errors_reported) return;
-
-                            auto tuple = function_call_is_viable(call, get_type_info(overload), false);
-                            if (compiler->errors_reported) return;
-
-                            bool viable = tuple.item1;
-                            u64  score  = tuple.item2;
-
-                            if (viable) {
-                                if (score < lowest_score) {
-                                    lowest_score = score;
-                                    function = overload;
-                                }
-                            }
-                        }
-                    }
-
-                    if (!function) {
-                        // @Incomplete print visible overload candidates
-                        compiler->report_error(call, "No viable overload for function call.\n");
-                        return;
-                    }
-
-
-
-                    function_call_is_viable(call, get_type_info(function), true);
-                    if (compiler->errors_reported) return;
-
-                    if (function->return_decl) {
-                        call->type_info = function->return_decl->type_info;
-                    } else {
-                        call->type_info = compiler->type_void;
-                    }
-
-                    identifier->resolved_declaration = function;
-                    identifier->type_info = function->type_info;
+                if (overload_set.count == 0) {
+                    compiler->report_error(call, "Function call identifier does not name a function.");
                     return;
                 }
+
+                // assert(identifier->type_info == compiler->type_void);
+
+                Ast_Function *function = nullptr;
+                // @Cleanup I'm not sure why I did this, but we can probably merge this with the general case for multiple overloads.
+                if (overload_set.count == 1) {
+                    function = overload_set[0];
+                    typecheck_function_header(function);
+                    if (compiler->errors_reported) return;
+
+                    if (function->is_template_function) {
+                        function = get_polymorph_for_function_call(function, call);
+                        if (compiler->errors_reported) return;
+                    }
+                } else {
+                    const u64 U64_MAX = 0xFFFFFFFFFFFFFFFF;
+                    u64 lowest_score = U64_MAX;
+                    for (auto overload : overload_set) {
+                        if (overload->is_template_function) {
+                            overload = get_polymorph_for_function_call(overload, call);
+                            if (compiler->errors_reported) return;
+
+                            if (!overload) continue; // no polymorphs that match this call, so skip it
+                        }
+
+                        typecheck_function_header(overload);
+                        if (compiler->errors_reported) return;
+
+                        auto tuple = function_call_is_viable(call, get_type_info(overload), false);
+                        if (compiler->errors_reported) return;
+
+                        bool viable = tuple.item1;
+                        u64  score  = tuple.item2;
+
+                        if (viable) {
+                            if (score < lowest_score) {
+                                lowest_score = score;
+                                function = overload;
+                            }
+                        }
+                    }
+                }
+
+                if (!function) {
+                    // @Incomplete print visible overload candidates
+                    compiler->report_error(call, "No viable overload for function call.\n");
+                    return;
+                }
+
+
+
+                function_call_is_viable(call, get_type_info(function), true);
+                if (compiler->errors_reported) return;
+
+                if (function->return_decl) {
+                    call->type_info = function->return_decl->type_info;
+                } else {
+                    call->type_info = compiler->type_void;
+                }
+
+                identifier->resolved_declaration = function;
+                identifier->type_info = function->type_info;
+                return;
             }
 
             // fall through case for expressions that generate function pointers
