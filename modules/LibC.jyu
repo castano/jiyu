@@ -36,5 +36,9 @@ func @c_function atof(str: c_string) -> double;
 func @c_function atoi(str: c_string) -> int32;
 
 func @c_function tan(a: double) -> double;
+func @c_function abs(a: double) -> double;
+func @c_function fabs(a: float) -> float;
+func @c_function sqrt(a: double) -> double;
+func @c_function sqrtf(a: float) -> float;
 
 func @c_function exit(exit_code: int32) -> void;

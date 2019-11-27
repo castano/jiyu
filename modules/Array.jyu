@@ -8,7 +8,7 @@ func array_reserve<T>(array: *[..] T, _amount: int) {
     if amount <= 0
         amount = NEW_MEM_CHUNK_ELEMENT_COUNT;
 
-    var new_mem = cast(*T) malloc(amount * sizeof(T));
+    var new_mem = cast(*T) malloc(cast(size_t) amount * sizeof(T));
 
     if array.data {
         memcpy(cast(*void) new_mem, cast(*void) array.data, cast(size_t) (array.count * sizeof(T)) );

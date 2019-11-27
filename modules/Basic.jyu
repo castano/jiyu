@@ -140,8 +140,8 @@ func read_entire_file(path: string) -> string {
     var length = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    var mem = cast(c_string) malloc(length);
-    fread(mem, 1, length, file);
+    var mem = cast(c_string) malloc(cast(size_t) length);
+    fread(mem, 1, cast(size_t) length, file);
     // @TODO verify fread success
 
     fclose(file);
@@ -227,7 +227,7 @@ func get_command_line(strings: [] string) -> *uint8 {
 
         var exit_code: DWORD;
         GetExitCodeProcess(process_info.hProcess, *exit_code);
-        return exit_code;
+        return cast(int32) exit_code;
     }
 
     // Slightly lazier version of the [] string one.
@@ -253,7 +253,7 @@ func get_command_line(strings: [] string) -> *uint8 {
 
         var exit_code: DWORD;
         GetExitCodeProcess(process_info.hProcess, *exit_code);
-        return exit_code;
+        return cast(int32) exit_code;
     }
 }
 

@@ -336,6 +336,12 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_t
         //else lit->type_info = compiler->type_float64; // @TODO we should probably have a check that verifies if the literal can fit in a 32-bit float and then default to that.
     }
 
+    if (lit->literal_type == Ast_Literal::NULLPTR) {
+        if (want_numeric_type->type == Ast_Type_Info::POINTER) {
+            lit->type_info = want_numeric_type;
+        }
+    }
+
     return viability_score;
 }
 
@@ -594,6 +600,14 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
         assert(get_type_info(lit));
         maybe_mutate_literal_to_type(lit, get_type_info(right));
         left = lit;
+    } else if (auto lit = folds_to_literal(right)) {
+        typecheck_expression(left);
+        if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
+
+        // typecheck_expression(right, get_type_info(left));
+        assert(get_type_info(lit));
+        maybe_mutate_literal_to_type(lit, get_type_info(left));
+        right = lit;
     } else {
         typecheck_expression(left);
         if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
@@ -637,9 +651,12 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
         } else if (is_int_type(ltype) && is_float_type(rtype)) {
             left = cast_int_to_float(compiler, left, rtype);
             left_viability_score += 10;
-        }else if (allow_coerce_to_ptr_void && is_pointer_type(ltype) && is_pointer_type(rtype)) {
+        } else if (allow_coerce_to_ptr_void && is_pointer_type(ltype) && is_pointer_type(rtype)) {
 
-            // @Note you're only allowed to coerce right-to-left here, meaning if the right-expression is *void, the left-expression cannot coerce away from whatever ptr type it is.
+            // @Note you're only allowed to coerce right-to-left here, meaning if the right-expression is *void,
+            // the left-expression cannot coerce away from whatever ptr type it is.
+            // UPDATE: I am not sure this is true in the general case. This should probably work in both directions.
+            // -josh 27 November 2019
             if (type_points_to_void_eventually(ltype)) {
                 auto left_indir = get_levels_of_indirection(ltype);
                 auto right_indir = get_levels_of_indirection(rtype);
