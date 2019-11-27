@@ -719,6 +719,8 @@ Ast_Array_Dereference *make_array_index(Compiler *compiler, Ast_Expression *arra
     Ast_Array_Dereference *deref = COMPILER_NEW2(Ast_Array_Dereference);
     deref->array_or_pointer_expression = array;
     deref->index_expression = index;
+
+    copy_location_info(deref, array);
     return deref;
 }
 
@@ -739,6 +741,8 @@ Ast_Unary_Expression *make_unary(Compiler *compiler, Token::Type op, Ast_Express
     Ast_Unary_Expression *un = COMPILER_NEW2(Ast_Unary_Expression);
     un->operator_type = op;
     un->expression = subexpr;
+
+    copy_location_info(un, subexpr);
     return un;
 }
 

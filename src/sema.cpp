@@ -732,6 +732,39 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
     }
 
     u64 viability_score = 0;
+
+    // Handle implicit argument conversions.
+    if (call->implicit_argument_inserted && function_type->arguments.count) {
+        Ast_Expression *source = call->argument_list[0];
+
+        auto source_type = get_type_info(source);
+        auto param_type  = function_type->arguments[0];
+
+        if (!types_match(source_type, param_type)) {
+            if (is_struct_type(source_type) && is_pointer_type(param_type) && types_match(source_type, param_type->pointer_to)) {
+                // Turn this struct into a pointer
+                auto unary = make_unary(compiler, Token::STAR, source);
+                // @Speed we can probably just assign the right type here.
+                typecheck_expression(unary);
+
+                call->argument_list[0] = unary;
+                // We still add a viability score increment in case the user has two functions
+                // that overload between the const-ref and pointer types.
+                viability_score += 1;
+            } else if (is_pointer_type(source_type) && is_struct_type(param_type) && types_match(source_type->pointer_to, param_type)) {
+                // Turn this into a dereference
+                auto unary = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, source);
+                // @Speed we can probably just assign the right type here.
+                typecheck_expression(unary);
+
+                call->argument_list[0] = unary;
+                // We still add a viability score increment in case the user has two functions
+                // that overload between the const-ref and pointer types.
+                viability_score += 1;
+            }
+        }
+    }
+
     for (array_count_type i = 0; i < call->argument_list.count; ++i) {
         auto original_value = call->argument_list[i];
         auto value = original_value;
@@ -1402,21 +1435,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     if ((is_pointer_type(left_type) && is_struct_type(left_type->pointer_to))
                         || is_struct_type(left_type)) {
                         implicit_argument = deref->left;
-
-                        if (is_struct_type(left_type)) {
-                            // Turn this struct into a pointer
-                            auto unary = make_unary(compiler, Token::STAR, implicit_argument);
-                            // @Speed we can probably just assign the right type here.
-                            typecheck_expression(unary);
-
-                            implicit_argument = unary;
-                        }
                     }
                 }
             }
 
             if (implicit_argument) {
                 call->argument_list.insert(0, implicit_argument);
+
+                // function_call_is_viable will check for this to cast the implicit argument to the target type if able.
                 call->implicit_argument_inserted = true;
             }
 
