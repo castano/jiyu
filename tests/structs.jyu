@@ -10,14 +10,37 @@ struct My_Struct {
     func my_cool_func(my_struct: *My_Struct) {
         printf("Hello, Sailor! %d\n", my_struct.i);
     }
+
+    func my_cool_func(my_struct: My_Struct) {
+        printf("Hello, Pilot! %d\n", my_struct.i);
+    }
+
+    func func2(my_struct: My_Struct) {
+        printf("Goodbye, Moonmen! %d\n", my_struct.i);
+    }
+
+    func func3(my_struct: *My_Struct) {
+        printf("Shut up, Morty! %d\n", my_struct.i);
+    }
 }
 
 
 func main() {
     var whatever: My_Struct;
+    var whatever_ptr = *whatever;
     whatever.i = 10;
 
+    // Pilot
     whatever.my_cool_func();
+    // World
     My_Struct.my_cool_func();
+    // Morty
+    whatever.func3();
+    // Sailor
     My_Struct.my_cool_func(*whatever);
+
+    // Sailor
+    whatever_ptr.my_cool_func();
+    // Moonmen
+    whatever_ptr.func2();
 }

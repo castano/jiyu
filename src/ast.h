@@ -205,6 +205,10 @@ struct Ast_Dereference : Ast_Expression {
     Ast_Expression *left = nullptr;
     Ast_Identifier *field_selector = nullptr;
 
+    // Same as left, except retains the original value of left if left gets transformed to something
+    // else. @Cleanup we should be able to avoid this if we can do left->substitute.
+    Ast_Expression *original_left = nullptr;
+
     bool is_type_dereference = false;
     s64 element_path_index = -1; // 0-based element into the list of declarations or fields within the outer type
     s64 byte_offset = -1; // byte-offset from the start of the the memory occupied by the outer type

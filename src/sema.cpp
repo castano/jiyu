@@ -732,42 +732,41 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
     }
 
     u64 viability_score = 0;
-
-    // Handle implicit argument conversions.
-    if (call->implicit_argument_inserted && function_type->arguments.count) {
-        Ast_Expression *source = call->argument_list[0];
-
-        auto source_type = get_type_info(source);
-        auto param_type  = function_type->arguments[0];
-
-        if (!types_match(source_type, param_type)) {
-            if (is_struct_type(source_type) && is_pointer_type(param_type) && types_match(source_type, param_type->pointer_to)) {
-                // Turn this struct into a pointer
-                auto unary = make_unary(compiler, Token::STAR, source);
-                // @Speed we can probably just assign the right type here.
-                typecheck_expression(unary);
-
-                call->argument_list[0] = unary;
-                // We still add a viability score increment in case the user has two functions
-                // that overload between the const-ref and pointer types.
-                viability_score += 1;
-            } else if (is_pointer_type(source_type) && is_struct_type(param_type) && types_match(source_type->pointer_to, param_type)) {
-                // Turn this into a dereference
-                auto unary = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, source);
-                // @Speed we can probably just assign the right type here.
-                typecheck_expression(unary);
-
-                call->argument_list[0] = unary;
-                // We still add a viability score increment in case the user has two functions
-                // that overload between the const-ref and pointer types.
-                viability_score += 1;
-            }
-        }
-    }
-
     for (array_count_type i = 0; i < call->argument_list.count; ++i) {
         auto original_value = call->argument_list[i];
         auto value = original_value;
+
+        // Handle implicit argument conversions.
+        if (call->implicit_argument_inserted && function_type->arguments.count && i == 0) {
+            Ast_Expression *source = call->argument_list[0];
+
+            auto source_type = get_type_info(source);
+            auto param_type  = function_type->arguments[0];
+
+            if (!types_match(source_type, param_type)) {
+                if (is_struct_type(source_type) && is_pointer_type(param_type) && types_match(source_type, param_type->pointer_to)) {
+                    // Turn this struct into a pointer
+                    auto unary = make_unary(compiler, Token::STAR, source);
+                    // @Speed we can probably just assign the right type here.
+                    typecheck_expression(unary);
+
+                    value = unary;
+                    // We still add a viability score increment in case the user has two functions
+                    // that overload between the const-ref and pointer types.
+                    viability_score += 1;
+                } else if (is_pointer_type(source_type) && is_struct_type(param_type) && types_match(source_type->pointer_to, param_type)) {
+                    // Turn this into a dereference
+                    auto unary = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, source);
+                    // @Speed we can probably just assign the right type here.
+                    typecheck_expression(unary);
+
+                    value = unary;
+                    // We still add a viability score increment in case the user has two functions
+                    // that overload between the const-ref and pointer types.
+                    viability_score += 1;
+                }
+            }
+        }
 
         if (i < function_type->arguments.count) {
             // use null for morphed param because we don't care about the modified value because function parameter declarations can't be mutated here
@@ -1431,10 +1430,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             if (subexpression->type == AST_DEREFERENCE) {
                 auto deref = static_cast<Ast_Dereference *>(subexpression);
                 if (!deref->is_type_dereference) {
-                    auto left_type = get_type_info(deref->left);
+                    auto left_type = get_type_info(deref->original_left);
                     if ((is_pointer_type(left_type) && is_struct_type(left_type->pointer_to))
                         || is_struct_type(left_type)) {
-                        implicit_argument = deref->left;
+                        implicit_argument = deref->original_left;
                     }
                 }
             }
@@ -1462,6 +1461,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     // assert(identifier->type_info == compiler->type_void);
 
                     Ast_Function *function = nullptr;
+                    // @Cleanup I'm not sure why I did this, but we can probably merge this with the general case for multiple overloads.
                     if (overload_set.count == 1) {
                         function = overload_set[0];
                         typecheck_function_header(function);
@@ -1506,6 +1506,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         return;
                     }
 
+
+
                     function_call_is_viable(call, get_type_info(function), true);
                     if (compiler->errors_reported) return;
 
@@ -1539,6 +1541,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             typecheck_expression(deref->left);
             if (compiler->errors_reported) return;
 
+            // Save this in case we need to check what the original thing was for struct member-function overloading.
+            // We dont want this change to propagate down to function-overloading.
+            deref->original_left = deref->left;
             if (get_type_info(deref->left)->type == Ast_Type_Info::POINTER) {
                 // we allow you to dereference once through a pointer
                 // here we insert some desugaring that expands pointer.field into (<<pointer).field
