@@ -421,8 +421,10 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
                 right = not_equal_empty_string;
                 viability_score += 1;
             }
-        } else if (is_pointer_type(ltype) && types_match(ltype->pointer_to, compiler->type_uint8) && types_match(rtype, compiler->type_string)) {
-            // Implicity dereference string when the left-type is *uint8.
+        } else if (is_pointer_type(ltype)
+                && (types_match(ltype->pointer_to, compiler->type_uint8) || types_match(ltype->pointer_to, compiler->type_int8))
+                && types_match(rtype, compiler->type_string)) {
+            // Implicity dereference string when the left-type is *uint8 or *int8.
             // @TODO maybe have an allow parameter for this in case this should only be allowed in certain situations.
 
             // Only allow this for literals because this is a convinience for passing literal strings to C functions!
@@ -432,6 +434,16 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
 
                 right = deref;
                 viability_score += 1;
+                
+                if (!types_match(ltype, compiler->type_string_data)) {
+                    // Add a pointer cast to the target type if it is *int8, or otherwise not the internal type of string.data.
+                    auto cast = cast_ptr_to_ptr(compiler, deref, ltype);
+                    typecheck_expression(cast);
+
+                    // We don't penalize the viability for this. You get this as a courtesy.
+                    right = cast;
+                }
+
             }
         }
     }
