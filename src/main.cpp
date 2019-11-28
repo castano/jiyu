@@ -308,6 +308,12 @@ extern "C" {
         
         return compiler->errors_reported == 0;
     }
+
+    EXPORT bool compiler_load_string(Compiler *compiler, String *source) {
+        perform_load_from_string(compiler, *source, compiler->global_scope);
+        
+        return compiler->errors_reported == 0;
+    }
     
     EXPORT bool compiler_typecheck_program(Compiler *compiler) {
         compiler->resolve_directives();

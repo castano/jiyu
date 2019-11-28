@@ -1527,7 +1527,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                                     function = overload;
                                 }
                             }
-                        }                    }
+                        }
+                    }
 
                     if (!function) {
                         // @Incomplete print visible overload candidates
@@ -1550,19 +1551,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     identifier->type_info = function->type_info;
                     return;
                 }
-                
-                function_call_is_viable(call, get_type_info(function), true);
-                if (compiler->errors_reported) return;
-                
-                if (function->return_decl) {
-                    call->type_info = function->return_decl->type_info;
-                } else {
-                    call->type_info = compiler->type_void;
-                }
-                
-                identifier->resolved_declaration = function;
-                identifier->type_info = function->type_info;
-                return;
             }
 
             // fall through case for expressions that generate function pointers
@@ -2138,6 +2126,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         if (!member.is_let) {
                             member.element_index = element_path_index;
                             element_path_index++;
+                        }
+
+                        if (member.type_info->size == -1) {
+                            auto member_type_name = type_to_string(member.type_info);
+                            defer { free(member_type_name.data); };
+                            compiler->report_error(decl, "field '%.*s' has incomplete type '%.*s'\n", PRINT_ARG(member.name->name), PRINT_ARG(member_type_name));
+                            // @@ Definition of '%s' is not complete until the closing '}'
+                            return;
                         }
 
                         size_cursor = pad_to_alignment(size_cursor, member.type_info->alignment);

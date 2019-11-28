@@ -1,17 +1,5 @@
 #import "LibC";
 
-
-
-func main() {
-    var whatever: My_Struct;
-    whatever.i = 10;
-
-    whatever.my_cool_func();
-    My_Struct.my_cool_func();
-    My_Struct.my_cool_func(*whatever);
-}
-
-
 struct My_Struct {
     var i: int64;
 
@@ -22,7 +10,20 @@ struct My_Struct {
     func my_cool_func(my_struct: *My_Struct) {
         printf("Hello, Sailor! %d\n", my_struct.i);
     }
+
+    func my_cool_func(my_struct: My_Struct) {
+        printf("Hello, Pilot! %d\n", my_struct.i);
+    }
+
+    func func2(my_struct: My_Struct) {
+        printf("Goodbye, Moonmen! %d\n", my_struct.i);
+    }
+
+    func func3(my_struct: *My_Struct) {
+        printf("Shut up, Morty! %d\n", my_struct.i);
+    }
 }
+
 
 func main() {
     var whatever: My_Struct;
@@ -44,19 +45,24 @@ func main() {
     whatever_ptr.func2();
 }
 
+struct Frame {
+    var up: Vector3;
+}
+
+
+
 struct Vector3 {
     //var x, y, z: float;
     var x: float;
     var y: float;
     var z: float;
-    //var v: Vector3; // This is crashing.
+    //var v: Vector3;     // This is crashing, but should give an error.
+    //let zero: Vector3;  // This should work!
 }
 
 
 
-
-}
-
+/*
 func main() {
     printf("bar = %d, foo = %d\n", Bla.foo, Bla.foo);
 }
