@@ -4,6 +4,11 @@
 #include "ast.h"
 #include "compiler.h"
 
+// We dont need or care about a wall of warnings from LLVM code.
+#ifdef WIN32
+#pragma warning(push, 0)
+#endif
+
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
@@ -40,6 +45,10 @@
 #include "llvm/ExecutionEngine/JITSymbol.h"
 
 #include "llvm/Transforms/Utils/Cloning.h"
+
+#ifdef WIN32
+#pragma warning(pop)
+#endif
 
 using namespace llvm;
 using namespace llvm::orc;

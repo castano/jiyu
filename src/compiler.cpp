@@ -7,7 +7,15 @@
 #include "llvm.h"
 #include "os_support.h"
 
+#ifdef WIN32
+#pragma warning(push, 0)
+#endif
+
 #include "llvm/Target/TargetMachine.h"
+
+#ifdef WIN32
+#pragma warning(pop)
+#endif
 
 #include <stdio.h> // for vprintf
 #include <new> // for placement new
@@ -349,7 +357,7 @@ void Compiler::resolve_directives() {
 
             bool success = false;
             for (auto &module_path : this->module_search_paths) {
-                String fullpath = mprintf("%.*s/%.*s.jyu", module_path.length, module_path.data, name.length, name.data);
+                String fullpath = mprintf("%.*s/%.*s.jyu", PRINT_ARG(module_path), PRINT_ARG(name));
 
                 if (file_exists(fullpath)) {
                     name = fullpath; // @Leak
@@ -359,7 +367,7 @@ void Compiler::resolve_directives() {
             }
 
             if (!success) {
-                this->report_error(import, "Could not find a module named %.*s.\n", name.length, name.data);
+                this->report_error(import, "Could not find a module named %.*s.\n", PRINT_ARG(name));
                 return;
             }
 
@@ -506,7 +514,8 @@ void Compiler::report_error_valist(String filename, String source, Span error_lo
     
     error_location.map_to_text_coordinates(source, &l0, &c0, &l1, &c1);
     
-    printf("w%lld:%.*s:%d,%d: ", this->instance_number, filename.length, filename.data, l0, c0);
+    // @Cleanup these static_casts by using the right printf format spec
+    printf("w%lld:%.*s:%d,%d: ", this->instance_number, PRINT_ARG(filename), static_cast<int>(l0), static_cast<int>(c0));
     vprintf(fmt, args);
     printf("\n");
     

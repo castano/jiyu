@@ -327,11 +327,11 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
         }
         
         case AST_UNINITIALIZED:
+        default:
             assert(false);
-            return false;
+            return nullptr;
+            
     }
-    
-    assert(false);
 }
 
 void Copier::copy_scope(Ast_Scope *_new, Ast_Scope *old) {
