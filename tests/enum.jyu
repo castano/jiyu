@@ -1,0 +1,61 @@
+
+//let Wednesday = Days.Wednesday;
+
+/*struct Days {
+    let Monday = 0;
+    let Tuesday = Monday + 1;
+    let Wednesday = froolic;
+}*/
+
+struct Bla {
+    let bar = foo + 1;
+    let foo = 0;
+}
+
+enum Days : uint8 {
+    Monday = 0;
+//    Tuesday = Monday + 1;
+//    Wednesday;
+//    Thursday;
+//    Friday;
+//    Saturday;
+//    Sunday;
+}
+
+#import "LibC";
+
+func main() {
+    printf("Hello Enums!\n");
+    //printf("bar = %d, foo = %d\n", Bla.bar, Bla.foo);
+    //printf("bar = %d, foo = %d\n", Bla.foo, Bla.foo);
+    printf("Monday = %d\n", Days.Monday);
+//    printf("Tuesday = %d\n", Days.Tuesday);
+//    printf("Whatever = %d\n", Days.Whatever); // This should trigger an error.
+}
+
+
+
+/*
+
+enum Days : uint8 {
+    Monday = 0;
+    Tuesday = 1;
+    Wednesday;
+    Thursday;
+    Friday;
+    Saturday;
+    Sunday;
+}
+
+enum Days : uint8 {
+    Monday = 0,
+    Tuesday = 1,
+    Wednesday,
+    Thursday,
+    Friday,
+    Saturday,
+    Sunday,
+}
+enum Bool : uint8 { False, True }
+
+*/
