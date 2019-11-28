@@ -230,6 +230,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY(initial_iterator_expression);
             COPY(upper_range_expression);
             COPY_P(is_element_pointer_iteration);
+            COPY_P(is_exclusive_end);
             
             // Dont do a copy here because the semantic pass will fil in the rest here.
             _new->iterator_declaration_scope.parent = get_current_scope();
