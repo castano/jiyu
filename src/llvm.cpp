@@ -1223,7 +1223,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             
             auto upper = emit_expression(_for->upper_range_expression);
             Value *cond = nullptr;
-            if (it_index_decl) {
+            if (it_index_decl || _for->is_exclusive_end) {
                 // use < here otherwise, we'll overstep by one.
                 // @Cleanup maybe this should be flagged as a half-open loop
                 // when we support that?

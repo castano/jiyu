@@ -99,6 +99,7 @@ struct Token {
         CARET_EQ,             // ^=
         
         DOTDOT,               // ..
+        DOTDOTLT,             // ..<
         
         COMMENT,
     };
