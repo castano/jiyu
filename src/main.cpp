@@ -8,6 +8,7 @@
 #include "sema.h"
 #include "copier.h"
 #include "os_support.h"
+// #include "clang_import.h"
 
 #ifdef WIN32
 #include "microsoft_craziness.h"
@@ -206,7 +207,7 @@ extern "C" {
             }
 
             for (auto path: compiler->library_search_paths) {
-                snprintf(libpath, LINE_SIZE, "/libpath:%.*s", path.length, path.data);
+                snprintf(libpath, LINE_SIZE, "/libpath:%.*s", PRINT_ARG(path));
                 args.add(copy_string(to_string(libpath)));
             }
             
@@ -221,20 +222,20 @@ extern "C" {
             
             for (auto lib: compiler->libraries) {
                 String s = lib->libname;
-                args.add(mprintf("%.*s.lib", s.length, s.data));
+                args.add(mprintf("%.*s.lib", PRINT_ARG(s)));
             }
             
             args.add(to_string("/nologo"));
             args.add(to_string("/DEBUG"));
             
             String exec_name = compiler->build_options.executable_name;
-            String obj_name = mprintf("%.*s.o", exec_name.length, exec_name.data);
+            String obj_name = mprintf("%.*s.o", PRINT_ARG(exec_name));
             convert_to_back_slashes(obj_name);
             args.add(obj_name);
             
             String output_name = exec_name;
             char executable_name[LINE_SIZE];
-            snprintf(executable_name, LINE_SIZE, "/OUT:%.*s.exe", output_name.length, output_name.data);
+            snprintf(executable_name, LINE_SIZE, "/OUT:%.*s.exe", PRINT_ARG(output_name));
             convert_to_back_slashes(executable_name + 1);
             
             args.add(to_string(executable_name));
@@ -401,6 +402,7 @@ int main(int argc, char **argv) {
     bool is_metaprogram = false;
     bool only_want_obj_file = false;
     String target_triple;
+    char *import_c_file = nullptr;
 
     int metaprogram_arg_start = -1;
     
@@ -415,6 +417,14 @@ int main(int argc, char **argv) {
                 i++;
             } else {
                 printf("error: No output name specified, following -o switch.\n");
+                return -1;
+            }
+        } else if (to_string("-clang_import") == to_string(argv[i])) {
+            if (i+1 < argc) {
+                import_c_file = argv[i+1];
+                i++;
+            } else {
+                printf("error: No C file name specified, following -clang_import switch.\n");
                 return -1;
             }
         } else if (to_string("-target") == to_string(argv[i])) {
@@ -466,6 +476,12 @@ int main(int argc, char **argv) {
         compiler->report_error((Token *)nullptr, "No input files specified.\n");
         return -1;
     }
+
+#if 0
+    if (import_c_file) {
+        if (!perform_clang_import(compiler, import_c_file, compiler->global_scope)) return -1;
+    }
+#endif
     
     if (!compiler_load_file(compiler, &filename)) return -1;
     

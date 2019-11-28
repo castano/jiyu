@@ -132,17 +132,18 @@ struct Ast_Scope : Ast_Expression {
     Ast_Scope() { type = AST_SCOPE; }
     Ast_Scope *parent = nullptr;
     Array<Ast_Expression *> statements;
-    Array<Ast_Expression *> declarations; // really should only contain Ast_Declaration and Ast_Function
-    Array<Ast_Expression *> private_declarations;
+    Array<Ast_Expression *> declarations;         // @NoCopy filled by copy_scope depending on the result of is_declaration().
+    Array<Ast_Expression *> private_declarations; // The members of this should be lite-copied only. This is only used for scope-expansions inserted by Compiler::resolve_directives().
     
     bool is_template_argument_block = false;
     bool rejected_by_static_if = false;
     
-    Ast_Struct *owning_struct = nullptr;
+    Ast_Struct *owning_struct = nullptr; // @NoCopy set by the code that copies Ast_Struct
 
-    Ast_Function   *owning_function = nullptr; // Only set for the top-level scope of a function body. scope->owning_function == scope->owning_function->scope.
-    Ast_Expression *owning_statement = nullptr;
 
+    // Only set for the top-level scope of a function body. scope->owning_function == scope->owning_function->scope.
+    Ast_Function   *owning_function = nullptr;  // @NoCopy this is set on the root scope by Copier::copy_function
+    Ast_Expression *owning_statement = nullptr; // @NoCopy this is set by respective copying code for owner-nodes (Ast_For ...).
     Ast_Enum *owning_enum = nullptr;
 };
 
@@ -150,8 +151,10 @@ struct Ast_Scope : Ast_Expression {
 struct Ast_Scope_Expansion : Ast_Expression {
     Ast_Scope_Expansion() { type = AST_SCOPE_EXPANSION; }
     
+    // Only copy this if expanded_via_import_directive is nullptr since
+    // it came from a static_if, otherwise this will point to the entire scope of a #import.
     Ast_Scope *scope = nullptr;
-    Ast_Expression *expanded_via_import_directive = nullptr;
+    Ast_Expression *expanded_via_import_directive = nullptr; // @NoCopy
 };
 
 struct Ast_Type_Instantiation : Ast_Expression {
@@ -168,7 +171,7 @@ struct Ast_Type_Instantiation : Ast_Expression {
     
     Ast_Function *function_header = nullptr;
     
-    Ast_Type_Info *type_value = nullptr;
+    Ast_Type_Info *type_value = nullptr; // @NoCopy
 };
 
 struct Ast_Type_Alias : Ast_Expression {
@@ -186,7 +189,7 @@ struct Ast_Struct : Ast_Expression {
     Ast_Identifier *identifier = nullptr;
     Ast_Scope member_scope;
     
-    Ast_Type_Info *type_value = nullptr;
+    Ast_Type_Info *type_value = nullptr; // @NoCopy
 };
 
 struct Ast_Enum : Ast_Expression {
@@ -218,10 +221,10 @@ struct Ast_Identifier : Ast_Expression {
     Ast_Identifier() { type = AST_IDENTIFIER; }
     Atom *name = nullptr;
     
-    Ast_Scope *enclosing_scope = nullptr;
+    Ast_Scope *enclosing_scope = nullptr; // @NoCopy should be set to the current scope being polymorphed.
     
-    Ast_Expression *resolved_declaration = nullptr;
-    Array<Ast_Function *> overload_set;
+    Ast_Expression *resolved_declaration = nullptr; // @NoCopy
+    Array<Ast_Function *> overload_set;             // @NoCopy
 };
 
 struct Ast_Dereference : Ast_Expression {
@@ -232,11 +235,11 @@ struct Ast_Dereference : Ast_Expression {
 
     // Same as left, except retains the original value of left if left gets transformed to something
     // else. @Cleanup we should be able to avoid this if we can do left->substitute.
-    Ast_Expression *original_left = nullptr;
+    Ast_Expression *original_left = nullptr; // @NoCopy
 
-    bool is_type_dereference = false;
-    s64 element_path_index = -1; // 0-based element into the list of declarations or fields within the outer type
-    s64 byte_offset = -1; // byte-offset from the start of the the memory occupied by the outer type
+    bool is_type_dereference = false;  // @NoCopy
+    s64 element_path_index = -1;       // @NoCopy 0-based element into the list of declarations or fields within the outer type
+    s64 byte_offset = -1;              // @NoCopy byte-offset from the start of the the memory occupied by the outer type
 };
 
 struct Ast_Array_Dereference : Ast_Expression {
@@ -252,7 +255,7 @@ struct Ast_Function_Call : Ast_Expression {
     Ast_Expression *function_or_function_ptr = nullptr;
     Array<Ast_Expression *> argument_list;
 
-    bool implicit_argument_inserted = false;
+    bool implicit_argument_inserted = false; // @NoCopy
 };
 
 struct Ast_If : Ast_Expression {
@@ -260,6 +263,7 @@ struct Ast_If : Ast_Expression {
     
     Ast_Expression *condition = nullptr;
     
+    // These should probably be Ast_Scope by default..
     Ast_Expression *then_statement = nullptr;
     Ast_Expression *else_statement = nullptr;
 };
@@ -274,8 +278,10 @@ struct Ast_While : Ast_Expression {
 struct Ast_Return : Ast_Expression {
     Ast_Return() { type = AST_RETURN; }
     
-    Ast_Function *owning_function = nullptr;
     Ast_Expression *expression = nullptr;
+    
+    // @TODO this could be found via a scope lookup like Ast_Control_Flow.
+    Ast_Function *owning_function = nullptr; // @NoCopy should be set to the current function being polymorphed.
 };
 
 struct Ast_Literal : Ast_Expression {
@@ -322,15 +328,15 @@ struct Ast_Function : Ast_Expression {
     Ast_Scope arguments_scope;
     Ast_Scope *scope = nullptr; // Function body. @Cleanup Maybe this should be renamed "body".
     
-    Array<Ast_Function *> polymorphed_overloads;
+    Array<Ast_Function *> polymorphed_overloads; // @NoCopy
     
     bool is_marked_metaprogram = false;
     bool is_c_function = false;
     bool is_c_varargs = false;
     bool is_template_function = false;
     
-    String linkage_name;
-    bool body_checked = false;
+    String linkage_name;       // @NoCopy
+    bool body_checked = false; // @NoCopy
 };
 
 struct Ast_Cast : Ast_Expression {
@@ -362,7 +368,7 @@ struct Ast_For : Ast_Expression {
     Ast_Expression *initial_iterator_expression = nullptr;
     Ast_Expression *upper_range_expression      = nullptr;
     
-    Ast_Scope iterator_declaration_scope;
+    Ast_Scope iterator_declaration_scope; // @NoCopy filled by Sema
     Ast_Scope body;
 };
 
@@ -371,17 +377,21 @@ struct Ast_Control_Flow : Ast_Expression {
 
     Token::Type control_type;
 
-    Ast_Scope *current_scope = nullptr; // Scope that the statement was made in, not necessarily the scope that target_statement may own...
+    Ast_Scope *current_scope = nullptr; // @NoCopy Scope that the statement was made in, not necessarily the scope that target_statement may own...
 
     // Filled in by sema
-    Ast_Expression *target_statement = nullptr;
+    Ast_Expression *target_statement = nullptr; // @NoCopy
 };
 
+// :NoCopyDirectives:
+// @NoCopy for directives because they are fully resolved before any semantic analysis can occur.
+// And their resolution is static for the result of compilation.
 struct Ast_Directive : Ast_Expression {
     
     Ast_Scope *scope_i_belong_to = nullptr;
 };
 
+// :NoCopyDirectives:
 struct Ast_Directive_Load : Ast_Directive {
     Ast_Directive_Load() { type = AST_DIRECTIVE_LOAD; }
     
@@ -389,6 +399,7 @@ struct Ast_Directive_Load : Ast_Directive {
     String     target_filename;
 };
 
+// :NoCopyDirectives:
 struct Ast_Directive_Import : Ast_Directive {
     Ast_Directive_Import() { type = AST_DIRECTIVE_IMPORT; }
 
@@ -397,6 +408,7 @@ struct Ast_Directive_Import : Ast_Directive {
     String     target_filename;
 };
 
+// :NoCopyDirectives:
 struct Ast_Directive_Static_If : Ast_Directive {
     Ast_Directive_Static_If() { type = AST_DIRECTIVE_STATIC_IF; }
     
@@ -413,5 +425,14 @@ struct Ast_Library : Ast_Expression {
     bool is_framework = false;
     String libname;
 };
+
+inline
+bool is_declaration(Ast_Type type) {
+    return type == AST_DECLARATION
+        || type == AST_FUNCTION
+        || type == AST_TYPE_ALIAS
+        || type == AST_STRUCT
+        || type == AST_ENUM;
+}
 
 #endif

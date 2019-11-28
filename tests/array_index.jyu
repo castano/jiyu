@@ -12,8 +12,8 @@ func main() {
     let ARRAY_SIZE = 4;
     var my_array: [ARRAY_SIZE] int;
 
-    for 0..my_array.count-1 {
-        my_array[it] = it * 2;
+    for 0..<my_array.count {
+        my_array[it] = cast(int) it * 2;
     }
 
     for 0 ..< my_array.count {

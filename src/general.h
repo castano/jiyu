@@ -55,7 +55,8 @@ struct String {
     }
 };
 
-#define PRINT_ARG(str) (int)str.length, str.data
+// For use with %.*s format. Note the int cast to avoid warning.
+#define PRINT_ARG(str) (int)((str).length), (str).data
 
 inline void advance(String *s, s64 amount = 1) {
     if (s->length) {

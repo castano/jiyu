@@ -336,6 +336,12 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_t
         //else lit->type_info = compiler->type_float64; // @TODO we should probably have a check that verifies if the literal can fit in a 32-bit float and then default to that.
     }
 
+    if (lit->literal_type == Ast_Literal::NULLPTR) {
+        if (want_numeric_type->type == Ast_Type_Info::POINTER) {
+            lit->type_info = want_numeric_type;
+        }
+    }
+
     return viability_score;
 }
 
@@ -415,8 +421,10 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
                 right = not_equal_empty_string;
                 viability_score += 1;
             }
-        } else if (is_pointer_type(ltype) && types_match(ltype->pointer_to, compiler->type_uint8) && types_match(rtype, compiler->type_string)) {
-            // Implicity dereference string when the left-type is *uint8.
+        } else if (is_pointer_type(ltype)
+                && (types_match(ltype->pointer_to, compiler->type_uint8) || types_match(ltype->pointer_to, compiler->type_int8))
+                && types_match(rtype, compiler->type_string)) {
+            // Implicity dereference string when the left-type is *uint8 or *int8.
             // @TODO maybe have an allow parameter for this in case this should only be allowed in certain situations.
 
             // Only allow this for literals because this is a convinience for passing literal strings to C functions!
@@ -426,6 +434,16 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
 
                 right = deref;
                 viability_score += 1;
+                
+                if (!types_match(ltype, compiler->type_string_data)) {
+                    // Add a pointer cast to the target type if it is *int8, or otherwise not the internal type of string.data.
+                    auto cast = cast_ptr_to_ptr(compiler, deref, ltype);
+                    typecheck_expression(cast);
+
+                    // We don't penalize the viability for this. You get this as a courtesy.
+                    right = cast;
+                }
+
             }
         }
     }
@@ -594,6 +612,14 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
         assert(get_type_info(lit));
         maybe_mutate_literal_to_type(lit, get_type_info(right));
         left = lit;
+    } else if (auto lit = folds_to_literal(right)) {
+        typecheck_expression(left);
+        if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
+
+        // typecheck_expression(right, get_type_info(left));
+        assert(get_type_info(lit));
+        maybe_mutate_literal_to_type(lit, get_type_info(left));
+        right = lit;
     } else {
         typecheck_expression(left);
         if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
@@ -637,9 +663,12 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
         } else if (is_int_type(ltype) && is_float_type(rtype)) {
             left = cast_int_to_float(compiler, left, rtype);
             left_viability_score += 10;
-        }else if (allow_coerce_to_ptr_void && is_pointer_type(ltype) && is_pointer_type(rtype)) {
+        } else if (allow_coerce_to_ptr_void && is_pointer_type(ltype) && is_pointer_type(rtype)) {
 
-            // @Note you're only allowed to coerce right-to-left here, meaning if the right-expression is *void, the left-expression cannot coerce away from whatever ptr type it is.
+            // @Note you're only allowed to coerce right-to-left here, meaning if the right-expression is *void,
+            // the left-expression cannot coerce away from whatever ptr type it is.
+            // UPDATE: I am not sure this is true in the general case. This should probably work in both directions.
+            // -josh 27 November 2019
             if (type_points_to_void_eventually(ltype)) {
                 auto left_indir = get_levels_of_indirection(ltype);
                 auto right_indir = get_levels_of_indirection(rtype);
@@ -1432,12 +1461,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             typecheck_expression(subexpression, want_numeric_type, true);
             if (compiler->errors_reported) return;
 
-            /*if (subexpression->type_info->type != Ast_Type_Info::FUNCTION) {
-                assert(false);
-                compiler->report_error(subexpression, "Expression is not a function.\n");
-                return;
-            }*/
-
             Ast_Expression *implicit_argument = nullptr;
             if (subexpression->type == AST_DEREFERENCE) {
                 auto deref = static_cast<Ast_Dereference *>(subexpression);
@@ -1463,51 +1486,48 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 auto identifier = static_cast<Ast_Identifier *>(subexpression);
                 auto overload_set = identifier->overload_set;
 
-                if (overload_set.count == 0) {
-                    compiler->report_error(call, "Function call identifier does not name a function.");
-                    return;
-                }
+                // If overload_set is empty, then it may still be a function pointer.
+                if (overload_set.count) {
+                    // assert(identifier->type_info == compiler->type_void);
 
-                // assert(identifier->type_info == compiler->type_void);
-
-                Ast_Function *function = nullptr;
-                // @Cleanup I'm not sure why I did this, but we can probably merge this with the general case for multiple overloads.
-                if (overload_set.count == 1) {
-                    function = overload_set[0];
-                    typecheck_function_header(function);
-                    if (compiler->errors_reported) return;
-
-                    if (function->is_template_function) {
-                        function = get_polymorph_for_function_call(function, call);
+                    Ast_Function *function = nullptr;
+                    // @Cleanup I'm not sure why I did this, but we can probably merge this with the general case for multiple overloads.
+                    if (overload_set.count == 1) {
+                        function = overload_set[0];
+                        typecheck_function_header(function);
                         if (compiler->errors_reported) return;
-                    }
-                } else {
-                    const u64 U64_MAX = 0xFFFFFFFFFFFFFFFF;
-                    u64 lowest_score = U64_MAX;
-                    for (auto overload : overload_set) {
-                        if (overload->is_template_function) {
-                            overload = get_polymorph_for_function_call(overload, call);
+
+                        if (function->is_template_function) {
+                            function = get_polymorph_for_function_call(function, call);
+                            if (compiler->errors_reported) return;
+                        }
+                    } else {
+                        const u64 U64_MAX = 0xFFFFFFFFFFFFFFFF;
+                        u64 lowest_score = U64_MAX;
+                        for (auto overload : overload_set) {
+                            if (overload->is_template_function) {
+                                overload = get_polymorph_for_function_call(overload, call);
+                                if (compiler->errors_reported) return;
+
+                                if (!overload) continue; // no polymorphs that match this call, so skip it
+                            }
+
+                            typecheck_function_header(overload);
                             if (compiler->errors_reported) return;
 
-                            if (!overload) continue; // no polymorphs that match this call, so skip it
-                        }
+                            auto tuple = function_call_is_viable(call, get_type_info(overload), false);
+                            if (compiler->errors_reported) return;
 
-                        typecheck_function_header(overload);
-                        if (compiler->errors_reported) return;
+                            bool viable = tuple.item1;
+                            u64  score  = tuple.item2;
 
-                        auto tuple = function_call_is_viable(call, get_type_info(overload), false);
-                        if (compiler->errors_reported) return;
-
-                        bool viable = tuple.item1;
-                        u64  score  = tuple.item2;
-
-                        if (viable) {
-                            if (score < lowest_score) {
-                                lowest_score = score;
-                                function = overload;
+                            if (viable) {
+                                if (score < lowest_score) {
+                                    lowest_score = score;
+                                    function = overload;
+                                }
                             }
-                        }
-                    }
+                        }                    }
 
                     if (!function) {
                         // @Incomplete print visible overload candidates
@@ -1547,6 +1567,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             // fall through case for expressions that generate function pointers
             auto info = get_type_info(subexpression);
+
+            if (info->type != Ast_Type_Info::FUNCTION) {
+                compiler->report_error(call, "Function-call target does not name a function.");
+                return;
+            }
+
             auto tuple = function_call_is_viable(call, info, true);
 
             bool viable = tuple.item1;

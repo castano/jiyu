@@ -7,7 +7,15 @@
 #include "llvm.h"
 #include "os_support.h"
 
+#ifdef WIN32
+#pragma warning(push, 0)
+#endif
+
 #include "llvm/Target/TargetMachine.h"
+
+#ifdef WIN32
+#pragma warning(pop)
+#endif
 
 #include <stdio.h> // for vprintf
 #include <new> // for placement new
@@ -16,10 +24,13 @@
 // sigh, c++
 #define COMPILER_NEW2(type) (new (compiler->get_memory(sizeof(type))) type())
 
-
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
     if (left->type != right->type) return false;
     if (left->size != right->size) return false;
+
+    if (left->type == Ast_Type_Info::INTEGER) {
+        return left->is_signed == right->is_signed;
+    }
     
     if (left->type == Ast_Type_Info::POINTER) {
         assert(left->pointer_to && right->pointer_to);
@@ -107,6 +118,18 @@ Ast_Type_Info *Compiler::make_pointer_type(Ast_Type_Info *pointee) {
     info->size = this->pointer_size; // @TargetInfo
     info->alignment = info->size;
     info->stride    = info->size;
+
+    add_to_type_table(info);
+    return info;
+}
+
+Ast_Type_Info *Compiler::make_type_alias(Ast_Type_Info *aliasee) {
+    Ast_Type_Info *info = COMPILER_NEW(Ast_Type_Info);
+    info->type = Ast_Type_Info::ALIAS;
+    info->alias_of  = aliasee;
+    info->size      = aliasee->size;
+    info->alignment = aliasee->alignment;
+    info->stride    = aliasee->stride;
 
     add_to_type_table(info);
     return info;
@@ -341,7 +364,7 @@ void Compiler::resolve_directives() {
 
             bool success = false;
             for (auto &module_path : this->module_search_paths) {
-                String fullpath = mprintf("%.*s/%.*s.jyu", module_path.length, module_path.data, name.length, name.data);
+                String fullpath = mprintf("%.*s/%.*s.jyu", PRINT_ARG(module_path), PRINT_ARG(name));
 
                 if (file_exists(fullpath)) {
                     name = fullpath; // @Leak
@@ -351,7 +374,7 @@ void Compiler::resolve_directives() {
             }
 
             if (!success) {
-                this->report_error(import, "Could not find a module named %.*s.\n", name.length, name.data);
+                this->report_error(import, "Could not find a module named %.*s.\n", PRINT_ARG(name));
                 return;
             }
 
@@ -498,7 +521,8 @@ void Compiler::report_error_valist(String filename, String source, Span error_lo
     
     error_location.map_to_text_coordinates(source, &l0, &c0, &l1, &c1);
     
-    printf("w%lld:%.*s:%d,%d: ", this->instance_number, PRINT_ARG(filename), l0, c0);
+    // @Cleanup these static_casts by using the right printf format spec
+    printf("w%lld:%.*s:%d,%d: ", this->instance_number, PRINT_ARG(filename), static_cast<int>(l0), static_cast<int>(c0));
     vprintf(fmt, args);
     printf("\n");
     

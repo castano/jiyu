@@ -8,9 +8,28 @@
 
 #define COPIER_NEW(type) ((type *)init_copy(new (compiler->get_memory(sizeof(type))) type(), old))
 
-#define COPY_ARRAY(name) do { for (auto i : old->name) {_new->name.add((decltype(i))copy(i)); } } while (0) 
+#define COPY_ARRAY(name)   do { for (auto i : old->name) {_new->name.add((decltype(i))copy(i)); } } while (0)
+#define COPY_ARRAY_P(name) do { for (auto i : old->name) {_new->name.add((decltype(i)) i);      } } while (0)
 #define COPY_P(name)     ( _new->name = old->name )
 #define COPY(name)       ( _new->name = (decltype(_new->name))copy(old->name) )
+
+// :NoCopyForTypecheckedExpressions:
+// In general, this stuff exists for creating polymorphs.
+// Some AST-nodes can be readily copied because they dont rely
+// on some known-external environment to be copied properly.
+// For example, Ast_Literal can be copied freely, but Ast_Identifier
+// cannot because it relies on it's position in the tree of scopes
+// to be correct in order for lookups to work properly. Sema may also
+// transform AST-nodes in ways that would make copying them properly more
+// complicated than it should be. For example, Ast_Function_Call may or
+// may not have a different list of arguments after typechecking due to
+// implicit_argument_inserted. It may make sense to just handle this case,
+// but I have chosen not to do that at this time.
+
+// If in doubt about what should or should not be copied, consult the parser;
+// If the parser creates and/or sets the data in question, then it should be
+// copied. If the data is set by Sema then it likely shouldn't be copied.
+// -josh 28 November 2019
 
 static
 Ast *init_copy(Ast* _new, Ast *old) {
@@ -24,6 +43,7 @@ Ast_Function *Copier::copy_function(Ast_Function *old) {
     
     auto outer_function = currently_copying_function;
     currently_copying_function = _new;
+    defer { currently_copying_function = outer_function; };
     
     COPY(identifier);
     
@@ -52,7 +72,6 @@ Ast_Function *Copier::copy_function(Ast_Function *old) {
     COPY_P(is_template_function);
     COPY_P(linkage_name);
     
-    currently_copying_function = outer_function;
     
     return _new;
 }
@@ -84,6 +103,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             
             COPY_P(name);
             
+            // This does not work in the general case.
+            // This will probably work fine for polymorphing though.
             _new->enclosing_scope = get_current_scope();
             return _new;
         }
@@ -96,6 +117,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY(type_inst);
             COPY_P(is_let);
             COPY_P(is_readonly_variable);
+            COPY_P(is_struct_member);
             return _new;
         }
         case AST_SCOPE: {
@@ -130,6 +152,9 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             
             COPY(function_or_function_ptr);
             COPY_ARRAY(argument_list);
+
+            // :NoCopyForTypecheckedExpressions:
+            assert(old->implicit_argument_inserted == false);
             
             return _new;
         }
@@ -189,6 +214,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY(array_element_type);
             COPY(array_size_expression);
             COPY_P(array_is_dynamic);
+            COPY(function_header);
             
             return _new;
         }
@@ -199,9 +225,12 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY(identifier);
             COPY(internal_type_inst);
             
-            // @Incomplete I think, type_value can be set when internal_type_inst isnt, when the compiler creates a type alias during polymorphing,
+            // I think, type_value can be set when internal_type_inst isnt, when the compiler creates a type alias during polymorphing,
             // do we ever need to handle that case here?
-            if (!_new->internal_type_inst) assert(!_new->type_value);
+            // if (!old->internal_type_inst) assert(!old->type_value);
+
+            // After thinking about it, I think lite-copying type_value is fine.
+            COPY_P(type_value);
             return _new;
         }
         case AST_ARRAY_DEREFERENCE: {
@@ -225,17 +254,19 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto old  = static_cast<Ast_For *>(expression);
             auto _new = COPIER_NEW(Ast_For);
             
+            COPY_P(is_element_pointer_iteration);
+            COPY_P(is_exclusive_end);
             COPY(iterator_decl);
             COPY(iterator_index_decl);
             COPY(initial_iterator_expression);
             COPY(upper_range_expression);
-            COPY_P(is_element_pointer_iteration);
             
             // Dont do a copy here because the semantic pass will fil in the rest here.
             _new->iterator_declaration_scope.parent = get_current_scope();
             
             scope_stack.add(&_new->iterator_declaration_scope);
             copy_scope(&_new->body, &old->body);
+            _new->body.owning_statement = _new;
             scope_stack.pop();
             return _new;
         }
@@ -245,34 +276,84 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             
             COPY(identifier);
             copy_scope(&_new->member_scope, &old->member_scope);
+            _new->member_scope.owning_struct = _new;
             
+            return _new;
+        }
+
+        // These guys do not get copied at all. They are resolved by the compiler after parsing irregardless of
+        // the fact that these may be declared in templates.
+        case AST_DIRECTIVE_LOAD:
+        case AST_DIRECTIVE_IMPORT:
+        case AST_DIRECTIVE_STATIC_IF:
+            return expression;
+
+        case AST_SCOPE_EXPANSION: {
+            auto old = static_cast<Ast_Scope_Expansion *>(expression);
+            auto _new = COPIER_NEW(Ast_Scope_Expansion);
+
+            if (!old->expanded_via_import_directive) {
+                copy_scope(_new->scope, old->scope);
+            } else {
+                COPY_P(scope); // Just do a lite-copy since we need this for scope lookups.
+            }
+
+            return _new;
+        }
+
+        case AST_OS: {
+            auto old  = static_cast<Ast_Os *>(expression);
+            auto _new = COPIER_NEW(Ast_Os);
+
+            COPY(expression);
+            return _new;
+        }
+        case AST_LIBRARY: {
+            auto old  = static_cast<Ast_Library *>(expression);
+            auto _new = COPIER_NEW(Ast_Library);
+
+            COPY_P(is_framework);
+            COPY_P(libname);
+            return _new;
+        }
+        case AST_CONTROL_FLOW: {
+            auto old  = static_cast<Ast_Control_Flow *>(expression);
+            auto _new = COPIER_NEW(Ast_Control_Flow);
+
+            COPY_P(control_type);
+            _new->current_scope = get_current_scope();
+
             return _new;
         }
         
         case AST_UNINITIALIZED:
-        assert(false);
+        default:
+            assert(false);
+            return nullptr;
+            
     }
-    
-    assert(false);
 }
 
 void Copier::copy_scope(Ast_Scope *_new, Ast_Scope *old) {
     _new->parent = get_current_scope();
     
     COPY_P(is_template_argument_block);
+    COPY_P(rejected_by_static_if);
+
+    // We dont do a copy for owning_function because it would have been set by copy_function.
     
     scope_stack.add(_new);
     for (auto expr: old->statements) {
         auto stmt = copy(expr);
-        if (stmt->type == AST_DECLARATION ||
-            stmt->type == AST_FUNCTION    ||
-            stmt->type == AST_TYPE_ALIAS  ||
-            stmt->type == AST_STRUCT) {
+        if (is_declaration(stmt->type)) {
             _new->declarations.add(stmt);
         }
         
         _new->statements.add(stmt);
     }
+
+    COPY_ARRAY_P(private_declarations);
+
     scope_stack.pop();
 }
 
@@ -280,6 +361,8 @@ Ast_Function *Copier::polymoprh_function_with_arguments(Ast_Function *poly, Arra
     assert(arguments->count == poly->arguments.count);
     
     scope_stack.add(poly->polymorphic_type_alias_scope->parent);
+    // @Speed @Memory we shouldnt be doing a full function copy at this point, we only need the header information copied
+    // until we actually know if that we can fill all type aliases.
     Ast_Function *poly_copy = copy_function(poly);
     poly_copy->is_template_function = false; // this is no longer a template
     
