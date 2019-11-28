@@ -2101,6 +2101,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             element_path_index++;
                         }
 
+                        if (member.type_info->size == -1) {
+                            auto member_type_name = type_to_string(member.type_info);
+                            defer { free(member_type_name.data); };
+                            compiler->report_error(decl, "field '%.*s' has incomplete type '%.*s'\n", PRINT_ARG(member.name->name), PRINT_ARG(member_type_name));
+                            // @@ Definition of '%s' is not complete until the closing '}'
+                            return;
+                        }
+
                         size_cursor = pad_to_alignment(size_cursor, member.type_info->alignment);
                         member.offset_in_struct = size_cursor;
                         size_cursor += member.type_info->size;
