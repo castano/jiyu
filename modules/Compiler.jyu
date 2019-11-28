@@ -15,6 +15,7 @@ func @c_function compiler_run_default_link_command(compiler: *Compiler) -> bool;
 
 // @FixMe on macOS/Linux string should normally be passed by value but we're currently passing string by pointer by default.
 func @c_function compiler_load_file(compiler: *Compiler, filename: string) -> bool;
+func @c_function compiler_load_string(compiler: *Compiler, source: string) -> bool;
 
 func @c_function compiler_typecheck_program(compiler: *Compiler) -> bool;
 func @c_function compiler_generate_llvm_module(compiler: *Compiler) -> bool;
