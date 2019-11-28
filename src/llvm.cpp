@@ -263,6 +263,8 @@ Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
 }
 
 Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
+    type = get_final_type(type);
+
     if (type->type == Ast_Type_Info::VOID) {
         // return type_i8 for pointers.
         return type_i8;
@@ -388,6 +390,8 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 }
 
 DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
+    type = get_final_type(type);
+
     if (type->type == Ast_Type_Info::VOID) {
         return nullptr;
     }
@@ -617,6 +621,8 @@ Value *LLVM_Generator::dereference(Value *value, s64 element_path_index, bool is
 }
 
 void LLVM_Generator::default_init_struct(Value *decl_value, Ast_Type_Info *info) {
+    info = get_final_type(info);
+
     assert(info->type == Ast_Type_Info::STRUCT);
     assert(info->struct_decl);
     
@@ -641,7 +647,7 @@ void LLVM_Generator::default_init_struct(Value *decl_value, Ast_Type_Info *info)
                 irb->CreateStore(expr, gep);
             } else {
                 auto mem_info = get_type_info(decl);
-                if (mem_info->type == Ast_Type_Info::STRUCT) {
+                if (is_struct_type(mem_info)) {
                     auto gep = dereference(decl_value, element_path_index, true);
                     default_init_struct(gep, mem_info);
                 }
@@ -687,9 +693,9 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 auto value = emit_expression(un->expression);
                 auto type = get_type_info(un->expression);
                 
-                if (type->type == Ast_Type_Info::INTEGER) {
+                if (is_int_type(type)) {
                     return irb->CreateNeg(value);
-                } else if (type->type == Ast_Type_Info::FLOAT) {
+                } else if (is_float_type(type)) {
                     return irb->CreateFNeg(value);
                 }
             }
@@ -718,7 +724,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                         if (is_int_type(info)) {
                             return irb->CreateMul(left, right);
                         } else {
-                            assert(info->type == Ast_Type_Info::FLOAT);
+                            assert(is_float_type(info));
                             return irb->CreateFMul(left, right);
                         }
                     }
@@ -744,7 +750,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                                 return irb->CreateUDiv(left, right);
                             }
                         } else {
-                            assert(info->type == Ast_Type_Info::FLOAT);
+                            assert(is_float_type(info));
                             return irb->CreateFDiv(left, right);
                         }
                     }
@@ -801,7 +807,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                                 return irb->CreateICmpULE(left, right);
                             }
                         } else {
-                            assert(info->type == Ast_Type_Info::FLOAT);
+                            assert(is_float_type(info));
                             return irb->CreateFCmpULE(left, right);
                         }
                     }
@@ -814,7 +820,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                                 return irb->CreateICmpUGE(left, right);
                             }
                         } else {
-                            assert(info->type == Ast_Type_Info::FLOAT);
+                            assert(is_float_type(info));
                             return irb->CreateFCmpUGE(left, right);
                         }
                     }
@@ -828,7 +834,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                                 return irb->CreateICmpULT(left, right);
                             }
                         } else {
-                            assert(info->type == Ast_Type_Info::FLOAT);
+                            assert(is_float_type(info));
                             return irb->CreateFCmpULT(left, right);
                         }
                     }
@@ -842,7 +848,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                                 return irb->CreateICmpUGT(left, right);
                             }
                         } else {
-                            assert(info->type == Ast_Type_Info::FLOAT);
+                            assert(is_float_type(info));
                             return irb->CreateFCmpUGT(left, right);
                         }
                     }
@@ -1021,15 +1027,15 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     
                     auto type = value->getType();
                     if (type->isIntegerTy() && type->getPrimitiveSizeInBits() < type_i32->getPrimitiveSizeInBits()) {
-                        assert(get_type_info(arg)->type == Ast_Type_Info::INTEGER ||
-                               get_type_info(arg)->type == Ast_Type_Info::BOOL);
+                        assert(is_int_type(get_type_info(arg)) ||
+                               get_final_type(get_type_info(arg))->type == Ast_Type_Info::BOOL);
                         if (get_type_info(arg)->is_signed) {
                             args[i] = irb->CreateSExt(value, type_i32);
                         } else {
                             args[i] = irb->CreateZExt(value, type_i32);
                         }
                     } else if (type->isFloatTy() && type->getPrimitiveSizeInBits() < type_f64->getPrimitiveSizeInBits()) {
-                        assert(get_type_info(arg)->type == Ast_Type_Info::FLOAT);
+                        assert(is_float_type(get_type_info(arg)));
                         args[i] = irb->CreateFPExt(value, type_f64);
                     }
                 }
@@ -1228,7 +1234,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             irb->SetInsertPoint(loop_header);
             // emit the condition in the loop header so that it always executes when we loop back around
             auto it_index = irb->CreateLoad(it_index_alloca);
-            assert(it_index_type->type == Ast_Type_Info::INTEGER);
+            assert(is_int_type(it_index_type));
             
             auto upper = emit_expression(_for->upper_range_expression);
             Value *cond = nullptr;
@@ -1298,6 +1304,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto index = emit_expression(deref->index_expression);
             
             auto type = get_type_info(deref->array_or_pointer_expression);
+            type = get_final_type(type);
+
             if (type->type == Ast_Type_Info::ARRAY && type->array_element_count == -1) {
                 // @Cleanup hardcoded indices
                 array = irb->CreateGEP(array, {ConstantInt::get(type_i32, 0), ConstantInt::get(type_i32, 0)});

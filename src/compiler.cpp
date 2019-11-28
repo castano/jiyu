@@ -25,6 +25,9 @@
 #define COMPILER_NEW2(type) (new (compiler->get_memory(sizeof(type))) type())
 
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
+    left  = get_final_type(left);
+    right = get_final_type(right);
+
     if (left->type != right->type) return false;
     if (left->size != right->size) return false;
 
@@ -123,13 +126,44 @@ Ast_Type_Info *Compiler::make_pointer_type(Ast_Type_Info *pointee) {
     return info;
 }
 
+#define COPY(name) do { info->name = aliasee->name; } while(0)
+
 Ast_Type_Info *Compiler::make_type_alias(Ast_Type_Info *aliasee) {
     Ast_Type_Info *info = COMPILER_NEW(Ast_Type_Info);
     info->type = Ast_Type_Info::ALIAS;
     info->alias_of  = aliasee;
-    info->size      = aliasee->size;
-    info->alignment = aliasee->alignment;
-    info->stride    = aliasee->stride;
+
+    COPY(size);
+    COPY(alignment);
+    COPY(stride);
+
+    // Copy important things from source=>alias. Most of the typechecking code
+    // shouldnt and doesnt care if something is a typealias, so one should be
+    // able to do this without going through alias_of:
+    /*
+    if (is_pointer_type(alias)) {
+        auto info = alias->pointer_to;
+    }
+    */
+    // This should also work if aliasee is an alias because this data would propagate back
+    // to this new alias, but maybe that isnt true! @TODO
+
+    // Dont copy alias_decl or alias_of here.
+    COPY(is_signed);
+    COPY(pointer_to);
+    COPY(array_element);
+
+    COPY(array_element_count);
+    COPY(is_dynamic);
+
+    COPY(struct_decl);
+
+    for (auto mem: aliasee->struct_members) info->struct_members.add(mem);
+
+    for (auto arg: aliasee->arguments) info->arguments.add(arg);
+    COPY(return_type);
+    COPY(is_c_function);
+    COPY(is_c_varargs);
 
     add_to_type_table(info);
     return info;
@@ -625,8 +659,8 @@ bool Compiler::is_toplevel_scope(Ast_Scope *scope) {
 Ast_Expression *cast_int_to_int(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
     
-    assert(expr->type_info->type == Ast_Type_Info::INTEGER);
-    assert(target->type == Ast_Type_Info::INTEGER);
+    assert(is_int_type(expr->type_info));
+    assert(is_int_type(target));
     
     if (target->size == expr->type_info->size) return expr;
     
@@ -641,8 +675,8 @@ Ast_Expression *cast_int_to_int(Compiler *compiler, Ast_Expression *expr, Ast_Ty
 Ast_Expression *cast_float_to_float(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
     
-    assert(expr->type_info->type == Ast_Type_Info::FLOAT);
-    assert(target->type == Ast_Type_Info::FLOAT);
+    assert(is_float_type(expr->type_info));
+    assert(is_float_type(target));
     
     if (target->size == expr->type_info->size) return expr;
     
@@ -657,8 +691,8 @@ Ast_Expression *cast_float_to_float(Compiler *compiler, Ast_Expression *expr, As
 Ast_Expression *cast_int_to_float(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
     
-    assert(expr->type_info->type == Ast_Type_Info::INTEGER);
-    assert(target->type == Ast_Type_Info::FLOAT);
+    assert(is_int_type(expr->type_info));
+    assert(is_float_type(target));
     
     Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
     copy_location_info(cast, expr);
@@ -672,8 +706,8 @@ Ast_Expression *cast_int_to_float(Compiler *compiler, Ast_Expression *expr, Ast_
 Ast_Expression *cast_ptr_to_ptr(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
     
-    assert(expr->type_info->type == Ast_Type_Info::POINTER);
-    assert(target->type == Ast_Type_Info::POINTER);
+    assert(is_pointer_type(expr->type_info));
+    assert(is_pointer_type(target));
     
     Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
     copy_location_info(cast, expr);
@@ -778,4 +812,12 @@ Ast_Binary_Expression *make_binary(Compiler *compiler, Token::Type op, Ast_Expre
     if (location) copy_location_info(bin, location);
 
     return bin;
+}
+
+Ast_Type_Info *get_final_type(Ast_Type_Info *info) {
+    if (!info) return nullptr;
+
+    while (info->type == Ast_Type_Info::ALIAS) info = info->alias_of;
+
+    return info;
 }
