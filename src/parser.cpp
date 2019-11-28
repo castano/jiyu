@@ -1024,12 +1024,8 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
         Ast_Expression *stmt = parse_statement();
         if (stmt) {
             scope->statements.add(stmt);
-            
-            // @Cleanup have a is_declaration() function?
-            if (stmt->type == AST_DECLARATION ||
-                stmt->type == AST_FUNCTION    ||
-                stmt->type == AST_TYPE_ALIAS  ||
-                stmt->type == AST_STRUCT) {
+
+            if (is_declaration(stmt->type)) {
                 scope->declarations.add(stmt);
             }
         }
