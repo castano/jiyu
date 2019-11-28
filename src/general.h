@@ -608,7 +608,10 @@ class ExitScopeHelp {
         ExitScope<T> operator+(T t){ return t;}
 };
  
+#if _MSC_VER
 #define defer const auto& CONCAT(defer__, __LINE__) = ExitScopeHelp() + [&]()
-
+#else // __GNUC__ or __clang__
+#define defer const auto& __attribute__((unused)) CONCAT(defer__, __LINE__) = ExitScopeHelp() + [&]()
+#endif
 
 #endif // GENERAL_H
