@@ -234,6 +234,12 @@ extern "C" {
             String obj_name = mprintf("%.*s.o", PRINT_ARG(exec_name));
             convert_to_back_slashes(obj_name);
             args.add(obj_name);
+
+            for (auto obj: compiler->user_supplied_objs) {
+                auto temp = copy_string(obj); // @Leak
+                convert_to_back_slashes(temp);
+                args.add(obj);
+            }
             
             String output_name = exec_name;
             char executable_name[LINE_SIZE];
@@ -273,6 +279,10 @@ extern "C" {
         String obj_name = mprintf("%.*s.o", exec_name.length, exec_name.data);
 
         args.add(obj_name);
+
+        for (auto obj: compiler->user_supplied_objs) {
+            args.add(obj);
+        }
         
         args.add(to_string("-o"));
         args.add(compiler->build_options.executable_name);
@@ -387,6 +397,10 @@ extern "C" {
     // @FixMe on macOS/Linux string should normally be passed by-value but we're currently passing string by pointer by default.
     EXPORT void compiler_add_library_search_path(Compiler *compiler, String *path) {
         compiler->library_search_paths.add(copy_string(*path)); // @TODO we should check for duplication here, maybe.
+    }
+
+    EXPORT void compiler_add_compiled_object_for_linking(Compiler *compiler, String *path) {
+        compiler->user_supplied_objs.add(copy_string(*path));
     }
 }
 
