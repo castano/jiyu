@@ -167,6 +167,8 @@ extern "C" {
         compiler->sema = new Sema(compiler);
 
         compiler->module_search_paths.add(__default_module_search_path);
+
+        compiler->library_search_paths.add(__default_module_search_path);
         
         perform_load_from_string(compiler, to_string((char *)preload_text), compiler->preload_scope);
         
