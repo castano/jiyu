@@ -411,4 +411,13 @@ bool is_declaration(Ast_Type type) {
         || type == AST_STRUCT;
 }
 
+inline
+Ast_Identifier * declaration_identifier(Ast_Expression * decl) {
+    if (decl->type == AST_DECLARATION) return static_cast<Ast_Declaration*>(decl)->identifier;
+    if (decl->type == AST_FUNCTION) return static_cast<Ast_Function*>(decl)->identifier;
+    if (decl->type == AST_TYPE_ALIAS) return static_cast<Ast_Type_Alias*>(decl)->identifier;
+    if (decl->type == AST_STRUCT) return static_cast<Ast_Struct*>(decl)->identifier;
+    return NULL;
+}
+
 #endif
