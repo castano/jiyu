@@ -48,6 +48,6 @@ func @metaprogram main() {
     compile_single_test_file("tests/structs.jyu", as_metaprogram);
 
     // Attempt to use an incomplete type:
-    compile_failing_test("struct Foo { var foo: Foo; }");
+    compile_failing_test("struct Foo { var foo: My_Foo; } typealias My_Foo = Foo;");
 
 }
