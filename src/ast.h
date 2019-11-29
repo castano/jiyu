@@ -13,6 +13,7 @@ struct Ast_Identifier;
 struct Ast_Scope;
 struct Ast_Struct;
 struct Ast_Enum;
+struct Ast_Type_Alias;
 
 enum Ast_Type {
     AST_UNINITIALIZED,
@@ -81,9 +82,11 @@ struct Ast_Type_Info {
     bool is_signed = false; // for INTEGER
     
     Ast_Type_Info *pointer_to    = nullptr;
-    Ast_Type_Info *alias_of      = nullptr;
     Ast_Type_Info *array_element = nullptr;
     
+    Ast_Type_Alias *alias_decl    = nullptr;
+    Ast_Type_Info  *alias_of      = nullptr;
+
     array_count_type array_element_count = -1;
     bool is_dynamic = false; // for array
     

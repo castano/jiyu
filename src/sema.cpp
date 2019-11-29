@@ -113,7 +113,7 @@ s32 get_levels_of_indirection(Ast_Type_Info *info) {
     s32 count = 0;
 
     while (info) {
-        if (info->type == Ast_Type_Info::POINTER) {
+        if (is_pointer_type(info)) {
             info = info->pointer_to;
             count++;
         } else {
@@ -125,6 +125,8 @@ s32 get_levels_of_indirection(Ast_Type_Info *info) {
 }
 
 bool type_is_iterable(Ast_Type_Info *info) {
+    info = get_final_type(info);
+
     if (info->type == Ast_Type_Info::ARRAY) return true;
 
     // @Incomplete test for structs containing .count member and supports [] overloading.
@@ -134,10 +136,10 @@ bool type_is_iterable(Ast_Type_Info *info) {
 
 bool type_points_to_void_eventually(Ast_Type_Info *ptr) {
     while (ptr) {
-        if (ptr->type == Ast_Type_Info::POINTER) {
+        if (is_pointer_type(ptr)) {
             ptr = ptr->pointer_to;
         } else {
-            return ptr->type == Ast_Type_Info::VOID;
+            return get_final_type(ptr)->type == Ast_Type_Info::VOID;
         }
     }
 
@@ -233,8 +235,24 @@ void print_type_to_builder(String_Builder *builder, Ast_Type_Info *info) {
 
         if (_struct->identifier) {
             String name = _struct->identifier->name->name;
-            builder->print("%.*s", name.length, name.data);
+            builder->print("%.*s", PRINT_ARG(name));
         }
+        return;
+    }
+
+    if (info->type == Ast_Type_Info::ALIAS) {
+        auto alias = info->alias_decl;
+
+        if (alias->identifier) {
+            String name = alias->identifier->name->name;
+            builder->print("%.*s ", PRINT_ARG(name));
+            builder->putchar('(');
+            print_type_to_builder(builder, info->alias_of);
+            builder->putchar(')');
+        } else {
+            print_type_to_builder(builder, info->alias_of);
+        }
+
         return;
     }
 
@@ -299,6 +317,8 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
 
 // @Returns viability contribution
 u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_type) {
+    want_numeric_type = get_final_type(want_numeric_type);
+
     u64 viability_score = 0;
     if (lit->literal_type == Ast_Literal::INTEGER) {
         if (want_numeric_type && (want_numeric_type->type == Ast_Type_Info::INTEGER || want_numeric_type->type == Ast_Type_Info::FLOAT)) {
@@ -1224,7 +1244,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             if (!types_match(left_type, right_type)) {
                 if ((bin->operator_type == Token::PLUS
                      || bin->operator_type == Token::MINUS) &&
-                    left_type->type == Ast_Type_Info::POINTER && right_type->type == Ast_Type_Info::INTEGER) {
+                    is_pointer_type(left_type) && is_int_type(right_type)) {
                     return;
                 }
 
@@ -1347,7 +1367,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
             } else if (un->operator_type == Token::DEREFERENCE_OR_SHIFT) {
                 auto type = get_type_info(un->expression);
-                if (type->type != Ast_Type_Info::POINTER) {
+                if (!is_pointer_type(type)) {
                     compiler->report_error(un, "Cannot use '<<' on a non-pointer expression.\n");
                     return;
                 }
@@ -1355,7 +1375,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 un->type_info = type->pointer_to;
             } else if (un->operator_type == Token::MINUS) {
                 auto type = get_type_info(un->expression);
-                if (type->type != Ast_Type_Info::INTEGER && type->type != Ast_Type_Info::FLOAT) {
+                if (is_int_type(type) && is_float_type(type)) {
                     compiler->report_error(un, "Unary '-' is only valid for integer for float operands.\n");
                     return;
                 }
@@ -1610,8 +1630,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 if (left->type == AST_TYPE_ALIAS) {
                     auto alias = static_cast<Ast_Type_Alias *>(left);
 
-                    left_type = alias->type_value->alias_of;
-                    while (left_type->type == Ast_Type_Info::ALIAS) left_type = left_type->alias_of;
+                    left_type = alias->type_value;
+                    left_type = get_final_type(left_type);
 
                     assert(left_type);
                     assert(alias->type_value->type == Ast_Type_Info::ALIAS);
@@ -1625,6 +1645,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             deref->is_type_dereference = is_type_use;
 
+            left_type = get_final_type(left_type);
             if (left_type->type != Ast_Type_Info::STRING &&
                 left_type->type != Ast_Type_Info::ARRAY  &&
                 left_type->type != Ast_Type_Info::STRUCT &&
@@ -2075,8 +2096,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 if (compiler->errors_reported) return;
 
                 assert(alias->internal_type_inst->type_value);
-                alias->type_value = alias->internal_type_inst->type_value;
+                alias->type_value = compiler->make_type_alias(alias->internal_type_inst->type_value);
+                alias->type_value->alias_decl = alias;
             } else {
+                // We got here due to polymorphing taking advantage of the
+                // alias system. No need to create an _alias_ type, but maybe
+                // we should for error reporting clarity.
                 assert(alias->type_value);
             }
             alias->type_info = compiler->type_info_type;
@@ -2178,6 +2203,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             if (compiler->errors_reported) return;
 
             auto array_type = get_type_info(deref->array_or_pointer_expression);
+            array_type = get_final_type(array_type);
+
             if (array_type->type != Ast_Type_Info::ARRAY   && array_type->type != Ast_Type_Info::POINTER &&
                 array_type->type != Ast_Type_Info::STRING) {
                 compiler->report_error(deref->array_or_pointer_expression, "Expected array, string, or pointer for index expression, but got something else.\n");
@@ -2185,7 +2212,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
 
             auto index_type = get_type_info(deref->index_expression);
-            if (index_type->type != Ast_Type_Info::INTEGER) {
+            if (!is_int_type(index_type)) {
                 compiler->report_error(deref->index_expression, "Array index subscript must be of integer type.\n");
                 return;
             }
@@ -2562,6 +2589,10 @@ void Sema::typecheck_function_header(Ast_Function *function, bool is_for_type_in
         if (function->is_c_function) {
             function->linkage_name = function->identifier->name->name;
         } else {
+            if (!function->scope) {
+                compiler->report_error(function, "Function header found without a body. Did you mean to mark this @c_function?\n");
+                return;
+            }
             function->linkage_name = get_mangled_name(compiler, function);
             String name = function->linkage_name;
             // printf("Mangled name: '%.*s'\n", name.length, name.data);

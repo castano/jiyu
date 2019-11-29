@@ -316,6 +316,18 @@ func get_command_line(strings: [] string) -> *uint8 {
     }
 }
 
+func wchar_to_mbstring(input: *wchar_t) -> string {
+    var in_length = wcslen(input);
+    var needed = wcstombs(null, input, in_length);
+
+    var output: string;
+    output.data   = cast() malloc(needed);
+    output.length = cast() needed;
+
+    wcstombs(output.data, input, in_length);
+    return output;
+}
+
 // @Incomplete, we need some sort of print function here..
 struct String_Builder {
     typealias array_count_type = int64; // @TODO @FixMe array_count_type

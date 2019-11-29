@@ -7,6 +7,15 @@
     library "m";
 }
 
+#if os(Windows) {
+    typealias wchar_t = uint16;
+} else {
+    typealias wchar_t = uint32;
+}
+
+func @c_function wcslen(str: *wchar_t) -> size_t;
+func @c_function wcstombs(mbstr: *uint8, wcstr: *wchar_t, count: size_t) -> size_t;
+
 typealias c_string = *uint8;
 
 func @c_function printf(fmt: c_string, temporary_c_vararg);

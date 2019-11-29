@@ -64,6 +64,7 @@ struct Compiler {
     Array<Ast_Library *> libraries;
     Array<String> library_search_paths;
     Array<String> module_search_paths;
+    Array<String> user_supplied_objs;
     Array<Ast_Directive_Import *> loaded_imports;
     Build_Options build_options;
 
@@ -165,38 +166,42 @@ struct Compiler {
 // Structs must be added to the type table manually
 Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct);
 
+Ast_Type_Info *get_final_type(Ast_Type_Info *info);
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right);
 
 inline
 bool is_int_type(Ast_Type_Info *info) {
-    if (info->type == Ast_Type_Info::ALIAS) return is_int_type(info->alias_of);
+    info = get_final_type(info);
     return info->type == Ast_Type_Info::INTEGER;
 }
 
 inline
 bool is_float_type(Ast_Type_Info *info) {
-    if (info->type == Ast_Type_Info::ALIAS) return is_float_type(info->alias_of);
+    info = get_final_type(info);
     return info->type == Ast_Type_Info::FLOAT;
 }
 
 inline
 bool is_pointer_type(Ast_Type_Info *info) {
-    if (info->type == Ast_Type_Info::ALIAS) return is_pointer_type(info->alias_of);
-
+    info = get_final_type(info);
     return info->type == Ast_Type_Info::POINTER;
 }
 
 inline
 bool is_struct_type(Ast_Type_Info *info) {
-    if (info->type == Ast_Type_Info::ALIAS) return is_struct_type(info->alias_of);
-
+    info = get_final_type(info);
     return info->type == Ast_Type_Info::STRUCT;
 }
 
 inline
+bool is_array_type(Ast_Type_Info *info) {
+    info = get_final_type(info);
+    return info->type == Ast_Type_Info::ARRAY;
+}
+
+inline
 bool is_aggregate_type(Ast_Type_Info *info) {
-    if (info->type == Ast_Type_Info::ALIAS) return is_aggregate_type(info->alias_of);
-    // @TODO arrays
+    info = get_final_type(info);
     return info->type == Ast_Type_Info::STRUCT || info->type == Ast_Type_Info::STRING;
 }
 
@@ -207,8 +212,12 @@ Ast_Type_Info *get_type_info(Ast_Expression *expr) {
     return expr->type_info;
 }
 
+
 inline
 bool is_valid_primitive_cast(Ast_Type_Info *target, Ast_Type_Info *source) {
+    target = get_final_type(target);
+    source = get_final_type(source);
+
     if (target->type == Ast_Type_Info::POINTER) {
         return (source->type == Ast_Type_Info::INTEGER || source->type == Ast_Type_Info::POINTER);
     }
@@ -241,17 +250,6 @@ inline
 void copy_location_info(Ast *left, Ast *right) {
     left->text_span = right->text_span;
     left->filename  = right->filename;
-}
-
-inline
-Ast_Type_Info *get_final_type(Ast_Type_Info *info) {
-    if (!info) return nullptr;
-
-    if (info->type == Ast_Type_Info::ALIAS) {
-        return get_final_type(info->alias_of);
-    }
-
-    return info;
 }
 
 inline

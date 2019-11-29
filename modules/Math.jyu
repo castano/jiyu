@@ -1,0 +1,141 @@
+#import "LibC"; // for sqrtf
+
+struct Vector3 {
+    var x: float;
+    var y: float;
+    var z: float;
+
+    func make(x: float, y: float, z: float) -> Vector3 {
+        var v: Vector3;
+        v.x = x;
+        v.y = y;
+        v.z = z;
+        return v;
+    }
+
+    func length(this: Vector3) -> float {
+        return sqrtf(this.x*this.x + this.y*this.y + this.z*this.z);
+    }
+
+    func length_squared(this: Vector3) -> float {
+        return this.x*this.x + this.y*this.y + this.z*this.z;
+    }
+
+    func cross(a: Vector3, b: Vector3) -> Vector3 {
+        var x = a.y*b.z - a.z*b.y;
+        var y = a.z*b.x - a.x*b.z;
+        var z = a.x*b.y - a.y*b.x;
+        return make(x, y, z);
+    }
+
+    func dot(a: Vector3, b: Vector3) -> float {
+        return a.x*b.x + a.y*b.y + a.z*b.z;
+    }
+
+    func sub(a: Vector3, b: Vector3) -> Vector3 {
+        return make(a.x - b.x, a.y - b.y, a.z - b.z);
+    }
+
+    func add(a: Vector3, b: Vector3) -> Vector3 {
+        return make(a.x + b.x, a.y + b.y, a.z + b.z);
+    }
+}
+
+
+struct Matrix4 {
+    var m: [4][4] float;
+
+    func identity() -> Matrix4 {
+        var m: Matrix4;
+
+        m.m[0][0] = 1;
+        m.m[1][1] = 1;
+        m.m[2][2] = 1;
+        m.m[3][3] = 1;
+
+        return m;
+    }
+
+    func ortho(left: float, right: float, bottom: float, top: float, near: float, far: float) -> Matrix4 {
+        var mat: Matrix4 = identity();
+        mat.m[0][0] = 2.0 / (right - left);
+        mat.m[1][1] = 2.0 / (top - bottom);
+        mat.m[2][2] = -2.0 / (far - near);
+
+        mat.m[0][3] = -(right + left) / (right - left);
+        mat.m[1][3] = -(top + bottom) / (top - bottom);
+        mat.m[2][3] = -(far + near) / (far - near);
+        return mat;
+    }
+
+    func frustum(left: float, right: float, bottom: float, top: float, _near: float, _far: float) -> Matrix4 {
+        var mat: Matrix4 = identity();
+
+        var A = (right + left) / (right - left);
+        var B = (top + bottom) / (top - bottom);
+        var C = - (_far + _near) / (_far - _near);
+        var D = - (2 * _far * _near) / (_far - _near);
+
+        mat.m[0][0] = 2 * _near / (right - left);
+        mat.m[0][2] = A;
+
+        mat.m[1][1] = 2 * _near / (top - bottom);
+        mat.m[1][2] = B;
+
+        mat.m[2][2] = C;
+        mat.m[2][3] = D;
+
+        mat.m[3][2] = -1;
+        mat.m[3][3] =  0;
+        return mat;
+    }
+
+    let DEGREES_TO_RADIANS: float = 0.0174533;
+
+    func perspective(fov: float, aspect: float, near: float, far: float) -> Matrix4 {
+        var t = cast(float) tan(DEGREES_TO_RADIANS * fov / 2.0) * near;
+        var b = -t;
+        var l = aspect * b;
+        var r = aspect * t;
+        return frustum(l, r, b, t, near, far);
+    }
+
+    func translate(v: Vector3) -> Matrix4 {
+        var mat: Matrix4 = identity();
+
+        mat.m[0][3] = v.x;
+        mat.m[1][3] = v.y;
+        mat.m[2][3] = v.z;
+
+        return mat;
+    }
+
+    func multiply(left: Matrix4, right: Matrix4) -> Matrix4 {
+        var result: Matrix4;
+
+        var mat = right;
+        var m   = left.m;
+
+        result.m[0][0] = m[0][0] * mat.m[0][0] + m[0][1] * mat.m[1][0] + m[0][2] * mat.m[2][0] + m[0][3] * mat.m[3][0];
+        result.m[0][1] = m[0][0] * mat.m[0][1] + m[0][1] * mat.m[1][1] + m[0][2] * mat.m[2][1] + m[0][3] * mat.m[3][1];
+        result.m[0][2] = m[0][0] * mat.m[0][2] + m[0][1] * mat.m[1][2] + m[0][2] * mat.m[2][2] + m[0][3] * mat.m[3][2];
+        result.m[0][3] = m[0][0] * mat.m[0][3] + m[0][1] * mat.m[1][3] + m[0][2] * mat.m[2][3] + m[0][3] * mat.m[3][3];
+
+        result.m[1][0] = m[1][0] * mat.m[0][0] + m[1][1] * mat.m[1][0] + m[1][2] * mat.m[2][0] + m[1][3] * mat.m[3][0];
+        result.m[1][1] = m[1][0] * mat.m[0][1] + m[1][1] * mat.m[1][1] + m[1][2] * mat.m[2][1] + m[1][3] * mat.m[3][1];
+        result.m[1][2] = m[1][0] * mat.m[0][2] + m[1][1] * mat.m[1][2] + m[1][2] * mat.m[2][2] + m[1][3] * mat.m[3][2];
+        result.m[1][3] = m[1][0] * mat.m[0][3] + m[1][1] * mat.m[1][3] + m[1][2] * mat.m[2][3] + m[1][3] * mat.m[3][3];
+
+        result.m[2][0] = m[2][0] * mat.m[0][0] + m[2][1] * mat.m[1][0] + m[2][2] * mat.m[2][0] + m[2][3] * mat.m[3][0];
+        result.m[2][1] = m[2][0] * mat.m[0][1] + m[2][1] * mat.m[1][1] + m[2][2] * mat.m[2][1] + m[2][3] * mat.m[3][1];
+        result.m[2][2] = m[2][0] * mat.m[0][2] + m[2][1] * mat.m[1][2] + m[2][2] * mat.m[2][2] + m[2][3] * mat.m[3][2];
+        result.m[2][3] = m[2][0] * mat.m[0][3] + m[2][1] * mat.m[1][3] + m[2][2] * mat.m[2][3] + m[2][3] * mat.m[3][3];
+
+        result.m[3][0] = m[3][0] * mat.m[0][0] + m[3][1] * mat.m[1][0] + m[3][2] * mat.m[2][0] + m[3][3] * mat.m[3][0];
+        result.m[3][1] = m[3][0] * mat.m[0][1] + m[3][1] * mat.m[1][1] + m[3][2] * mat.m[2][1] + m[3][3] * mat.m[3][1];
+        result.m[3][2] = m[3][0] * mat.m[0][2] + m[3][1] * mat.m[1][2] + m[3][2] * mat.m[2][2] + m[3][3] * mat.m[3][2];
+        result.m[3][3] = m[3][0] * mat.m[0][3] + m[3][1] * mat.m[1][3] + m[3][2] * mat.m[2][3] + m[3][3] * mat.m[3][3];
+
+        return result;
+    }
+}

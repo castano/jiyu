@@ -12,4 +12,7 @@ func main() {
     var result = my_func_ptr(1);
     
     var func_ptr_2: @c_function (a: int32, b: float) -> bool;
+
+    // typealias T = int32;
+    // T();
 }
