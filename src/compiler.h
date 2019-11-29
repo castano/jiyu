@@ -64,6 +64,7 @@ struct Compiler {
     Array<Ast_Library *> libraries;
     Array<String> library_search_paths;
     Array<String> module_search_paths;
+    Array<String> user_supplied_objs;
     Array<Ast_Directive_Import *> loaded_imports;
     Build_Options build_options;
 

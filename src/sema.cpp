@@ -2494,6 +2494,10 @@ void Sema::typecheck_function_header(Ast_Function *function, bool is_for_type_in
         if (function->is_c_function) {
             function->linkage_name = function->identifier->name->name;
         } else {
+            if (!function->scope) {
+                compiler->report_error(function, "Function header found without a body. Did you mean to mark this @c_function?\n");
+                return;
+            }
             function->linkage_name = get_mangled_name(compiler, function);
             String name = function->linkage_name;
             // printf("Mangled name: '%.*s'\n", name.length, name.data);
