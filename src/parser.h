@@ -63,6 +63,8 @@ struct Parser {
     void parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_statement = false, bool push_scope = true);
     
     Ast_Function *parse_function();
+
+    bool add_declaration(Array<Ast_Expression *> * declarations, Ast_Expression * decl);
 };
 
 #endif
