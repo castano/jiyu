@@ -1,0 +1,16 @@
+#import "LibC";
+library "microsoft_craziness";
+
+struct Find_Result {
+    var windows_sdk_version: int32;   // Zero if no Windows SDK found.
+
+    var windows_sdk_root             : *wchar_t;
+    var windows_sdk_um_library_path  : *wchar_t;
+    var windows_sdk_ucrt_library_path: *wchar_t;
+
+    var vs_exe_path    : *wchar_t;
+    var vs_library_path: *wchar_t;
+}
+
+func @c_function free_resources(result: *Find_Result) -> void;
+func @c_function find_visual_studio_and_windows_sdk(result: *Find_Result) -> void;
