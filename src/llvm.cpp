@@ -590,7 +590,7 @@ Value *LLVM_Generator::create_string_literal(Ast_Literal *lit, bool want_lvalue)
     if (lit->string_value.length == 0 || lit->string_value.data == nullptr) {
         value = Constant::getNullValue(type_string);
     } else {
-        bool add_null = true;
+        // null-character automatically inserted by CreateGlobalStringPtr
         Constant *data = irb->CreateGlobalStringPtr(string_ref(lit->string_value));
         Constant *length = ConstantInt::get(type_string_length, lit->string_value.length);
         
@@ -1368,6 +1368,20 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             assert(false && "Could not find LLVM BasicBlock for control-flow statement.");
             return nullptr;
         }
+
+        case AST_UNINITIALIZED:
+            assert(false && "Unitialized AST Node!");
+        // No-ops
+        case AST_TYPE_INSTANTIATION:
+        case AST_TYPE_ALIAS:
+        case AST_STRUCT:
+        case AST_DIRECTIVE_LOAD:
+        case AST_DIRECTIVE_IMPORT:
+        case AST_DIRECTIVE_STATIC_IF:
+        case AST_LIBRARY:
+        case AST_OS:     // This is always subtituted by a literal at the AST level.
+        case AST_SIZEOF: // This is always subtituted by a literal at the AST level.
+            break;
     }
     
     return nullptr;

@@ -374,7 +374,7 @@ void Compiler::resolve_directives() {
         if (directive->type == AST_DIRECTIVE_LOAD) {
             auto load = static_cast<Ast_Directive_Load *>(directive);
             
-            auto name = load->target_filename;
+            // auto name = load->target_filename;
             // printf("%d DEBUG: load '%.*s', rejected? : %s\n", this->instance_number, name.length, name.data, rejected ? "true" : "false");
             
             void perform_load(Compiler *compiler, Ast *ast, String filename, Ast_Scope *target_scope);
@@ -385,6 +385,8 @@ void Compiler::resolve_directives() {
             directive_queue.ordered_remove(0);
         } else if (directive->type == AST_DIRECTIVE_IMPORT) {
             // @Incomplete we need a way to stop imports into a module scope from leaking into the global scope lookup
+            // Actually, doesn't this already do that? If we import Basic right now, LibC isnt exposed to the application
+            // unless the application also imports LibC. -josh 30 November 2019
             auto import = static_cast<Ast_Directive_Import *>(directive);
             
             auto name = import->target_filename;

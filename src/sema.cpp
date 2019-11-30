@@ -289,7 +289,7 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
         }
 
         case AST_ARRAY_DEREFERENCE: {
-            auto deref = static_cast<Ast_Dereference *>(expression);
+            // auto deref = static_cast<Ast_Dereference *>(expression);
             // @Incomplete this isnt true if array_or_pointer_expression is a literal.
             // but maybe that never happens here due to substitution ?
 
@@ -309,9 +309,10 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
                 assert(false);
             }
         }
-    }
 
-    return false;
+        default:
+            return false;
+    }
 }
 
 
@@ -997,6 +998,18 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
     if (expression->type != AST_FUNCTION && expression->type_info) return;
 
     switch (expression->type) {
+        case AST_UNINITIALIZED: {
+            assert(false && "Unitialized AST Node!");
+            return;
+        }
+        case AST_TYPE_INSTANTIATION: {
+            // We should not get here due to the fact that this currently do not organically
+            // call typecheck_expression on Ast_Type_Instantiation because it is normally
+            // only available attached to other AST nodes, which will call resolve_type_inst
+            // on it.
+            assert(false);
+            return;
+        }
         case AST_DIRECTIVE_LOAD: {
             // @TODO Should we assert or error here if the directive has not yet been executed?
             expression->type_info = compiler->type_void;
@@ -1373,20 +1386,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     compiler->report_error(un, "Unary '-' is only valid for integer for float operands.\n");
                     return;
                 }
-
-                auto lit = resolves_to_literal_value(un->expression);
-                // @TODO this isnt exactly correct...
-                /*
-                if (lit) {
-                if (type->type == Ast_Type_Info::INTEGER) {
-                lit->integer_value = (-lit->integer_value);
-                } else if (type->type == Ast_Type_Info::FLOAT) {
-                lit->float_value = (-lit->float_value);
-                } else assert(0);
-
-                un->substitution = lit;
-                }
-                */
 
                 // @Incomplete I think, should we warn about unary minus on unsiged integers?
                 un->type_info = type;
@@ -2267,7 +2266,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             lit->type_info = compiler->type_bool;
             lit->bool_value = false;
 
-            // @TODO @FixMe this should be based off of what the LLVM target is
+            // @Incomplete @FixMe this should be based off of what the LLVM target is
 #ifdef WIN32
             lit->bool_value = (ident->name == compiler->atom_Windows);
 #elif defined(MACOSX)
@@ -2286,7 +2285,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 return;
             }
 
-            String op = name->name;
+            // String op = name->name;
             // printf("os(): %.*s: %s\n", op.length, op.data, lit->bool_value ? "true" : "false");
 
             os->type_info = lit->type_info;
@@ -2507,7 +2506,7 @@ void Sema::typecheck_function_header(Ast_Function *function, bool is_for_type_in
                 return;
             }
             function->linkage_name = get_mangled_name(compiler, function);
-            String name = function->linkage_name;
+            // String name = function->linkage_name;
             // printf("Mangled name: '%.*s'\n", name.length, name.data);
         }
     }

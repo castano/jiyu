@@ -253,8 +253,7 @@ Ast_Expression *Parser::parse_postfix_expression() {
             next_token();
             
             call->function_or_function_ptr = sub_expression;
-            
-            bool found_argument = false;
+
             token = peek_token();
             while (token->type != Token::END) {
                 
@@ -1163,6 +1162,8 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
         case Token::KEYWORD_VOID:   builtin_primitive = compiler->type_void; break;
         
         case Token::KEYWORD_BOOL:   builtin_primitive = compiler->type_bool; break;
+
+        default: break; // JH: silence warnings.
     }
     
     if (builtin_primitive) {
