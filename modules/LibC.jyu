@@ -25,7 +25,7 @@ func @c_function fopen(path: c_string, mode: c_string) -> *FILE;
 func @c_function fclose(file: *FILE) -> int32;
 func @c_function ftell(file: *FILE) -> int32; // long int, this should be int32 on Windows but s64 on Linux/Mac
 func @c_function fread(ptr: *void, size: size_t, count: size_t, file: *FILE) -> size_t;
-func @c_function fwrite (ptr: *void, size: size_t, count: size_t, stream: *FILE ) -> size_t;
+func @c_function fwrite(ptr: *void, size: size_t, count: size_t, stream: *FILE ) -> size_t;
 
 let SEEK_SET = 0;
 let SEEK_CUR = 1;

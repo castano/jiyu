@@ -8,7 +8,7 @@
 #include "sema.h"
 #include "copier.h"
 #include "os_support.h"
-// #include "clang_import.h"
+#include "clang_import.h"
 
 #ifdef WIN32
 #include "microsoft_craziness.h"
@@ -499,11 +499,9 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-#if 0
     if (import_c_file) {
         if (!perform_clang_import(compiler, import_c_file, compiler->global_scope)) return -1;
     }
-#endif
     
     if (!compiler_load_file(compiler, &filename)) return -1;
     

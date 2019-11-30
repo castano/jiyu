@@ -252,13 +252,13 @@ void copy_location_info(Ast *left, Ast *right) {
 }
 
 inline
-bool is_a_type_declaration(Ast_Expression *expression) {
+bool is_a_type_declaration(Ast *expression) {
     return expression->type == AST_STRUCT || expression->type == AST_TYPE_ALIAS;
 }
 
 inline
 Ast_Type_Info *
-get_type_declaration_resolved_type(Ast_Expression *expression) {
+get_type_declaration_resolved_type(Ast *expression) {
     assert(is_a_type_declaration(expression));
 
     if (expression->type == AST_STRUCT) {

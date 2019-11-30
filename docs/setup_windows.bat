@@ -4,6 +4,7 @@ set JIYU_DIR=%cd%
 
 set LLVM_VERSION=release_80
 set LLVM_URL=https://github.com/llvm-mirror/llvm/archive/%LLVM_VERSION%.zip
+set CLANG_URL=https://github.com/llvm-mirror/clang/archive/%LLVM_VERSION%.zip
 
 if "%LLVM_TARGETS%" == "" (
     set LLVM_TARGETS=X86;ARM;AArch64
@@ -13,8 +14,17 @@ if not exist llvm-%LLVM_VERSION%.src.zip (
     wget %LLVM_URL% || curl -L --output llvm-%LLVM_VERSION%.src.zip %LLVM_URL%
 )
 
+if not exist clang-%LLVM_VERSION%.src.zip (
+    wget %CLANG_URL% || curl -L --output clang-%LLVM_VERSION%.src.zip %CLANG_URL%
+)
+
 if not exist llvm-%LLVM_VERSION% (
     unzip  llvm-%LLVM_VERSION%.src.zip
+)
+
+if not exist llvm-%LLVM_VERSION%/tools/clang (
+    unzip clang-%LLVM_VERSION%.src.zip
+    mv clang-%LLVM_VERSION% llvm-%LLVM_VERSION%/tools/clang
 )
 
 cd llvm-%LLVM_VERSION%
