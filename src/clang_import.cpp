@@ -1,6 +1,7 @@
 #include "clang_import.h"
 #include "compiler.h"
 
+#include <new> // for placement new
 #include <clang-c/Index.h>
 
 #define IMPORT_NEW(type) (new (compiler->get_memory(sizeof(type))) type())
@@ -38,7 +39,7 @@ struct Visitor_Data {
 };
 
 static
-String copy_and_dispose(Compiler *compiler, CXString &input) {
+String copy_and_dispose(Compiler *compiler, CXString input) {
     String result = compiler->copy_string(to_string(clang_getCString(input)));
     clang_disposeString(input);
     return result;
