@@ -4,7 +4,13 @@ find_package (Threads)
 
 set(LLVM_DIR "${PROJECT_SOURCE_DIR}/llvm/lib/cmake/llvm/")
 find_package(LLVM REQUIRED CONFIG)
-find_library(LIBCLANG clang HINTS ${PROJECT_SOURCE_DIR}/llvm/lib)
+
+# sigh
+if (WIN32)
+    find_library(LIBCLANG libclang HINTS ${PROJECT_SOURCE_DIR}/llvm/lib)
+else ()
+    find_library(LIBCLANG clang HINTS ${PROJECT_SOURCE_DIR}/llvm/lib)
+endif ()
 
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     add_definitions(-DENV32)
