@@ -38,6 +38,7 @@ enum Ast_Type {
     AST_DIRECTIVE_LOAD,
     AST_DIRECTIVE_IMPORT,
     AST_DIRECTIVE_STATIC_IF,
+    AST_DIRECTIVE_CLANG_IMPORT,
     AST_SCOPE_EXPANSION,
     AST_OS,
     AST_LIBRARY,
@@ -395,6 +396,14 @@ struct Ast_Directive_Static_If : Ast_Directive {
     Ast_Scope *else_scope = nullptr;
 };
 
+// :NoCopyDirectives:
+struct Ast_Directive_Clang_Import : Ast_Directive {
+    Ast_Directive_Clang_Import() { type = AST_DIRECTIVE_CLANG_IMPORT; }
+
+    Ast_Scope *target_scope;
+    // Ast_Scope *imported_scope = nullptr;
+    String     string_to_compile;
+};
 
 struct Ast_Library : Ast_Expression {
     Ast_Library() { type = AST_LIBRARY; }

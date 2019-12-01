@@ -901,7 +901,7 @@ Ast_Expression *Parser::parse_statement() {
             String name = token->string;
             String base_path = basepath(lexer->filename);
             
-            next_token();
+            if (!expect_and_eat(Token::STRING)) return nullptr;
             if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
             
             const int MAX_PATH = 512;
@@ -920,8 +920,8 @@ Ast_Expression *Parser::parse_statement() {
             
             token = peek_token();
             String name = token->string;
-            
-            next_token();
+
+            if (!expect_and_eat(Token::STRING)) return nullptr;
             if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
             
             import->target_filename = copy_string(name); // fullname will be resolved when the directive is resolved.
@@ -957,6 +957,21 @@ Ast_Expression *Parser::parse_statement() {
             }
             
             return _if;
+        } else if (token->type == Token::IDENTIFIER && token->string == to_string("clang_import")) {
+            if (!expect_and_eat(Token::IDENTIFIER)) return nullptr;
+            
+            Ast_Directive_Clang_Import *import = PARSER_NEW(Ast_Directive_Clang_Import);
+            import->scope_i_belong_to = get_current_canonical_scope();
+            compiler->queue_directive(import);
+            
+            token = peek_token();
+            import->string_to_compile = token->string;
+            
+            if (!expect_and_eat(Token::STRING)) return nullptr;
+            if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
+            
+            import->target_scope    = get_current_scope();
+            return import;
         } else {
             String s  = token->string;
             compiler->report_error(token, "Unknown compiler directive '%.*s'.\n", s.length, s.data);

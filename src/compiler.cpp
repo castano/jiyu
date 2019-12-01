@@ -6,6 +6,7 @@
 #include "sema.h"
 #include "llvm.h"
 #include "os_support.h"
+#include "clang_import.h"
 
 #ifdef WIN32
 #pragma warning(push, 0)
@@ -340,7 +341,8 @@ void Compiler::add_to_type_table(Ast_Type_Info *info) {
 }
 
 void Compiler::queue_directive(Ast_Directive *directive) {
-    assert(directive->type == AST_DIRECTIVE_LOAD || directive->type == AST_DIRECTIVE_STATIC_IF || directive->type == AST_DIRECTIVE_IMPORT);
+    assert(directive->type == AST_DIRECTIVE_LOAD   || directive->type == AST_DIRECTIVE_STATIC_IF
+        || directive->type == AST_DIRECTIVE_IMPORT || directive->type == AST_DIRECTIVE_CLANG_IMPORT);
     
     directive_queue.add(directive);
 }
@@ -517,6 +519,26 @@ void Compiler::resolve_directives() {
                 _if->substitution = exp;
             }
             
+            directive_queue.ordered_remove(0);
+        } else if (directive->type == AST_DIRECTIVE_CLANG_IMPORT) {
+            auto import = static_cast<Ast_Directive_Clang_Import *>(directive);
+
+            // sigh, for some reason, you cannot just pass a string to clang and get
+            // an AST back. The code has to exist in a file at some point.
+
+            String path = mprintf(".w%d_temp_c_file.c");
+
+            bool write_entire_file(String filepath, String data);
+            write_entire_file(path, import->string_to_compile);
+
+            char *c_path = to_c_string(path);
+            perform_clang_import(this, c_path, import->scope_i_belong_to);
+
+            free(c_path);
+            free(path.data);
+
+            if (this->errors_reported) return;
+
             directive_queue.ordered_remove(0);
         } else {
             assert(false);

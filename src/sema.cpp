@@ -1027,6 +1027,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             expression->type_info = compiler->type_void;
             return;
         }
+        case AST_DIRECTIVE_CLANG_IMPORT: {
+            expression->type_info = compiler->type_void;
+        }
 
         case AST_SCOPE_EXPANSION: {
             auto exp = static_cast<Ast_Scope_Expansion *>(expression);
