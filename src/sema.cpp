@@ -1117,16 +1117,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 decl->type_info = get_type_info(decl->initializer_expression);
             }
 
-            if (!decl->is_let && decl->identifier && compiler->is_toplevel_scope(decl->identifier->enclosing_scope)) {
-                if (decl->initializer_expression && !resolves_to_literal_value(decl->initializer_expression)) {
-                    compiler->report_error(decl, "Global variable may only be initialized by a literal expression.\n");
-                }
-
-                compiler->global_decl_emission_queue.add(decl);
-            }
-
-            if (compiler->errors_reported) return;
-
             if (decl->type_info && decl->initializer_expression) {
                 auto result = typecheck_and_implicit_cast_single_expression(decl->initializer_expression, get_type_info(decl), ALLOW_COERCE_TO_PTR_VOID);
 
@@ -1141,6 +1131,16 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     return;
                 }
             }
+
+            if (!decl->is_let && decl->identifier && compiler->is_toplevel_scope(decl->identifier->enclosing_scope)) {
+                if (decl->initializer_expression && !resolves_to_literal_value(decl->initializer_expression)) {
+                    compiler->report_error(decl, "Global variable may only be initialized by a literal expression.\n");
+                }
+
+                compiler->global_decl_emission_queue.add(decl);
+            }
+
+            if (compiler->errors_reported) return;
 
             return;
         }
@@ -1796,7 +1796,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         deref->substitution = decl;
                         found = true;
 
-                        if (decl && decl->type == AST_DECLARATION) {
+                        /*if (sdecl->type == AST_DECLARATION) {
                             auto declaration = static_cast<Ast_Declaration *>(decl);
 
                             assert(declaration->is_let);
@@ -1804,7 +1804,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                             // Constant folding of the initializer should be done already.
                             assert(deref->substitution->type == AST_LITERAL);
-                        }
+                        }*/
                     }
                 }
 
