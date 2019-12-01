@@ -1547,7 +1547,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                                     function = overload;
                                 }
                             }
-                        }                    }
+                        }
+                    }
 
                     if (!function) {
                         // @Incomplete print visible overload candidates
@@ -1570,19 +1571,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     identifier->type_info = function->type_info;
                     return;
                 }
-                
-                function_call_is_viable(call, get_type_info(function), true);
-                if (compiler->errors_reported) return;
-                
-                if (function->return_decl) {
-                    call->type_info = function->return_decl->type_info;
-                } else {
-                    call->type_info = compiler->type_void;
-                }
-                
-                identifier->resolved_declaration = function;
-                identifier->type_info = function->type_info;
-                return;
             }
 
             // fall through case for expressions that generate function pointers
