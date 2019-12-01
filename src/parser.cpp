@@ -1128,6 +1128,8 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
 void Parser::parse_enum_scope(Ast_Scope *scope) {
     assert(scope->owning_enum != nullptr);
 
+    push_scopes(scope);
+
     if (!expect_and_eat((Token::Type) '{')) return;
     
     Ast_Declaration * prev_item = nullptr;
@@ -1157,6 +1159,8 @@ void Parser::parse_enum_scope(Ast_Scope *scope) {
     }
     
     if (!expect_and_eat((Token::Type) '}')) return;
+
+    pop_scopes();
 }
 
 
