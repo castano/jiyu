@@ -2089,7 +2089,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 // If this is already set, this may have been due to a clang_import
                 _struct->type_value = make_struct_type(compiler, _struct);
             } else {
-                assert(_struct->type_value->size == -1);
                 assert(_struct->type_value->struct_members.count == 0);
                 assert(_struct->type_value->type_table_index == -1);
             }
@@ -2147,12 +2146,13 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         offset_cursor = pad_to_alignment(offset_cursor, final_type->alignment);
                         member.offset_in_struct = offset_cursor;
                         
+                        assert(final_type->stride >= 0);
                         if (!_struct->is_union) {
-                            offset_cursor += final_type->size;
+                            offset_cursor += final_type->stride;
                             size = offset_cursor;
                         } else {
-                            if (final_type->size > size) {
-                                size = final_type->size;
+                            if (final_type->stride > size) {
+                                size = final_type->stride;
                             }
                         }
 
@@ -2164,7 +2164,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                 }
 
-                info->alignment = biggest_alignment;
+                if (info->alignment <= 0) info->alignment = biggest_alignment;
+                
+                if (info->size >= 0) assert(pad_to_alignment(size, info->alignment) == info->size); //this came from clang
                 info->size = size;
                 info->stride = pad_to_alignment(info->size, info->alignment);
 

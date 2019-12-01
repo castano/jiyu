@@ -98,9 +98,12 @@ Ast_Type_Info *Compiler::make_array_type(Ast_Type_Info *element, array_count_typ
     info->is_dynamic = is_dynamic;
     
     if (count >= 0) {
+        auto element_final_type = get_final_type(element);
+
         assert(is_dynamic == false);
-        info->size = element->size * count;
-        info->alignment = element->alignment;
+        info->size      = element_final_type->size * count;
+        info->alignment = element_final_type->alignment;
+        info->stride = info->size;
     } else {
         if (!is_dynamic) {
             info->size = this->pointer_size * 2;
@@ -109,7 +112,10 @@ Ast_Type_Info *Compiler::make_array_type(Ast_Type_Info *element, array_count_typ
         }
         
         info->alignment = this->pointer_size; // @TargetInfo @PointerSize
+        info->stride = info->size;
     }
+
+    assert(info->alignment >= 0);
 
     add_to_type_table(info);
     return info;

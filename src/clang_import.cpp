@@ -150,12 +150,21 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
         }
         
         // @Incomplete enums arent supported in jiyu yet
-        // CXType_Enum = 106,
+        case CXType_Enum: {
+            CXCursor type_decl = clang_getTypeDeclaration(type);
+            String usr = copy_and_dispose(compiler, clang_getCursorUSR(type_decl));
+            Ast *ast = find_ast(data->usr_map, usr);
+
+            assert(ast && ast->type == AST_TYPE_ALIAS); // @Incomplete change to AST_ENUM when that exists.
+            auto result = get_type_declaration_resolved_type(ast);
+            assert(result);
+            return result;
+        }
         
 
         case CXType_Typedef: {
-            CXCursor typedef_decl = clang_getTypeDeclaration(type);
-            String usr = copy_and_dispose(compiler, clang_getCursorUSR(typedef_decl));
+            CXCursor type_decl = clang_getTypeDeclaration(type);
+            String usr = copy_and_dispose(compiler, clang_getCursorUSR(type_decl));
             Ast *ast = find_ast(data->usr_map, usr);
 
             assert(ast && ast->type == AST_TYPE_ALIAS);
@@ -167,12 +176,44 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
         // CXType_ObjCInterface = 108,
         // CXType_ObjCObjectPointer = 109,
         // CXType_FunctionNoProto = 110,
-        // CXType_FunctionProto = 111,
-        // CXType_ConstantArray = 112,
+        case CXType_FunctionProto: {
+            // @Cutnpaste from Compiler::make_function_type
+            Ast_Type_Info *info = IMPORT_NEW(Ast_Type_Info);
+            info->type   = Ast_Type_Info::FUNCTION;
+            info->size   = compiler->type_ptr_void->size;
+            info->stride = compiler->type_ptr_void->stride;
+            
+            info->is_c_function = true;
+            info->is_c_varargs  = (clang_isFunctionTypeVariadic(type) != 0);
+            
+            auto arg_count = clang_getNumArgTypes(type);
+            for (int i = 0; i < arg_count; ++i) {
+                auto arg_info = get_jiyu_type(data, clang_getArgType(type, i));
+                
+                info->arguments.add(arg_info);
+            }
+            
+            
+            info->return_type = get_jiyu_type(data, clang_getResultType(type));
+            
+            compiler->add_to_type_table(info);
+            return info;
+        }
+        case CXType_ConstantArray: {
+            auto element_count = clang_getNumElements(type);
+            auto element_type = get_jiyu_type(data, clang_getArrayElementType(type));
+
+            return compiler->make_array_type(element_type, element_count, /*is_dynamic=*/false);
+        }
         // CXType_Vector = 113,
 
         // @Incomplete array types
-        // CXType_IncompleteArray = 114,
+        case CXType_IncompleteArray: {
+            // <type> name[]; just turn these into pointers since we dont have compatible types
+            // and a pointer allows the user to just do: <jiyu_array>.data.
+            auto element_type = get_jiyu_type(data, clang_getArrayElementType(type));
+            return compiler->make_pointer_type(element_type);
+        }
         // CXType_VariableArray = 115,
         // CXType_DependentSizedArray = 116,
 
@@ -187,6 +228,8 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
     CXString kind_string = clang_getTypeKindSpelling(type.kind);
     compiler->report_error((Ast *)nullptr, "Unhandled CXTypeKind in get_jiyu_type: %s. This is a message for maintainers.\n", clang_getCString(kind_string));
     clang_disposeString(kind_string);
+
+    assert(false);
     return nullptr;
 }
 
@@ -205,9 +248,22 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
     String my_usr_string = compiler->copy_string(to_string(clang_getCString(usr_string)));
     clang_disposeString(usr_string);
 
+    auto location = clang_getCursorLocation(cursor);
+    CXFile file;
+    unsigned line;
+    unsigned column;
+    unsigned offset;
+    clang_getFileLocation(location, &file, &line, &column, &offset);
+
+    auto filename = copy_and_dispose(compiler, clang_getFileName(file));
+
     switch (cursor.kind) {
+        case CXCursor_UnexposedAttr: {
+            // @Hack this is usually just extern "C", but clang_Cursor_getMangling handles the linkage for us.
+            return CXChildVisit_Recurse;
+        }
         case CXCursor_FunctionDecl: {
-            cursor = clang_getCanonicalCursor(cursor);
+            cursor = clang_getCursorDefinition(cursor);
             if (find_ast(usr_map, my_usr_string)) {
                 break; // Skip, we've already filled this function
             }
@@ -246,7 +302,13 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
                 function->arguments.add(param_decl);
             }
 
-            function->linkage_name = compiler->copy_string(name);
+            {
+                CXString cxstring = clang_Cursor_getMangling(cursor);
+                defer { clang_disposeString(cxstring); };
+
+                String name = to_string(clang_getCString(cxstring));
+                function->linkage_name = compiler->copy_string(name);
+            }
 
             // We should maybe make get_jiyu_type work for the function prototype type, but
             // doing this for now just to get things going.
@@ -277,21 +339,93 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
             auto info = get_jiyu_type(visitor_data, underlying_type);
             assert(info);
             alias->type_value = compiler->make_type_alias(info);
+            alias->type_value->alias_decl = alias;
 
             current_scope->statements.add(alias);
             current_scope->declarations.add(alias);
             break;
         }
 
+        case CXCursor_EnumDecl: {
+            // @TODO since we do not have enums yet, just import the type of the enum as
+            // a typealias to the underlying C type and import enumerates as lets.
+            Ast_Type_Alias *alias = IMPORT_NEW(Ast_Type_Alias);
+            add_usr_mapping(usr_map, my_usr_string, alias);
+            alias->type_info = compiler->type_info_type;
+
+            CXString cxstring = clang_getCursorSpelling(cursor);
+            defer { clang_disposeString(cxstring); };
+
+            String name = to_string(clang_getCString(cxstring));
+            // printf("Alias name: %.*s\n", PRINT_ARG(name));
+
+            Atom *name_atom = compiler->make_atom(name);
+            alias->identifier = make_identifier(compiler, name_atom);
+            alias->identifier->enclosing_scope = current_scope;
+
+            CXType underlying_type = clang_getEnumDeclIntegerType(cursor);
+
+            auto info = get_jiyu_type(visitor_data, underlying_type);
+            assert(info);
+            alias->type_value = compiler->make_type_alias(info);
+            alias->type_value->alias_decl = alias;
+
+            current_scope->statements.add(alias);
+            current_scope->declarations.add(alias);
+
+
+            return CXChildVisit_Recurse; // @TODO This should just be a break and we can call cursor_visitor with the proper scope information to build the proper enum type.
+        }
+
+        case CXCursor_EnumConstantDecl: {
+            Ast_Declaration *decl = IMPORT_NEW(Ast_Declaration);
+
+            CXString cxstring = clang_getCursorSpelling(cursor);
+            defer { clang_disposeString(cxstring); };
+
+            String name = to_string(clang_getCString(cxstring));
+            // printf("Field name: %.*s\n", PRINT_ARG(name));
+
+            if (name != String()) {
+                Atom *name_atom = compiler->make_atom(name);
+                decl->identifier = make_identifier(compiler, name_atom);
+                decl->identifier->enclosing_scope = current_scope;
+            }
+
+            CXType type = clang_getCursorType(cursor);
+            Ast_Type_Info *info = get_jiyu_type(visitor_data, type);
+
+            decl->is_let = true;
+            decl->is_readonly_variable = false;
+            // decl->is_struct_member = true; // This will be set via typechecking anyways..
+            decl->type_info = info;
+
+            current_scope->statements.add(decl);
+            current_scope->declarations.add(decl);
+            break;
+        }
+
+        case CXCursor_UnionDecl:
         case CXCursor_StructDecl: {
-            cursor = clang_getCanonicalCursor(cursor);
+            cursor = clang_getCursorDefinition(cursor);
             if (find_ast(usr_map, my_usr_string)) {
                 break; // Skip, we've already filled the type.
             }
 
             Ast_Struct *_struct = IMPORT_NEW(Ast_Struct);
+            _struct->is_union = (cursor.kind == CXCursor_UnionDecl);
             _struct->type_value = make_struct_type(compiler, _struct);
             add_usr_mapping(usr_map, my_usr_string, _struct);
+
+            {
+                auto cursor_type = clang_getCursorType(cursor);
+                auto type_value = _struct->type_value;
+                type_value->size = clang_Type_getSizeOf(cursor_type);
+                type_value->stride = type_value->size;
+                type_value->alignment = clang_Type_getAlignOf(cursor_type);
+            }
+
+            _struct->member_scope.parent = current_scope;
 
             CXString cxstring = clang_getCursorSpelling(cursor);
             defer { clang_disposeString(cxstring); };
@@ -365,6 +499,10 @@ bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *targe
 
     // @Incomplete
     Array<char *> clang_command_line_args;
+    for (auto lib_search_path: compiler->library_search_paths) {
+        clang_command_line_args.add("-I");
+        clang_command_line_args.add(to_c_string(lib_search_path)); // @Leak
+    }
 
     CXTranslationUnit translation_unit;
     CXErrorCode error = clang_parseTranslationUnit2(index,
@@ -386,17 +524,19 @@ bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *targe
     bool has_errors = false;
     for (unsigned i = 0; i < clang_getNumDiagnostics(translation_unit); ++i) {
         CXDiagnostic diag = clang_getDiagnostic(translation_unit, i);
-        CXString diag_string = clang_formatDiagnostic(diag, CXDiagnostic_DisplaySourceLocation | CXDiagnostic_DisplayColumn | CXDiagnostic_DisplaySourceRanges);
+        CXString diag_string = clang_formatDiagnostic(diag, CXDiagnostic_DisplaySourceLocation | CXDiagnostic_DisplayColumn);
         
         // @Incomplete what we really want is to use Jiyu's error reporting system.
         printf("%s\n", clang_getCString(diag_string));
         clang_disposeString(diag_string);
 
         auto severity = clang_getDiagnosticSeverity(diag);
-        if ((severity == CXDiagnostic_Error) || (severity == CXDiagnostic_Fatal)) has_errors = true;
+        if ((severity == CXDiagnostic_Error) || (severity == CXDiagnostic_Fatal)) {
+            compiler->errors_reported += 1;
+        }
     }
 
-    if (has_errors) return false;
+    if (compiler->errors_reported) return false;
 
     Array<USR_Pair>    usr_map;
     Visitor_Data data;
@@ -413,6 +553,7 @@ bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *targe
 
         auto info = compiler->type_ptr_void;
         alias->type_value = compiler->make_type_alias(info);
+        alias->type_value->alias_decl = alias;
 
         target_scope->statements.add(alias);
         target_scope->declarations.add(alias);
