@@ -1801,16 +1801,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                         deref->substitution = decl;
                         found = true;
-
-                        /*if (sdecl->type == AST_DECLARATION) {
-                            auto declaration = static_cast<Ast_Declaration *>(decl);
-
-                            assert(declaration->is_let);
-                            deref->substitution = declaration->initializer_expression;
-
-                            // Constant folding of the initializer should be done already.
-                            assert(deref->substitution->type == AST_LITERAL);
-                        }*/
                     }
                 }
 
