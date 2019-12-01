@@ -289,7 +289,7 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
         }
 
         case AST_ARRAY_DEREFERENCE: {
-            auto deref = static_cast<Ast_Dereference *>(expression);
+            // auto deref = static_cast<Ast_Dereference *>(expression);
             // @Incomplete this isnt true if array_or_pointer_expression is a literal.
             // but maybe that never happens here due to substitution ?
 
@@ -309,9 +309,10 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
                 assert(false);
             }
         }
-    }
 
-    return false;
+        default:
+            return false;
+    }
 }
 
 
@@ -383,8 +384,8 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
         viability_score += score;
     }
 
-    auto rtype = get_type_info(expression);
-    auto ltype = target_type_info;
+    auto rtype = get_final_type(get_type_info(expression));
+    auto ltype = get_final_type(target_type_info);
 
     auto right = expression;
 
@@ -655,8 +656,8 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
     assert(left->type_info);
     assert(right->type_info);
 
-    auto ltype = left->type_info;
-    auto rtype = right->type_info;
+    auto ltype = get_final_type(get_type_info(left));
+    auto rtype = get_final_type(get_type_info(right));
     u64  left_viability_score  = 0;
     u64  right_viability_score = 0;
 
@@ -845,6 +846,12 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
         } else if (function_type->is_c_varargs) {
             // just do a normal typecheck on the call argument since this is for varargs
             typecheck_expression(value);
+
+            if (auto lit = folds_to_literal(value)) {
+                //auto score = maybe_mutate_literal_to_type(lit, target_type_info);
+                value = lit;
+            }
+
             viability_score += 1;
         } else {
             assert(false);
@@ -920,13 +927,13 @@ Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom 
             if (function->identifier->name == atom) return function;
         } else if (it->type == AST_TYPE_ALIAS) {
             auto alias = static_cast<Ast_Type_Alias *>(it);
-            if (alias->identifier->name == atom) return alias;
+            if (alias->identifier && alias->identifier->name == atom) return alias;
         } else if (it->type == AST_STRUCT) {
             auto _struct = static_cast<Ast_Struct *>(it);
-            if (_struct->identifier->name == atom) return _struct;
+            if (_struct->identifier && _struct->identifier->name == atom) return _struct;
         } else if (it->type == AST_ENUM) {
             auto _enum = static_cast<Ast_Enum *>(it);
-            if (_enum->identifier->name == atom) return _enum;
+            if (_enum->identifier && _enum->identifier->name == atom) return _enum;
         } else if (it->type == AST_SCOPE_EXPANSION) {
             auto exp = static_cast<Ast_Scope_Expansion *>(it);
 
@@ -942,23 +949,7 @@ Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom 
         for (auto it : scope->private_declarations) {
             while (it->substitution) it = it->substitution;
 
-            if (it->type == AST_DECLARATION) {
-                auto decl = static_cast<Ast_Declaration *>(it);
-                if (decl->identifier->name == atom) return it;
-            } else if (it->type == AST_FUNCTION) {
-                auto function = static_cast<Ast_Function *>(it);
-                if (function->identifier->name == atom) return function;
-            } else if (it->type == AST_TYPE_ALIAS) {
-                auto alias = static_cast<Ast_Type_Alias *>(it);
-                if (alias->identifier->name == atom) return alias;
-            } else if (it->type == AST_STRUCT) {
-                auto _struct = static_cast<Ast_Struct *>(it);
-                if (_struct->identifier->name == atom) return _struct;
-            } else if (it->type == AST_ENUM) {
-                auto _enum = static_cast<Ast_Enum *>(it);
-                if (_enum->identifier->name == atom) return _enum;        
-            } else if (it->type == AST_SCOPE_EXPANSION) {
-                auto exp = static_cast<Ast_Scope_Expansion *>(it);
+
 
                 bool check_private = (exp->expanded_via_import_directive == nullptr);
                 auto decl = find_declaration_for_atom_in_scope(exp->scope, atom, check_private);
@@ -1003,6 +994,18 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
     if (expression->type != AST_FUNCTION && expression->type_info) return;
 
     switch (expression->type) {
+        case AST_UNINITIALIZED: {
+            assert(false && "Unitialized AST Node!");
+            return;
+        }
+        case AST_TYPE_INSTANTIATION: {
+            // We should not get here due to the fact that this currently do not organically
+            // call typecheck_expression on Ast_Type_Instantiation because it is normally
+            // only available attached to other AST nodes, which will call resolve_type_inst
+            // on it.
+            assert(false);
+            return;
+        }
         case AST_DIRECTIVE_LOAD: {
             // @TODO Should we assert or error here if the directive has not yet been executed?
             expression->type_info = compiler->type_void;
@@ -1019,6 +1022,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         case AST_DIRECTIVE_STATIC_IF: {
             expression->type_info = compiler->type_void;
             return;
+        }
+        case AST_DIRECTIVE_CLANG_IMPORT: {
+            expression->type_info = compiler->type_void;
         }
 
         case AST_SCOPE_EXPANSION: {
@@ -1037,9 +1043,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (!decl) {
                 String name = ident->name->name;
-
-                // @FixMe pass in ident
-                compiler->report_error(ident, "Undeclared identifier '%.*s'\n", name.length, name.data);
+                compiler->report_error(ident, "Undeclared identifier '%.*s'\n", PRINT_ARG(name));
             } else {
                 if (decl->type == AST_FUNCTION) {
                     assert(ident->overload_set.count == 0);
@@ -1123,16 +1127,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 decl->type_info = get_type_info(decl->initializer_expression);
             }
 
-            if (!decl->is_let && decl->identifier && compiler->is_toplevel_scope(decl->identifier->enclosing_scope)) {
-                if (decl->initializer_expression && !resolves_to_literal_value(decl->initializer_expression)) {
-                    compiler->report_error(decl, "Global variable may only be initialized by a literal expression.\n");
-                }
-
-                compiler->global_decl_emission_queue.add(decl);
-            }
-
-            if (compiler->errors_reported) return;
-
             if (decl->type_info && decl->initializer_expression) {
                 auto result = typecheck_and_implicit_cast_single_expression(decl->initializer_expression, get_type_info(decl), ALLOW_COERCE_TO_PTR_VOID);
 
@@ -1147,6 +1141,16 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     return;
                 }
             }
+
+            if (!decl->is_let && decl->identifier && compiler->is_toplevel_scope(decl->identifier->enclosing_scope)) {
+                if (decl->initializer_expression && !resolves_to_literal_value(decl->initializer_expression)) {
+                    compiler->report_error(decl, "Global variable may only be initialized by a literal expression.\n");
+                }
+
+                compiler->global_decl_emission_queue.add(decl);
+            }
+
+            if (compiler->errors_reported) return;
 
             return;
         }
@@ -1380,20 +1384,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     return;
                 }
 
-                auto lit = resolves_to_literal_value(un->expression);
-                // @TODO this isnt exactly correct...
-                /*
-                if (lit) {
-                if (type->type == Ast_Type_Info::INTEGER) {
-                lit->integer_value = (-lit->integer_value);
-                } else if (type->type == Ast_Type_Info::FLOAT) {
-                lit->float_value = (-lit->float_value);
-                } else assert(0);
-
-                un->substitution = lit;
-                }
-                */
-
                 // @Incomplete I think, should we warn about unary minus on unsiged integers?
                 un->type_info = type;
             }
@@ -1405,7 +1395,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         case AST_LITERAL: {
             auto lit = static_cast<Ast_Literal *>(expression);
 
-            // @Incomplete
+            // @Incomplete @Cleanup we should be able to get rid of want_numeric_type here now that literal folding exists.
 
             // @Incomplete if we have a float literal but want an int type, keep a float type and let the implicit cast system do its job
             if (lit->literal_type == Ast_Literal::INTEGER) {
@@ -2112,7 +2102,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             auto _struct = static_cast<Ast_Struct *>(expression);
 
             // Set this early so we dont recurse indefinitely
-            _struct->type_value = make_struct_type(compiler, _struct);
+            if (!_struct->type_value) {
+                // If this is already set, this may have been due to a clang_import
+                _struct->type_value = make_struct_type(compiler, _struct);
+            } else {
+                assert(_struct->type_value->struct_members.count == 0);
+                assert(_struct->type_value->type_table_index == -1);
+            }
+            
             _struct->type_info = compiler->type_info_type;
 
             // flag stuct member declarations
@@ -2128,7 +2125,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 assert(info->type == Ast_Type_Info::STRUCT);
                 assert(info->struct_decl == _struct);
 
-                s64 size_cursor = 0;
+                s64 size = 0;
+                s64 offset_cursor = 0;
                 s64 biggest_alignment = 1;
                 s64 element_path_index = 0;
 
@@ -2153,7 +2151,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             element_path_index++;
                         }
 
-                        if (member.type_info->size == -1) {
+                        auto final_type = get_final_type(member.type_info);
+                        if (final_type->size == -1) {
                             auto member_type_name = type_to_string(member.type_info);
                             defer { free(member_type_name.data); };
                             compiler->report_error(decl, "field '%.*s' has incomplete type '%.*s'\n", PRINT_ARG(member.name->name), PRINT_ARG(member_type_name));
@@ -2161,20 +2160,31 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             return;
                         }
 
-                        size_cursor = pad_to_alignment(size_cursor, member.type_info->alignment);
-                        member.offset_in_struct = size_cursor;
-                        size_cursor += member.type_info->size;
+                        offset_cursor = pad_to_alignment(offset_cursor, final_type->alignment);
+                        member.offset_in_struct = offset_cursor;
+                        
+                        assert(final_type->stride >= 0);
+                        if (!_struct->is_union) {
+                            offset_cursor += final_type->stride;
+                            size = offset_cursor;
+                        } else {
+                            if (final_type->stride > size) {
+                                size = final_type->stride;
+                            }
+                        }
 
-                        if (member.type_info->alignment > biggest_alignment) {
-                            biggest_alignment = member.type_info->alignment;
+                        if (final_type->alignment > biggest_alignment) {
+                            biggest_alignment = final_type->alignment;
                         }
 
                         info->struct_members.add(member);
                     }
                 }
 
-                info->alignment = biggest_alignment;
-                info->size = size_cursor;
+                if (info->alignment <= 0) info->alignment = biggest_alignment;
+                
+                if (info->size >= 0) assert(pad_to_alignment(size, info->alignment) == info->size); //this came from clang
+                info->size = size;
                 info->stride = pad_to_alignment(info->size, info->alignment);
 
                 compiler->add_to_type_table(info);
@@ -2254,9 +2264,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
 
             auto type = resolve_type_inst(size->target_type_inst);
-            assert(type->size >= 0);
 
-            auto lit = make_integer_literal(compiler, type->size, compiler->type_int32);
+            auto lit = make_integer_literal(compiler, get_final_type(type)->size, compiler->type_int32);
             copy_location_info(lit, size);
 
             size->type_info = lit->type_info;
@@ -2286,7 +2295,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             lit->type_info = compiler->type_bool;
             lit->bool_value = false;
 
-            // @TODO @FixMe this should be based off of what the LLVM target is
+            // @Incomplete @FixMe this should be based off of what the LLVM target is
 #ifdef WIN32
             lit->bool_value = (ident->name == compiler->atom_Windows);
 #elif defined(MACOSX)
@@ -2305,7 +2314,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 return;
             }
 
-            String op = name->name;
+            // String op = name->name;
             // printf("os(): %.*s: %s\n", op.length, op.data, lit->bool_value ? "true" : "false");
 
             os->type_info = lit->type_info;
@@ -2594,7 +2603,7 @@ void Sema::typecheck_function_header(Ast_Function *function, bool is_for_type_in
                 return;
             }
             function->linkage_name = get_mangled_name(compiler, function);
-            String name = function->linkage_name;
+            // String name = function->linkage_name;
             // printf("Mangled name: '%.*s'\n", name.length, name.data);
         }
     }

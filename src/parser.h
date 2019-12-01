@@ -64,6 +64,8 @@ struct Parser {
     void parse_enum_scope(Ast_Scope *scope);
     
     Ast_Function *parse_function();
+
+    bool add_declaration(Array<Ast_Expression *> * declarations, Ast_Expression * decl);
 };
 
 #endif

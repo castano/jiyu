@@ -8,7 +8,7 @@
 #include "sema.h"
 #include "copier.h"
 #include "os_support.h"
-// #include "clang_import.h"
+#include "clang_import.h"
 
 #ifdef WIN32
 #include "microsoft_craziness.h"
@@ -40,12 +40,13 @@ String mprintf(char *c_fmt, ...) {
 
 bool read_entire_file(String filepath, String *result) {
     char *cpath = to_c_string(filepath);
+    defer { free(cpath); };
     
     FILE *file = fopen(cpath, "rb");
     if (!file) {
-        free(cpath);
         return false;
     }
+    defer { fclose(file); };
     
     fseek(file, 0, SEEK_END);
     auto size = ftell(file);
@@ -54,9 +55,7 @@ bool read_entire_file(String filepath, String *result) {
     char *mem = (char *)malloc(size);
     auto bytes_read = fread(mem, 1, size, file);
     if (bytes_read != (size_t)size) {
-        fclose(file);
         free(mem);
-        free(cpath);
         return false;
     }
     
@@ -64,7 +63,24 @@ bool read_entire_file(String filepath, String *result) {
     s.data = mem;
     s.length = size;
     *result = s;
-    free(cpath);
+    return true;
+}
+
+bool write_entire_file(String filepath, String data) {
+    char *cpath = to_c_string(filepath);
+    defer { free(cpath); };
+    
+    FILE *file = fopen(cpath, "wb");
+    if (!file) {
+        return false;
+    }
+    defer { fclose(file); };
+    
+    // @Incomplete handle erros and ensure entire string is written
+    auto bytes_written = fwrite(data.data, 1, data.length, file);
+    if (bytes_written != (size_t)data.length) {
+        return false;
+    }
     return true;
 }
 
@@ -499,11 +515,9 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-#if 0
     if (import_c_file) {
         if (!perform_clang_import(compiler, import_c_file, compiler->global_scope)) return -1;
     }
-#endif
     
     if (!compiler_load_file(compiler, &filename)) return -1;
     

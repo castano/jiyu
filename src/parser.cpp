@@ -57,6 +57,7 @@ String token_type_to_string(Token::Type type) {
         case Token::KEYWORD_LET:       return copy_string(to_string("let"));
         case Token::KEYWORD_TYPEALIAS: return copy_string(to_string("typealias"));
         case Token::KEYWORD_STRUCT:    return copy_string(to_string("struct"));
+        case Token::KEYWORD_UNION:     return copy_string(to_string("union"));
         case Token::KEYWORD_ENUM:      return copy_string(to_string("enum"));
         case Token::KEYWORD_LIBRARY:   return copy_string(to_string("library"));
         case Token::KEYWORD_FRAMEWORK: return copy_string(to_string("framework"));
@@ -254,8 +255,7 @@ Ast_Expression *Parser::parse_postfix_expression() {
             next_token();
             
             call->function_or_function_ptr = sub_expression;
-            
-            bool found_argument = false;
+
             token = peek_token();
             while (token->type != Token::END) {
                 
@@ -435,11 +435,11 @@ Ast_Expression *Parser::parse_shift_expression() {
         
         if (token->type == Token::DEREFERENCE_OR_SHIFT
             || token->type == Token::RIGHT_SHIFT) {
-            next_token();
-            
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
+            
+            next_token();
             
             auto right = parse_additive_expression();
             if (!right) {
@@ -470,11 +470,11 @@ Ast_Expression *Parser::parse_relational_expression() {
             || token->type == Token::RIGHT_ANGLE
             || token->type == Token::LE_OP
             || token->type == Token::GE_OP) {
-            next_token();
-            
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
+            
+            next_token();
             
             auto right = parse_shift_expression();
             if (!right) {
@@ -631,11 +631,11 @@ Ast_Expression *Parser::parse_logical_and_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::AND_OP) {
-            next_token();
-            
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
+            
+            next_token();
             
             auto right = parse_inclusive_or_expression();
             if (!right) {
@@ -663,11 +663,11 @@ Ast_Expression *Parser::parse_logical_xor_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::XOR_OP) {
-            next_token();
-            
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
+
+            next_token();
             
             auto right = parse_logical_and_expression();
             if (!right) {
@@ -695,11 +695,11 @@ Ast_Expression *Parser::parse_logical_or_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::OR_OP) {
-            next_token();
-            
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
+            
+            next_token();
             
             auto right = parse_logical_xor_expression();
             if (!right) {
@@ -764,13 +764,14 @@ Ast_Expression *Parser::parse_statement() {
         return alias;
     }
     
-    if (token->type == Token::KEYWORD_STRUCT) {
+    if (token->type == Token::KEYWORD_STRUCT || token->type == Token::KEYWORD_UNION) {
         Ast_Struct *_struct = PARSER_NEW(Ast_Struct);
         next_token();
         
         _struct->identifier = parse_identifier();
         _struct->member_scope.parent = get_current_scope();
         _struct->member_scope.owning_struct = _struct;
+        _struct->is_union = (token->type == Token::KEYWORD_UNION);
         parse_scope(&_struct->member_scope, true);
         return _struct;
     }
@@ -935,7 +936,7 @@ Ast_Expression *Parser::parse_statement() {
             String name = token->string;
             String base_path = basepath(lexer->filename);
             
-            next_token();
+            if (!expect_and_eat(Token::STRING)) return nullptr;
             if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
             
             const int MAX_PATH = 512;
@@ -954,8 +955,8 @@ Ast_Expression *Parser::parse_statement() {
             
             token = peek_token();
             String name = token->string;
-            
-            next_token();
+
+            if (!expect_and_eat(Token::STRING)) return nullptr;
             if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
             
             import->target_filename = copy_string(name); // fullname will be resolved when the directive is resolved.
@@ -991,6 +992,21 @@ Ast_Expression *Parser::parse_statement() {
             }
             
             return _if;
+        } else if (token->type == Token::IDENTIFIER && token->string == to_string("clang_import")) {
+            if (!expect_and_eat(Token::IDENTIFIER)) return nullptr;
+            
+            Ast_Directive_Clang_Import *import = PARSER_NEW(Ast_Directive_Clang_Import);
+            import->scope_i_belong_to = get_current_canonical_scope();
+            compiler->queue_directive(import);
+            
+            token = peek_token();
+            import->string_to_compile = token->string;
+            
+            if (!expect_and_eat(Token::STRING)) return nullptr;
+            if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
+            
+            import->target_scope    = get_current_scope();
+            return import;
         } else {
             String s  = token->string;
             compiler->report_error(token, "Unknown compiler directive '%.*s'.\n", s.length, s.data);
@@ -1020,6 +1036,9 @@ Ast_Expression *Parser::parse_statement() {
             token->type == Token::VERTICAL_BAR_EQ ||     // |=
             token->type == Token::CARET_EQ               // ^=
             ) {
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
+            bin->operator_type = token->type;
+
             next_token();
             
             Ast_Expression *right = parse_expression();
@@ -1030,8 +1049,6 @@ Ast_Expression *Parser::parse_statement() {
                 }
             }
             
-            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
-            bin->operator_type = token->type;
             bin->left = left;
             bin->right = right;
             
@@ -1042,6 +1059,37 @@ Ast_Expression *Parser::parse_statement() {
     if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
     
     return left;
+}
+
+static Ast_Expression * find_declaration(Array<Ast_Expression *> * array, Atom * name) {
+    for (auto it: *array) {
+        auto id = declaration_identifier(it);
+        if (id && id->name == name) {
+            return it;
+        }
+    }
+    return nullptr;
+}
+
+bool Parser::add_declaration(Array<Ast_Expression *> * declarations, Ast_Expression * decl) {
+    auto id = declaration_identifier(decl);
+
+    // Skip anonymous declarations, in case we have them.
+    if (id) {
+        // Check duplicate declarations.
+        auto prev_decl = find_declaration(declarations, id->name);
+
+        if (prev_decl) {
+            if (decl->type != AST_FUNCTION || prev_decl->type != AST_FUNCTION) {
+                compiler->report_error(id, "Redefinition of '%.*s'.\n", PRINT_ARG(id->name->name));
+                compiler->report_error(prev_decl, "previous definition is here:\n");
+                return false;
+            }
+        }
+    }
+
+    declarations->add(decl);
+    return true;
 }
 
 void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_statement, bool push_scope) {
@@ -1059,7 +1107,9 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
             scope->statements.add(stmt);
 
             if (is_declaration(stmt->type)) {
-                scope->declarations.add(stmt);
+                if (!add_declaration(&scope->declarations, stmt)) {
+                    return;
+                }
             }
         }
         
@@ -1198,6 +1248,8 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
         case Token::KEYWORD_VOID:   builtin_primitive = compiler->type_void; break;
         
         case Token::KEYWORD_BOOL:   builtin_primitive = compiler->type_bool; break;
+
+        default: break; // JH: silence warnings.
     }
 
     if (builtin_primitive) {
@@ -1483,7 +1535,7 @@ Ast_Function *Parser::parse_function() {
         if (decl) {
             decl->is_let = true;
             function->arguments.add(decl);
-            function->arguments_scope.declarations.add(decl);
+            add_declaration(&function->arguments_scope.declarations, decl);
         }
         
         if (compiler->errors_reported) return nullptr;

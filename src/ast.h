@@ -40,6 +40,7 @@ enum Ast_Type {
     AST_DIRECTIVE_LOAD,
     AST_DIRECTIVE_IMPORT,
     AST_DIRECTIVE_STATIC_IF,
+    AST_DIRECTIVE_CLANG_IMPORT,
     AST_SCOPE_EXPANSION,
     AST_OS,
     AST_LIBRARY,
@@ -100,7 +101,8 @@ struct Ast_Type_Info {
         bool is_let = false;
     };
     Array<Struct_Member> struct_members; // for STRUCT
-
+    bool is_union = false;
+    
     // FUNCTION
     Array<Ast_Type_Info *> arguments;
     Ast_Type_Info *return_type = nullptr;
@@ -191,6 +193,7 @@ struct Ast_Struct : Ast_Expression {
     
     Ast_Identifier *identifier = nullptr;
     Ast_Scope member_scope;
+    bool is_union = false;
     
     Ast_Type_Info *type_value = nullptr; // @NoCopy
 };
@@ -421,6 +424,14 @@ struct Ast_Directive_Static_If : Ast_Directive {
     Ast_Scope *else_scope = nullptr;
 };
 
+// :NoCopyDirectives:
+struct Ast_Directive_Clang_Import : Ast_Directive {
+    Ast_Directive_Clang_Import() { type = AST_DIRECTIVE_CLANG_IMPORT; }
+
+    Ast_Scope *target_scope;
+    // Ast_Scope *imported_scope = nullptr;
+    String     string_to_compile;
+};
 
 struct Ast_Library : Ast_Expression {
     Ast_Library() { type = AST_LIBRARY; }
@@ -436,6 +447,15 @@ bool is_declaration(Ast_Type type) {
         || type == AST_TYPE_ALIAS
         || type == AST_STRUCT
         || type == AST_ENUM;
+}
+
+inline
+Ast_Identifier * declaration_identifier(Ast_Expression * decl) {
+    if (decl->type == AST_DECLARATION) return static_cast<Ast_Declaration*>(decl)->identifier;
+    if (decl->type == AST_FUNCTION) return static_cast<Ast_Function*>(decl)->identifier;
+    if (decl->type == AST_TYPE_ALIAS) return static_cast<Ast_Type_Alias*>(decl)->identifier;
+    if (decl->type == AST_STRUCT) return static_cast<Ast_Struct*>(decl)->identifier;
+    return NULL;
 }
 
 #endif

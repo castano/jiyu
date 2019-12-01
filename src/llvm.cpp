@@ -336,10 +336,34 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
         Array<Type *> member_types;
         
-        for (auto member : type->struct_members) {
-            if (member.is_let) continue;
-            
-            member_types.add(make_llvm_type(member.type_info));
+        if (!type->is_union) {
+            for (auto member : type->struct_members) {
+                if (member.is_let) continue;
+                
+                member_types.add(make_llvm_type(member.type_info));
+            }
+        } else {
+            // If the struct is a union, then just use the largest member
+            // as the only member, we will bitcast to the right things elsewhere.
+
+            s64 largest_size = -1;
+            array_count_type largest_index = -1;
+
+            for (array_count_type i = 0; i < type->struct_members.count; ++i) {
+                auto member = type->struct_members[i];
+                if (member.is_let) continue;
+                assert(member.offset_in_struct == 0);
+
+                if (member.type_info->size > largest_size) {
+                    largest_size = member.type_info->size;
+                    largest_index = i;
+                }
+            }
+
+            if (largest_index >= 0) {
+                auto llvm_type = make_llvm_type(type->struct_members[largest_index].type_info);
+                member_types.add(llvm_type);
+            }
         }
 
         final_type->setBody(ArrayRef<Type *>(member_types.data, member_types.count), false/*is packed*/);
@@ -607,7 +631,7 @@ Value *LLVM_Generator::create_string_literal(Ast_Literal *lit, bool want_lvalue)
     if (lit->string_value.length == 0 || lit->string_value.data == nullptr) {
         value = Constant::getNullValue(type_string);
     } else {
-        bool add_null = true;
+        // null-character automatically inserted by CreateGlobalStringPtr
         Constant *data = irb->CreateGlobalStringPtr(string_ref(lit->string_value));
         Constant *length = ConstantInt::get(type_string_length, lit->string_value.length);
         
@@ -1071,8 +1095,28 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         
         case AST_DEREFERENCE: {
             auto deref = static_cast<Ast_Dereference *>(expression);
-            
             auto lhs = emit_expression(deref->left, true);
+
+            auto left_expr = deref->left;
+            while (left_expr->substitution) left_expr = left_expr->substitution;
+
+            auto left_type = get_final_type(get_type_info(left_expr));
+            if (left_type->type == Ast_Type_Info::STRUCT) {
+                // if we're dereferencing a union, bitcast to the right type
+                // since LLVM does not have a union type by default.
+                if (left_type->is_union) {
+                    for (auto member: left_type->struct_members) {
+                        if (member.element_index == deref->element_path_index) {
+                            auto llvm_type = llvm_types[member.type_info->type_table_index]->getPointerTo();
+                            auto bitcast = irb->CreateBitCast(lhs, llvm_type);
+
+                            if (!is_lvalue) return irb->CreateLoad(bitcast);
+                            return bitcast;
+                        }
+                    }
+                }
+            }
+            
             
             assert(deref->element_path_index >= 0);
             
@@ -1087,8 +1131,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto cast = static_cast<Ast_Cast *>(expression);
             Value *value = emit_expression(cast->expression);
             
-            auto src = get_type_info(cast->expression);
-            auto dst = cast->type_info;
+            auto src = get_final_type(get_type_info(cast->expression));
+            auto dst = get_final_type(cast->type_info);
             
             auto src_type = get_type(src);
             auto dst_type = get_type(dst);
@@ -1385,6 +1429,20 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             assert(false && "Could not find LLVM BasicBlock for control-flow statement.");
             return nullptr;
         }
+
+        case AST_UNINITIALIZED:
+            assert(false && "Unitialized AST Node!");
+        // No-ops
+        case AST_TYPE_INSTANTIATION:
+        case AST_TYPE_ALIAS:
+        case AST_STRUCT:
+        case AST_DIRECTIVE_LOAD:
+        case AST_DIRECTIVE_IMPORT:
+        case AST_DIRECTIVE_STATIC_IF:
+        case AST_LIBRARY:
+        case AST_OS:     // This is always subtituted by a literal at the AST level.
+        case AST_SIZEOF: // This is always subtituted by a literal at the AST level.
+            break;
     }
     
     return nullptr;

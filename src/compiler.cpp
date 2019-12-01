@@ -6,6 +6,7 @@
 #include "sema.h"
 #include "llvm.h"
 #include "os_support.h"
+#include "clang_import.h"
 
 #ifdef WIN32
 #pragma warning(push, 0)
@@ -97,9 +98,12 @@ Ast_Type_Info *Compiler::make_array_type(Ast_Type_Info *element, array_count_typ
     info->is_dynamic = is_dynamic;
     
     if (count >= 0) {
+        auto element_final_type = get_final_type(element);
+
         assert(is_dynamic == false);
-        info->size = element->size * count;
-        info->alignment = element->alignment;
+        info->size      = element_final_type->size * count;
+        info->alignment = element_final_type->alignment;
+        info->stride = info->size;
     } else {
         if (!is_dynamic) {
             info->size = this->pointer_size * 2;
@@ -108,7 +112,10 @@ Ast_Type_Info *Compiler::make_array_type(Ast_Type_Info *element, array_count_typ
         }
         
         info->alignment = this->pointer_size; // @TargetInfo @PointerSize
+        info->stride = info->size;
     }
+
+    assert(info->alignment >= 0);
 
     add_to_type_table(info);
     return info;
@@ -133,9 +140,11 @@ Ast_Type_Info *Compiler::make_type_alias(Ast_Type_Info *aliasee) {
     info->type = Ast_Type_Info::ALIAS;
     info->alias_of  = aliasee;
 
-    COPY(size);
-    COPY(alignment);
-    COPY(stride);
+    // Dont copy these, if you want to check this info
+    // you should call get_final_type.
+    // COPY(size);
+    // COPY(alignment);
+    // COPY(stride);
 
     // Copy important things from source=>alias. Most of the typechecking code
     // shouldnt and doesnt care if something is a typealias, so one should be
@@ -173,6 +182,7 @@ Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct) {
     Ast_Type_Info *info = COMPILER_NEW2(Ast_Type_Info);
     info->type = Ast_Type_Info::STRUCT;
     info->struct_decl = _struct;
+    info->is_union = _struct->is_union;
     return info;
 }
 
@@ -347,7 +357,8 @@ void Compiler::add_to_type_table(Ast_Type_Info *info) {
 }
 
 void Compiler::queue_directive(Ast_Directive *directive) {
-    assert(directive->type == AST_DIRECTIVE_LOAD || directive->type == AST_DIRECTIVE_STATIC_IF || directive->type == AST_DIRECTIVE_IMPORT);
+    assert(directive->type == AST_DIRECTIVE_LOAD   || directive->type == AST_DIRECTIVE_STATIC_IF
+        || directive->type == AST_DIRECTIVE_IMPORT || directive->type == AST_DIRECTIVE_CLANG_IMPORT);
     
     directive_queue.add(directive);
 }
@@ -381,7 +392,7 @@ void Compiler::resolve_directives() {
         if (directive->type == AST_DIRECTIVE_LOAD) {
             auto load = static_cast<Ast_Directive_Load *>(directive);
             
-            auto name = load->target_filename;
+            // auto name = load->target_filename;
             // printf("%d DEBUG: load '%.*s', rejected? : %s\n", this->instance_number, name.length, name.data, rejected ? "true" : "false");
             
             void perform_load(Compiler *compiler, Ast *ast, String filename, Ast_Scope *target_scope);
@@ -392,6 +403,8 @@ void Compiler::resolve_directives() {
             directive_queue.ordered_remove(0);
         } else if (directive->type == AST_DIRECTIVE_IMPORT) {
             // @Incomplete we need a way to stop imports into a module scope from leaking into the global scope lookup
+            // Actually, doesn't this already do that? If we import Basic right now, LibC isnt exposed to the application
+            // unless the application also imports LibC. -josh 30 November 2019
             auto import = static_cast<Ast_Directive_Import *>(directive);
             
             auto name = import->target_filename;
@@ -522,6 +535,26 @@ void Compiler::resolve_directives() {
                 _if->substitution = exp;
             }
             
+            directive_queue.ordered_remove(0);
+        } else if (directive->type == AST_DIRECTIVE_CLANG_IMPORT) {
+            auto import = static_cast<Ast_Directive_Clang_Import *>(directive);
+
+            // sigh, for some reason, you cannot just pass a string to clang and get
+            // an AST back. The code has to exist in a file at some point.
+
+            String path = mprintf(".w%d_temp_c_file.c", this->instance_number);
+
+            bool write_entire_file(String filepath, String data);
+            write_entire_file(path, import->string_to_compile);
+
+            char *c_path = to_c_string(path);
+            perform_clang_import(this, c_path, import->scope_i_belong_to);
+
+            free(c_path);
+            free(path.data);
+
+            if (this->errors_reported) return;
+
             directive_queue.ordered_remove(0);
         } else {
             assert(false);

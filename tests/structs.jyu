@@ -24,6 +24,12 @@ struct My_Struct {
     }
 }
 
+union My_Union {
+    var x: float;
+    var s: string;
+    var i: int32;
+}
+
 
 func main() {
     var whatever: My_Struct;
@@ -43,6 +49,12 @@ func main() {
     whatever_ptr.my_cool_func();
     // Moonmen
     whatever_ptr.func2();
+
+    var union_test: My_Union;
+    var union_test_ptr = *union_test;
+    var f: float = 123.0;
+    union_test_ptr.i = <<cast(*int32) *f;
+    printf("union_test.x: %f, union_test.i: %d\n", union_test.x, union_test.i);
 }
 
 struct Frame {
