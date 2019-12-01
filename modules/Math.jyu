@@ -150,7 +150,7 @@ struct Matrix4 {
     }
 
     func scale(a: float) -> Matrix4 {
-        return scale(make_Vector3(a, a, a));
+        return scale(Vector3.make(a, a, a));
     }
 
     func multiply(left: Matrix4, right: Matrix4) -> Matrix4 {
