@@ -433,11 +433,11 @@ Ast_Expression *Parser::parse_shift_expression() {
         
         if (token->type == Token::DEREFERENCE_OR_SHIFT
             || token->type == Token::RIGHT_SHIFT) {
-            next_token();
-            
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
+            
+            next_token();
             
             auto right = parse_additive_expression();
             if (!right) {
@@ -468,11 +468,11 @@ Ast_Expression *Parser::parse_relational_expression() {
             || token->type == Token::RIGHT_ANGLE
             || token->type == Token::LE_OP
             || token->type == Token::GE_OP) {
-            next_token();
-            
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
+            
+            next_token();
             
             auto right = parse_shift_expression();
             if (!right) {
@@ -629,11 +629,11 @@ Ast_Expression *Parser::parse_logical_and_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::AND_OP) {
-            next_token();
-            
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
+            
+            next_token();
             
             auto right = parse_inclusive_or_expression();
             if (!right) {
@@ -661,11 +661,11 @@ Ast_Expression *Parser::parse_logical_xor_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::XOR_OP) {
-            next_token();
-            
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
+
+            next_token();
             
             auto right = parse_logical_and_expression();
             if (!right) {
@@ -693,11 +693,11 @@ Ast_Expression *Parser::parse_logical_or_expression() {
     while (token->type != Token::END) {
         
         if (token->type == Token::OR_OP) {
-            next_token();
-            
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
+            
+            next_token();
             
             auto right = parse_logical_xor_expression();
             if (!right) {
@@ -986,6 +986,9 @@ Ast_Expression *Parser::parse_statement() {
             token->type == Token::VERTICAL_BAR_EQ ||     // |=
             token->type == Token::CARET_EQ               // ^=
             ) {
+            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
+            bin->operator_type = token->type;
+
             next_token();
             
             Ast_Expression *right = parse_expression();
@@ -996,8 +999,6 @@ Ast_Expression *Parser::parse_statement() {
                 }
             }
             
-            Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
-            bin->operator_type = token->type;
             bin->left = left;
             bin->right = right;
             

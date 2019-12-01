@@ -1044,9 +1044,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (!decl) {
                 String name = ident->name->name;
-
-                // @FixMe pass in ident
-                compiler->report_error(ident, "Undeclared identifier '%.*s'\n", name.length, name.data);
+                compiler->report_error(ident, "Undeclared identifier '%.*s'\n", PRINT_ARG(name));
             } else {
                 if (decl->type == AST_FUNCTION) {
                     assert(ident->overload_set.count == 0);
@@ -1398,7 +1396,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         case AST_LITERAL: {
             auto lit = static_cast<Ast_Literal *>(expression);
 
-            // @Incomplete
+            // @Incomplete @Cleanup we should be able to get rid of want_numeric_type here now that literal folding exists.
 
             // @Incomplete if we have a float literal but want an int type, keep a float type and let the implicit cast system do its job
             if (lit->literal_type == Ast_Literal::INTEGER) {

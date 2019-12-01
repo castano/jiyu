@@ -1,4 +1,4 @@
-#import "LibC"; // for sqrtf
+#import "LibC"; // for sqrtf, cos, sin
 
 let TAU = 6.28318530718;
 let DEGREES_TO_RADIANS = TAU / 360.0;
@@ -118,6 +118,27 @@ struct Matrix4 {
         mat.m[2][3] = v.z;
 
         return mat;
+    }
+
+    func rotate(v: Vector3, theta: float) -> Matrix4 {
+        var c = cosf(theta);
+        var s = sinf(theta);
+        var omc = 1.0 - c;
+
+        var x = v.x * omc;
+        var y = v.y * omc;
+        var z = v.z * omc;
+
+        var vxvy = x * v.y;
+        var vxvz = x * v.z;
+        var vyvz = y * v.z;
+
+        var result: Matrix4;
+        result.set_column(0, Vector3.make(   c + x*v.x, vxvy - s*v.z, vxvz + s*v.y), 0);
+        result.set_column(1, Vector3.make(vxvy + s*v.z,    c + y*v.y, vyvz - s*v.x), 0);
+        result.set_column(2, Vector3.make(vxvz - s*v.y, vyvz + s*v.x,    c + z*v.z), 0);
+        result.m[3][3] = 1;
+        return result;
     }
 
     func multiply(left: Matrix4, right: Matrix4) -> Matrix4 {
