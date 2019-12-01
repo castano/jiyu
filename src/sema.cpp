@@ -845,6 +845,12 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
         } else if (function_type->is_c_varargs) {
             // just do a normal typecheck on the call argument since this is for varargs
             typecheck_expression(value);
+
+            if (auto lit = folds_to_literal(value)) {
+                //auto score = maybe_mutate_literal_to_type(lit, target_type_info);
+                value = lit;
+            }
+
             viability_score += 1;
         } else {
             assert(false);
