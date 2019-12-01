@@ -949,7 +949,23 @@ Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom 
         for (auto it : scope->private_declarations) {
             while (it->substitution) it = it->substitution;
 
-
+            if (it->type == AST_DECLARATION) {
+                auto decl = static_cast<Ast_Declaration *>(it);
+                if (decl->identifier->name == atom) return it;
+            } else if (it->type == AST_FUNCTION) {
+                auto function = static_cast<Ast_Function *>(it);
+                if (function->identifier->name == atom) return function;
+            } else if (it->type == AST_TYPE_ALIAS) {
+                auto alias = static_cast<Ast_Type_Alias *>(it);
+                if (alias->identifier && alias->identifier->name == atom) return alias;
+            } else if (it->type == AST_STRUCT) {
+                auto _struct = static_cast<Ast_Struct *>(it);
+                if (_struct->identifier && _struct->identifier->name == atom) return _struct;
+            } else if (it->type == AST_ENUM) {
+                auto _enum = static_cast<Ast_Struct *>(it);
+                if (_enum->identifier && _enum->identifier->name == atom) return _enum;
+            } else if (it->type == AST_SCOPE_EXPANSION) {
+                auto exp = static_cast<Ast_Scope_Expansion *>(it);
 
                 bool check_private = (exp->expanded_via_import_directive == nullptr);
                 auto decl = find_declaration_for_atom_in_scope(exp->scope, atom, check_private);
