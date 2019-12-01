@@ -617,4 +617,12 @@ class ExitScopeHelp {
 #define defer const auto& __attribute__((unused)) CONCAT(defer__, __LINE__) = ExitScopeHelp() + [&]()
 #endif
 
+
+// Debug helpers
+#if _MSC_VER
+#define debug_break() __debugbreak()
+#else // __GNUC__ or __clang__
+#define debug_break() __builtin_debugtrap()
+#endif
+
 #endif // GENERAL_H
