@@ -920,10 +920,10 @@ Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom 
             if (function->identifier->name == atom) return function;
         } else if (it->type == AST_TYPE_ALIAS) {
             auto alias = static_cast<Ast_Type_Alias *>(it);
-            if (alias->identifier->name == atom) return alias;
+            if (alias->identifier && alias->identifier->name == atom) return alias;
         } else if (it->type == AST_STRUCT) {
             auto _struct = static_cast<Ast_Struct *>(it);
-            if (_struct->identifier->name == atom) return _struct;
+            if (_struct->identifier->name == atom && _struct->identifier->name == atom) return _struct;
         } else if (it->type == AST_ENUM) {
             auto _enum = static_cast<Ast_Enum *>(it);
             if (_enum->identifier->name == atom) return _enum;
@@ -950,13 +950,13 @@ Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom 
                 if (function->identifier->name == atom) return function;
             } else if (it->type == AST_TYPE_ALIAS) {
                 auto alias = static_cast<Ast_Type_Alias *>(it);
-                if (alias->identifier->name == atom) return alias;
+                if (alias->identifier && alias->identifier->name == atom) return alias;
             } else if (it->type == AST_STRUCT) {
                 auto _struct = static_cast<Ast_Struct *>(it);
-                if (_struct->identifier->name == atom) return _struct;
+                if (_struct->identifier && _struct->identifier->name == atom) return _struct;
             } else if (it->type == AST_ENUM) {
                 auto _enum = static_cast<Ast_Enum *>(it);
-                if (_enum->identifier->name == atom) return _enum;        
+                if (_enum->identifier && _enum->identifier->name == atom) return _enum;        
             } else if (it->type == AST_SCOPE_EXPANSION) {
                 auto exp = static_cast<Ast_Scope_Expansion *>(it);
 
@@ -2124,7 +2124,15 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             auto _struct = static_cast<Ast_Struct *>(expression);
 
             // Set this early so we dont recurse indefinitely
-            _struct->type_value = make_struct_type(compiler, _struct);
+            if (!_struct->type_value) {
+                // If this is already set, this may have been due to a clang_import
+                _struct->type_value = make_struct_type(compiler, _struct);
+            } else {
+                assert(_struct->type_value->size == -1);
+                assert(_struct->type_value->struct_members.count == 0);
+                assert(_struct->type_value->type_table_index == -1);
+            }
+            
             _struct->type_info = compiler->type_info_type;
 
             // flag stuct member declarations

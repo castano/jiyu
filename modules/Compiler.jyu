@@ -24,3 +24,4 @@ func @c_function compiler_run_metaprogram(compiler: *Compiler, argc: int32, argv
 
 // @FixMe on macOS/Linux string should normally be passed by-value but we're currently passing string by pointer by default.
 func @c_function compiler_add_library_search_path(compiler: *Compiler, path: string) -> void;
+func @c_function compiler_add_compiled_object_for_linking(compiler: *Compiler, path: string) -> void;

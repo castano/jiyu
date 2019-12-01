@@ -152,6 +152,14 @@ func read_entire_file(path: string) -> string {
     return result;
 }
 
+// @Temporary maybe?
+func get_slice<T>(arr: [..] T) -> [] T {
+    var out: [] T;
+    out.data  = arr.data;
+    out.count = arr.count;
+    return out;
+}
+
 func get_command_line(strings: [] string) -> *uint8 {
     typealias string_length_type = int64; // @TODO
 

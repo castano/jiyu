@@ -23,6 +23,7 @@ func compile_single_test_file(path: string, as_metaprogram: bool) {
     }
 }
 
+// @@ Add option to silence the error and just check for failure.
 func compile_failing_test(source: string) {
 
     var options: Build_Options;
@@ -50,5 +51,12 @@ func @metaprogram main() {
 
     // Attempt to use an incomplete type:
     compile_failing_test("struct Foo { var foo: My_Foo; } typealias My_Foo = Foo;");
+    //compile_failing_test("struct Foo { var foo: Foo; }");
+
+    // Duplicate declaration:
+    //compile_failing_test("var foo: float; var foo: float;");
+    //compile_failing_test("var foo: float; func foo() {}");
+    //compile_failing_test("func foo() {} var foo: float;");
+    //compile_failing_test("func foo(bar: int, bar: int) {}");
 
 }

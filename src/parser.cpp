@@ -1044,6 +1044,37 @@ Ast_Expression *Parser::parse_statement() {
     return left;
 }
 
+static Ast_Expression * find_declaration(Array<Ast_Expression *> * array, Atom * name) {
+    for (auto it: *array) {
+        auto id = declaration_identifier(it);
+        if (id && id->name == name) {
+            return it;
+        }
+    }
+    return nullptr;
+}
+
+bool Parser::add_declaration(Array<Ast_Expression *> * declarations, Ast_Expression * decl) {
+    auto id = declaration_identifier(decl);
+
+    // Skip anonymous declarations, in case we have them.
+    if (id) {
+        // Check duplicate declarations.
+        auto prev_decl = find_declaration(declarations, id->name);
+
+        if (prev_decl) {
+            if (decl->type != AST_FUNCTION || prev_decl->type != AST_FUNCTION) {
+                compiler->report_error(id, "Redefinition of '%.*s'.\n", PRINT_ARG(id->name->name));
+                compiler->report_error(prev_decl, "previous definition is here:\n");
+                return false;
+            }
+        }
+    }
+
+    declarations->add(decl);
+    return true;
+}
+
 void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_statement, bool push_scope) {
     if (push_scope) push_scopes(scope);
     
@@ -1059,7 +1090,9 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
             scope->statements.add(stmt);
 
             if (is_declaration(stmt->type)) {
-                scope->declarations.add(stmt);
+                if (!add_declaration(&scope->declarations, stmt)) {
+                    return;
+                }
             }
         }
         
@@ -1483,7 +1516,7 @@ Ast_Function *Parser::parse_function() {
         if (decl) {
             decl->is_let = true;
             function->arguments.add(decl);
-            function->arguments_scope.declarations.add(decl);
+            add_declaration(&function->arguments_scope.declarations, decl);
         }
         
         if (compiler->errors_reported) return nullptr;
