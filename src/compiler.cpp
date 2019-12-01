@@ -134,9 +134,11 @@ Ast_Type_Info *Compiler::make_type_alias(Ast_Type_Info *aliasee) {
     info->type = Ast_Type_Info::ALIAS;
     info->alias_of  = aliasee;
 
-    COPY(size);
-    COPY(alignment);
-    COPY(stride);
+    // Dont copy these, if you want to check this info
+    // you should call get_final_type.
+    // COPY(size);
+    // COPY(alignment);
+    // COPY(stride);
 
     // Copy important things from source=>alias. Most of the typechecking code
     // shouldnt and doesnt care if something is a typealias, so one should be

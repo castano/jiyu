@@ -384,8 +384,8 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
         viability_score += score;
     }
 
-    auto rtype = get_type_info(expression);
-    auto ltype = target_type_info;
+    auto rtype = get_final_type(get_type_info(expression));
+    auto ltype = get_final_type(target_type_info);
 
     auto right = expression;
 
@@ -656,8 +656,8 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
     assert(left->type_info);
     assert(right->type_info);
 
-    auto ltype = left->type_info;
-    auto rtype = right->type_info;
+    auto ltype = get_final_type(get_type_info(left));
+    auto rtype = get_final_type(get_type_info(right));
     u64  left_viability_score  = 0;
     u64  right_viability_score = 0;
 
@@ -2109,7 +2109,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 assert(info->type == Ast_Type_Info::STRUCT);
                 assert(info->struct_decl == _struct);
 
-                s64 size_cursor = 0;
+                s64 size = 0;
+                s64 offset_cursor = 0;
                 s64 biggest_alignment = 1;
                 s64 element_path_index = 0;
 
@@ -2134,7 +2135,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             element_path_index++;
                         }
 
-                        if (member.type_info->size == -1) {
+                        auto final_type = get_final_type(member.type_info);
+                        if (final_type->size == -1) {
                             auto member_type_name = type_to_string(member.type_info);
                             defer { free(member_type_name.data); };
                             compiler->report_error(decl, "field '%.*s' has incomplete type '%.*s'\n", PRINT_ARG(member.name->name), PRINT_ARG(member_type_name));
@@ -2142,13 +2144,20 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             return;
                         }
 
-                        size_cursor = pad_to_alignment(size_cursor, member.type_info->alignment);
-                        member.offset_in_struct = size_cursor;
+                        offset_cursor = pad_to_alignment(offset_cursor, final_type->alignment);
+                        member.offset_in_struct = offset_cursor;
                         
-                        if (!_struct->is_union) size_cursor += member.type_info->size;
+                        if (!_struct->is_union) {
+                            offset_cursor += final_type->size;
+                            size = offset_cursor;
+                        } else {
+                            if (final_type->size > size) {
+                                size = final_type->size;
+                            }
+                        }
 
-                        if (member.type_info->alignment > biggest_alignment) {
-                            biggest_alignment = member.type_info->alignment;
+                        if (final_type->alignment > biggest_alignment) {
+                            biggest_alignment = final_type->alignment;
                         }
 
                         info->struct_members.add(member);
@@ -2156,7 +2165,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
 
                 info->alignment = biggest_alignment;
-                info->size = size_cursor;
+                info->size = size;
                 info->stride = pad_to_alignment(info->size, info->alignment);
 
                 compiler->add_to_type_table(info);
@@ -2236,9 +2245,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
 
             auto type = resolve_type_inst(size->target_type_inst);
-            assert(type->size >= 0);
 
-            auto lit = make_integer_literal(compiler, type->size, compiler->type_int32);
+            auto lit = make_integer_literal(compiler, get_final_type(type)->size, compiler->type_int32);
             copy_location_info(lit, size);
 
             size->type_info = lit->type_info;

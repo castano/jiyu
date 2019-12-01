@@ -1114,8 +1114,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto cast = static_cast<Ast_Cast *>(expression);
             Value *value = emit_expression(cast->expression);
             
-            auto src = get_type_info(cast->expression);
-            auto dst = cast->type_info;
+            auto src = get_final_type(get_type_info(cast->expression));
+            auto dst = get_final_type(cast->type_info);
             
             auto src_type = get_type(src);
             auto dst_type = get_type(dst);
