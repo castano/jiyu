@@ -846,6 +846,12 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
         } else if (function_type->is_c_varargs) {
             // just do a normal typecheck on the call argument since this is for varargs
             typecheck_expression(value);
+
+            if (auto lit = folds_to_literal(value)) {
+                //auto score = maybe_mutate_literal_to_type(lit, target_type_info);
+                value = lit;
+            }
+
             viability_score += 1;
         } else {
             assert(false);
@@ -1131,16 +1137,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 decl->type_info = get_type_info(decl->initializer_expression);
             }
 
-            if (!decl->is_let && decl->identifier && compiler->is_toplevel_scope(decl->identifier->enclosing_scope)) {
-                if (decl->initializer_expression && !resolves_to_literal_value(decl->initializer_expression)) {
-                    compiler->report_error(decl, "Global variable may only be initialized by a literal expression.\n");
-                }
-
-                compiler->global_decl_emission_queue.add(decl);
-            }
-
-            if (compiler->errors_reported) return;
-
             if (decl->type_info && decl->initializer_expression) {
                 auto result = typecheck_and_implicit_cast_single_expression(decl->initializer_expression, get_type_info(decl), ALLOW_COERCE_TO_PTR_VOID);
 
@@ -1155,6 +1151,16 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     return;
                 }
             }
+
+            if (!decl->is_let && decl->identifier && compiler->is_toplevel_scope(decl->identifier->enclosing_scope)) {
+                if (decl->initializer_expression && !resolves_to_literal_value(decl->initializer_expression)) {
+                    compiler->report_error(decl, "Global variable may only be initialized by a literal expression.\n");
+                }
+
+                compiler->global_decl_emission_queue.add(decl);
+            }
+
+            if (compiler->errors_reported) return;
 
             return;
         }
