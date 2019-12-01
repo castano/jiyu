@@ -2144,7 +2144,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                         size_cursor = pad_to_alignment(size_cursor, member.type_info->alignment);
                         member.offset_in_struct = size_cursor;
-                        size_cursor += member.type_info->size;
+                        
+                        if (!_struct->is_union) size_cursor += member.type_info->size;
 
                         if (member.type_info->alignment > biggest_alignment) {
                             biggest_alignment = member.type_info->alignment;

@@ -179,6 +179,7 @@ Token Lexer::lex_token() {
         else if (result.string == to_string("let"))       result.type = Token::KEYWORD_LET;
         else if (result.string == to_string("typealias")) result.type = Token::KEYWORD_TYPEALIAS;
         else if (result.string == to_string("struct"))    result.type = Token::KEYWORD_STRUCT;
+        else if (result.string == to_string("union"))     result.type = Token::KEYWORD_UNION;
         else if (result.string == to_string("library"))   result.type = Token::KEYWORD_LIBRARY;
         else if (result.string == to_string("framework")) result.type = Token::KEYWORD_FRAMEWORK;
         

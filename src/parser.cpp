@@ -57,6 +57,7 @@ String token_type_to_string(Token::Type type) {
         case Token::KEYWORD_LET:       return copy_string(to_string("let"));
         case Token::KEYWORD_TYPEALIAS: return copy_string(to_string("typealias"));
         case Token::KEYWORD_STRUCT:    return copy_string(to_string("struct"));
+        case Token::KEYWORD_UNION:     return copy_string(to_string("union"));
         case Token::KEYWORD_LIBRARY:   return copy_string(to_string("library"));
         case Token::KEYWORD_FRAMEWORK: return copy_string(to_string("framework"));
         
@@ -762,13 +763,14 @@ Ast_Expression *Parser::parse_statement() {
         return alias;
     }
     
-    if (token->type == Token::KEYWORD_STRUCT) {
+    if (token->type == Token::KEYWORD_STRUCT || token->type == Token::KEYWORD_UNION) {
         Ast_Struct *_struct = PARSER_NEW(Ast_Struct);
         next_token();
         
         _struct->identifier = parse_identifier();
         _struct->member_scope.parent = get_current_scope();
         _struct->member_scope.owning_struct = _struct;
+        _struct->is_union = (token->type == Token::KEYWORD_UNION);
         parse_scope(&_struct->member_scope, true);
         return _struct;
     }

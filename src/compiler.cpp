@@ -174,6 +174,7 @@ Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct) {
     Ast_Type_Info *info = COMPILER_NEW2(Ast_Type_Info);
     info->type = Ast_Type_Info::STRUCT;
     info->struct_decl = _struct;
+    info->is_union = _struct->is_union;
     return info;
 }
 
@@ -526,7 +527,7 @@ void Compiler::resolve_directives() {
             // sigh, for some reason, you cannot just pass a string to clang and get
             // an AST back. The code has to exist in a file at some point.
 
-            String path = mprintf(".w%d_temp_c_file.c");
+            String path = mprintf(".w%d_temp_c_file.c", this->instance_number);
 
             bool write_entire_file(String filepath, String data);
             write_entire_file(path, import->string_to_compile);
