@@ -1,5 +1,8 @@
 #import "LibC"; // for sqrtf
 
+let TAU = 6.28318530718;
+let DEGREES_TO_RADIANS = TAU / 360.0;
+
 struct Vector3 {
     var x: float;
     var y: float;
@@ -38,6 +41,15 @@ struct Vector3 {
 
     func add(a: Vector3, b: Vector3) -> Vector3 {
         return make(a.x + b.x, a.y + b.y, a.z + b.z);
+    }
+
+    func multiply(a: Vector3, s: float) -> Vector3 {
+        return make(a.x*s, a.y*s, a.z*s);
+    }
+
+    func project_onto(a: Vector3, b: Vector3) -> Vector3 {
+        var scalar = dot(a, b) / b.length_squared();
+        return b.multiply(scalar);
     }
 }
 
@@ -90,8 +102,6 @@ struct Matrix4 {
         return mat;
     }
 
-    let DEGREES_TO_RADIANS: float = 0.0174533;
-
     func perspective(fov: float, aspect: float, near: float, far: float) -> Matrix4 {
         var t = cast(float) tan(DEGREES_TO_RADIANS * fov / 2.0) * near;
         var b = -t;
@@ -137,5 +147,86 @@ struct Matrix4 {
         result.m[3][3] = m[3][0] * mat.m[0][3] + m[3][1] * mat.m[1][3] + m[3][2] * mat.m[2][3] + m[3][3] * mat.m[3][3];
 
         return result;
+    }
+
+    func inverse(mat: Matrix4) -> Matrix4 {
+        var a = <<cast(*Vector3) *mat.m[0];
+        var b = <<cast(*Vector3) *mat.m[1];
+        var c = <<cast(*Vector3) *mat.m[2];
+        var d = <<cast(*Vector3) *mat.m[3];
+
+        var x = mat.m[0][3];
+        var y = mat.m[1][3];
+        var z = mat.m[2][3];
+        var w = mat.m[3][3];
+
+        var s = Vector3.cross(a, b);
+        var t = Vector3.cross(c, d);
+        var u = Vector3.sub(a.multiply(y), b.multiply(x));
+        var v = Vector3.sub(c.multiply(w), d.multiply(z));
+
+        var inv_det = 1.0 / (s.dot(v) + t.dot(u));
+        s = s.multiply(inv_det);
+        t = t.multiply(inv_det);
+        u = u.multiply(inv_det);
+        v = v.multiply(inv_det);
+
+        var r0 = Vector3.add(b.cross(v), t.multiply(y));
+        var r1 = Vector3.sub(v.cross(a), t.multiply(x));
+        var r2 = Vector3.add(d.cross(u), s.multiply(w));
+        var r3 = Vector3.sub(u.cross(c), s.multiply(z));
+
+        var result: Matrix4;
+        result.set_column(0, r0, -b.dot(t));
+        result.set_column(1, r1,  a.dot(t));
+        result.set_column(2, r2, -d.dot(s));
+        result.set_column(3, r3,  c.dot(s));
+        return result;
+    }
+
+    // utility to avoid making a function taking a bunch of floats for inverse()
+    func set_row(mat: Matrix4, index: int, v: Vector3, w: float) {
+        mat.m[index][0] = v.x;
+        mat.m[index][1] = v.y;
+        mat.m[index][2] = v.z;
+        mat.m[index][3] = w;
+    }
+
+    func set_column(mat: Matrix4, index: int, v: Vector3, w: float) {
+        mat.m[0][index] = v.x;
+        mat.m[1][index] = v.y;
+        mat.m[2][index] = v.z;
+        mat.m[3][index] = w;
+    }
+
+    func transpose(mat: Matrix4) -> Matrix4 {
+        var result: Matrix4;
+
+        for 0..3 {
+            var x = it;
+            for 0..3 {
+                var y = it;
+                result.m[x][y] = mat.m[y][x];
+            }
+        }
+
+        return result;
+    }
+
+
+    func determinate (mat: Matrix4) -> float {
+        return
+            mat.m[0][3] * mat.m[1][2] * mat.m[2][1] * mat.m[3][0] - mat.m[0][2] * mat.m[1][3] * mat.m[2][1] * mat.m[3][0] -
+            mat.m[0][3] * mat.m[1][1] * mat.m[2][2] * mat.m[3][0] + mat.m[0][1] * mat.m[1][3] * mat.m[2][2] * mat.m[3][0] +
+            mat.m[0][2] * mat.m[1][1] * mat.m[2][3] * mat.m[3][0] - mat.m[0][1] * mat.m[1][2] * mat.m[2][3] * mat.m[3][0] -
+            mat.m[0][3] * mat.m[1][2] * mat.m[2][0] * mat.m[3][1] + mat.m[0][2] * mat.m[1][3] * mat.m[2][0] * mat.m[3][1] +
+            mat.m[0][3] * mat.m[1][0] * mat.m[2][2] * mat.m[3][1] - mat.m[0][0] * mat.m[1][3] * mat.m[2][2] * mat.m[3][1] -
+            mat.m[0][2] * mat.m[1][0] * mat.m[2][3] * mat.m[3][1] + mat.m[0][0] * mat.m[1][2] * mat.m[2][3] * mat.m[3][1] +
+            mat.m[0][3] * mat.m[1][1] * mat.m[2][0] * mat.m[3][2] - mat.m[0][1] * mat.m[1][3] * mat.m[2][0] * mat.m[3][2] -
+            mat.m[0][3] * mat.m[1][0] * mat.m[2][1] * mat.m[3][2] + mat.m[0][0] * mat.m[1][3] * mat.m[2][1] * mat.m[3][2] +
+            mat.m[0][1] * mat.m[1][0] * mat.m[2][3] * mat.m[3][2] - mat.m[0][0] * mat.m[1][1] * mat.m[2][3] * mat.m[3][2] -
+            mat.m[0][2] * mat.m[1][1] * mat.m[2][0] * mat.m[3][3] + mat.m[0][1] * mat.m[1][2] * mat.m[2][0] * mat.m[3][3] +
+            mat.m[0][2] * mat.m[1][0] * mat.m[2][1] * mat.m[3][3] - mat.m[0][0] * mat.m[1][2] * mat.m[2][1] * mat.m[3][3] -
+            mat.m[0][1] * mat.m[1][0] * mat.m[2][2] * mat.m[3][3] + mat.m[0][0] * mat.m[1][1] * mat.m[2][2] * mat.m[3][3];
     }
 }
