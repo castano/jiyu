@@ -380,6 +380,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
         
         for (auto arg_type : type->arguments) {
+            arg_type = get_final_type(arg_type);
             if (arg_type == compiler->type_void) continue;
             
             Type *type = make_llvm_type(arg_type);
@@ -401,7 +402,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
             arguments.add(type);
         }
         
-        Type *return_type = make_llvm_type(type->return_type);
+        Type *return_type = make_llvm_type(get_final_type(type->return_type));
         if (type->return_type->type == Ast_Type_Info::VOID) {
             return_type = type_void;
         }

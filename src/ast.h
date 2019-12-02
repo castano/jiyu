@@ -153,7 +153,7 @@ struct Ast_Type_Instantiation : Ast_Expression {
     // @Cleanup maybe, builtin_primitive sort of overlaps with type_value since it is known at the time of parsing.
     Ast_Type_Info *builtin_primitive = nullptr;
     Ast_Type_Instantiation *pointer_to = nullptr;
-    Ast_Identifier *typename_identifier = nullptr;
+    Ast_Expression *type_dereference_expression = nullptr;
     
     Ast_Type_Instantiation *array_element_type = nullptr;
     Ast_Expression *array_size_expression = nullptr;

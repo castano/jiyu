@@ -210,7 +210,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             
             COPY_P(builtin_primitive);
             COPY(pointer_to);
-            COPY(typename_identifier);
+            COPY(type_dereference_expression);
             COPY(array_element_type);
             COPY(array_size_expression);
             COPY_P(array_is_dynamic);
@@ -401,14 +401,19 @@ bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_i
         return types_match(type_inst->builtin_primitive, target_type_info);
     }
     
-    if (type_inst->typename_identifier) {
+    if (type_inst->type_dereference_expression) {
+        if (type_inst->type_dereference_expression->type != AST_IDENTIFIER) {
+            // @TODO this should probably be done at parse time.
+            compiler->report_error(type_inst->type_dereference_expression, "Type-name of polymorphic template argument must be an identifier.\n");
+            return false;
+        }
         // dont call this stuff here because we cant yet typecheck the resolved decl if it is
         // a template argument typealias
         // compiler->sema->typecheck_expression(type_inst->typename_identifier);
-        
-        auto decl = compiler->sema->find_declaration_for_atom(type_inst->typename_identifier->name, type_inst->typename_identifier->enclosing_scope);
+        auto ident = static_cast<Ast_Identifier *>(type_inst->type_dereference_expression);
+        auto decl = compiler->sema->find_declaration_for_atom(ident->name, ident->enclosing_scope);
         if (!decl) {
-            compiler->report_error(type_inst->typename_identifier, "Undeclared identifier.\n");
+            compiler->report_error(ident, "Undeclared identifier '%.*s'.\n", PRINT_ARG(ident->name->name));
             return false;
         }
         

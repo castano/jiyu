@@ -1206,7 +1206,26 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
         Ast_Type_Instantiation *type_inst = PARSER_NEW(Ast_Type_Instantiation);
         
         auto ident = parse_identifier();
-        type_inst->typename_identifier = ident;
+
+        Ast_Expression *sub_expression = ident;
+        token = peek_token();
+        while (token->type == Token::DOT) {
+            Ast_Dereference *deref = PARSER_NEW(Ast_Dereference);
+            next_token();
+            
+            // @TODO do other languages let you use anything other than an identifier for a field selection?
+            auto right = parse_identifier();
+            if (!right) return nullptr;
+            
+            deref->left = sub_expression;
+            deref->field_selector = right;
+            
+            sub_expression = deref;
+
+            token = peek_token();
+        }
+
+        type_inst->type_dereference_expression = sub_expression;
         return type_inst;
     }
     

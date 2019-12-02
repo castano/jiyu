@@ -256,6 +256,14 @@ void print_type_to_builder(String_Builder *builder, Ast_Type_Info *info) {
         return;
     }
 
+    if (info->type == Ast_Type_Info::FUNCTION) {
+        // @Incomplete
+        builder->putchar('(');
+        builder->append("func");
+        builder->putchar(')');
+        return;
+    }
+
     assert(false);
 }
 
@@ -2070,6 +2078,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
         case AST_TYPE_ALIAS: {
             auto alias = static_cast<Ast_Type_Alias *>(expression);
+
             if (alias->internal_type_inst) {
                 resolve_type_inst(alias->internal_type_inst);
                 if (compiler->errors_reported) return;
@@ -2082,6 +2091,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 // alias system. No need to create an _alias_ type, but maybe
                 // we should for error reporting clarity.
                 assert(alias->type_value);
+
+                // In the case that we got here due to clang_import, typecheck struct_decl if able
+                // Otherwise something might try to resolve before struct_decl is fully typechecked.
+                if (get_final_type(alias->type_value)->struct_decl) typecheck_expression(get_final_type(alias->type_value)->struct_decl);
             }
             alias->type_info = compiler->type_info_type;
             return;
@@ -2382,19 +2395,25 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
         return type_inst->type_value;
     }
 
-    if (type_inst->typename_identifier) {
-        typecheck_expression(type_inst->typename_identifier);
+    if (type_inst->type_dereference_expression) {
+        typecheck_expression(type_inst->type_dereference_expression);
         if (compiler->errors_reported) return nullptr;
 
-        auto ident = type_inst->typename_identifier;
+        auto expr = type_inst->type_dereference_expression;
+        while (expr->substitution) expr = expr->substitution;
 
-        if (ident->type_info->type != Ast_Type_Info::TYPE) {
-            String name = ident->name->name;
-            compiler->report_error(ident, "Identifier '%.*s' doesn't name a type.\n", name.length, name.data);
+        if (get_type_info(expr)->type != Ast_Type_Info::TYPE) {
+            // @TODO it would be nice if this could print out a dereference chain:
+            // struct Test { func T (){ ...} ... }
+            // Typename expression 'Test.T' doesn't name a type.
+            compiler->report_error(expr, "Typename expression doesn't name a type.\n");
             return nullptr;
         }
 
-        auto decl = ident->resolved_declaration;
+        auto decl = expr;
+        if (expr->type == AST_IDENTIFIER) {
+            decl = static_cast<Ast_Identifier *>(expr)->resolved_declaration;
+        }
 
         if (decl->type == AST_TYPE_ALIAS) {
             auto alias = static_cast<Ast_Type_Alias *>(decl);
