@@ -131,6 +131,10 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
 
         case CXType_Pointer: {
             CXType pointee = clang_getPointeeType(type);
+            if (pointee.kind == CXType_FunctionProto) {
+                // the plain function-pointer-type in Jiyu is 1 level of indirection away from C (which defaults to a pointer-to-function).
+                return get_jiyu_type(data, pointee);
+            }
             return compiler->make_pointer_type(get_jiyu_type(data, pointee));
         }
         
@@ -179,9 +183,10 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
         case CXType_FunctionProto: {
             // @Cutnpaste from Compiler::make_function_type
             Ast_Type_Info *info = IMPORT_NEW(Ast_Type_Info);
-            info->type   = Ast_Type_Info::FUNCTION;
-            info->size   = compiler->type_ptr_void->size;
-            info->stride = compiler->type_ptr_void->stride;
+            info->type      = Ast_Type_Info::FUNCTION;
+            info->size      = compiler->type_ptr_void->size;
+            info->stride    = compiler->type_ptr_void->stride;
+            info->alignment = compiler->type_ptr_void->stride;
             
             info->is_c_function = true;
             info->is_c_varargs  = (clang_isFunctionTypeVariadic(type) != 0);

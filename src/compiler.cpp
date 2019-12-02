@@ -188,9 +188,10 @@ Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct) {
 
 Ast_Type_Info *Compiler::make_function_type(Ast_Function *function) {
     Ast_Type_Info *info = COMPILER_NEW(Ast_Type_Info);
-    info->type   = Ast_Type_Info::FUNCTION;
-    info->size   = this->type_ptr_void->size;
-    info->stride = this->type_ptr_void->stride;
+    info->type      = Ast_Type_Info::FUNCTION;
+    info->size      = this->type_ptr_void->size;
+    info->stride    = this->type_ptr_void->stride;
+    info->alignment = this->type_ptr_void->alignment;
     
     info->is_c_function = function->is_c_function;
     info->is_c_varargs  = function->is_c_varargs;

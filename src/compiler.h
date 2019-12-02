@@ -205,6 +205,12 @@ bool is_aggregate_type(Ast_Type_Info *info) {
 }
 
 inline
+bool is_function_type(Ast_Type_Info *info) {
+    info = get_final_type(info);
+    return info->type == Ast_Type_Info::FUNCTION;
+}
+
+inline
 Ast_Type_Info *get_type_info(Ast_Expression *expr) {
     while (expr->substitution) expr = expr->substitution;
     

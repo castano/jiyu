@@ -1156,6 +1156,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 }
             } else if (is_pointer_type(src) && is_pointer_type(dst)) {
                 return irb->CreatePointerCast(value, dst_type);
+            } else if (is_function_type(src) && is_function_type(dst)) {
+                return irb->CreatePointerCast(value, dst_type);
             } else if (is_pointer_type(src) && is_int_type(dst)) {
                 return irb->CreatePtrToInt(value, dst_type);
             } else if (is_int_type(src) && is_pointer_type(dst)) {
