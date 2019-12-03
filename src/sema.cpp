@@ -2069,9 +2069,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             cast->type_info = target;
 
             if (!is_valid_primitive_cast(target, expr_type)) {
-                is_valid_primitive_cast(target, expr_type);
-                // @TODO print the types we're trying to cast between
-                compiler->report_error(cast, "Cast is invalid.\n");
+                String from = type_to_string(expr_type);
+                String to   = type_to_string(target);
+                compiler->report_error(cast, "Invalid cast from '%.*s' to '%.*s'.\n", PRINT_ARG(from), PRINT_ARG(to));
+                free(from.data);
+                free(to.data);
             }
 
             return;
