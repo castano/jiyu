@@ -1237,11 +1237,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 auto result = typecheck_and_implicit_cast_single_expression(decl->initializer_expression, get_type_info(decl), ALLOW_COERCE_TO_PTR_VOID);
 
                 if (decl->initializer_expression != result.item2) decl->initializer_expression = result.item2; // Don't do a substitution here, otherwise we can cause a loop
+                
                 if (!types_match(get_type_info(decl), get_type_info(decl->initializer_expression))) {
+                    // @@ The error message is good, but the error highlight could be improved, currently it points to the ':' in the declaration only.
+                    // Note that due to the above substitution it's not a good idea to point to the initializer.
                     auto wanted = type_to_string(get_type_info(decl));
                     auto given  = type_to_string(get_type_info(decl->initializer_expression));
-                    compiler->report_error(decl->initializer_expression, "Attempt to initialize variable with expression of incompatible type (Wanted %.*s, Given %.*s).\n",
-                                           wanted.length, wanted.data, given.length, given.data);
+                    compiler->report_error(decl, "Attempt to initialize '%.*s' with expression of incompatible type (Wanted %.*s, Given %.*s).\n",
+                                           PRINT_ARG(decl->identifier->name->name), PRINT_ARG(wanted), PRINT_ARG(given));
                     free(wanted.data);
                     free(given.data);
                     return;
