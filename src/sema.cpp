@@ -641,6 +641,14 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             return nullptr;
         }
 
+        case AST_TYPE_INSTANTIATION: {
+            auto type_inst = static_cast<Ast_Type_Instantiation *>(expression);
+            
+            auto literal = make_integer_literal(compiler, type_inst->type_value->type_table_index, compiler->type_info_type, type_inst);
+
+            return literal;
+        }
+
         case AST_CAST: {
             auto cast = static_cast<Ast_Cast *>(expression);
             auto target_type = cast->type_info;
@@ -1110,6 +1118,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             // only available attached to other AST nodes, which will call resolve_type_inst
             // on it.
             //assert(false);
+            resolve_type_inst(static_cast<Ast_Type_Instantiation*>(expression));
             expression->type_info = compiler->type_info_type;
             return;
         }
@@ -1576,6 +1585,19 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     call->substitution = os;
                     return;
                 }
+                /*else if (identifier->name == compiler->atom_type_of) {
+                    if (call->argument_list.count != 1) {
+                        compiler->report_error(call, "type_of() operator only accepts one argument.\n");
+                        return;
+                    }
+
+                    Ast_Typeof *type_of = SEMA_NEW(Ast_Typeof);
+                    copy_location_info(type_of, call);
+                    type_of->expression = call->argument_list[0];
+                    typecheck_expression(type_of);
+                    call->substitution = type_of;
+                    return;
+                }*/
             }
 
             typecheck_expression(subexpression, want_numeric_type, true);
@@ -2404,25 +2426,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             typecheck_expression(typeof->expression);
             if (compiler->errors_reported) return;
 
-            //auto expr_type = get_type_info(typeof->expression);
+            auto expr_type = get_type_info(typeof->expression);
 
-            // 
+            Ast_Type_Instantiation *type_inst = new (compiler->get_memory(sizeof(Ast_Type_Instantiation))) Ast_Type_Instantiation();
+            copy_location_info(type_inst, typeof);
+            type_inst->type_value = expr_type;
 
-
+            typeof->substitution = type_inst;
             typeof->type_info = compiler->type_info_type;
-
-            // @@ Create a type instantiation for the type of the expression.
-            //Ast_Type_Instantiation *type_inst = PARSER_NEW(Ast_Type_Instantiation);
-
-
-            //auto type = resolve_type_inst(type_of->target_type_inst);
-
-            // @@ What do we resolve this exactly?
-            // auto lit = make_integer_literal(compiler, get_final_type(type)->size, compiler->type_int32);
-            // copy_location_info(lit, size);
-
-            // type_of->type_info = lit->type_info;
-            // type_of->substitution = lit;
             return;
         }
         case AST_OS: {
@@ -2526,13 +2537,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         }
 
         case AST_ENUM: {
-            //compiler->report_error(expression, "enum statements not supported yet.\n");
-
             auto _enum = static_cast<Ast_Enum *>(expression);
             
             // Set this early so we dont recurse indefinitely
             _enum->type_value = compiler->make_enum_type(_enum);
-            _enum->type_info = compiler->type_info_type;            // @@ What is this exactly?
+            _enum->type_info = compiler->type_info_type;
             
             auto base_type_info = resolve_type_inst(_enum->base_type);
             if (compiler->errors_reported) return;
