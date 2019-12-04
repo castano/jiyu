@@ -1241,8 +1241,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             irb->CreateCondBr(cond, loop_body, next_block);
             
             irb->SetInsertPoint(loop_body);
-            if (loop->statement) {
-                emit_expression(loop->statement);
+            {
+                emit_scope(&loop->body);
                 // irb->SetInsertPoint(loop_body);
                 if (!irb->GetInsertBlock()->getTerminator()) irb->CreateBr(loop_header);
             }

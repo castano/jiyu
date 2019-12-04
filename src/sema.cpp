@@ -723,6 +723,8 @@ void Sema::typecheck_scope(Ast_Scope *scope) {
     for (auto &it : scope->statements) {
         // @TODO should we do replacements at the scope level?
         typecheck_expression(it);
+
+        if (compiler->errors_reported) return;
     }
 }
 
@@ -1855,7 +1857,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 compiler->report_error(cond, "'while' condition isn't of boolean type.\n");
             }
 
-            if (loop->statement) typecheck_expression(loop->statement);
+            typecheck_scope(&loop->body);
 
             return;
         }

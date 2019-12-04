@@ -253,7 +253,7 @@ struct Ast_While : Ast_Expression {
     Ast_While() { type = AST_WHILE; }
     
     Ast_Expression *condition = nullptr;
-    Ast_Expression *statement = nullptr;
+    Ast_Scope body;
 };
 
 struct Ast_Return : Ast_Expression {

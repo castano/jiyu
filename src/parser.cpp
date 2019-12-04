@@ -872,7 +872,9 @@ Ast_Expression *Parser::parse_statement() {
             return loop;
         }
         
-        loop->statement = parse_statement();
+        loop->body.parent = get_current_scope();
+        loop->body.owning_statement = loop;
+        parse_scope(&loop->body, false, true);
         return loop;
     }
     

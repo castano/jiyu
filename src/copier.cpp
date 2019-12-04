@@ -192,8 +192,9 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto _new = COPIER_NEW(Ast_While);
             
             COPY(condition);
-            COPY(statement);
-            
+
+            copy_scope(&_new->body, &old->body);
+            _new->body.owning_statement = _new;
             return _new;
         }
         case AST_RETURN: {
