@@ -55,6 +55,13 @@ static void add_type(String_Builder *builder, Ast_Type_Info *type) {
         // @Incomplete anonymous structs?
         String name = type->struct_decl->identifier->name->name;
         builder->print("%d%.*s", name.length, name.length, name.data);
+    } else if (type->type == Ast_Type_Info::ENUM) {
+        builder->putchar('E');
+
+        // @Incomplete structs that are declared with other structs/named-scopes.
+        // @Incomplete anonymous structs?
+        String name = type->enum_decl->identifier->name->name;
+        builder->print("%d%.*s", name.length, name.length, name.data);
     } else if (type->type == Ast_Type_Info::FUNCTION) {
         builder->putchar('L');
 
@@ -253,6 +260,24 @@ void print_type_to_builder(String_Builder *builder, Ast_Type_Info *info) {
             print_type_to_builder(builder, info->alias_of);
         }
 
+        return;
+    }
+
+    if (info->type == Ast_Type_Info::ENUM) {
+        auto _enum = info->enum_decl;
+
+        maybe_add_struct_parent_name(builder, _enum->member_scope.parent);
+
+        if (_enum->identifier) {
+            String name = _enum->identifier->name->name;
+            builder->print("%.*s", PRINT_ARG(name));
+        }
+        return;
+    }
+
+    if (info->type == Ast_Type_Info::TYPE) {
+        // @@ Print type name properly.
+        builder->print("<type>");
         return;
     }
 
@@ -1647,6 +1672,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     left_type = _struct->type_value;
                     assert(left_type);
                 }
+                else if (left->type == AST_ENUM) {
+                    auto _enum = static_cast<Ast_Enum *>(left);
+
+                    left_type = _enum->type_value;
+                    assert(left_type);
+                }
             }
 
             deref->is_type_dereference = is_type_use;
@@ -1821,20 +1852,20 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 // @Incomplete this should perform a scope lookup for a declaration so we can handle
                 // lets, functions, typealiases, etc..
-                bool found = false;
-                int index = 0;
+                //int index = 0;
                 for (auto member : _enum->member_scope.declarations) {
                     auto decl = static_cast<Ast_Declaration *>(member);
                     if (decl->identifier->name == field_atom) {
-                        found = true;
-                        
-                        deref->element_path_index = index;
+                        //deref->element_path_index = index;
                         //deref->type_info = member.type_info;
-                        deref->byte_offset = 0;
-                        break;
-                    }
+                        //deref->byte_offset = 0;
+                        //break;
 
-                    index += 1;
+                        typecheck_expression(decl); // @@ Is this necessary here?
+                        if (compiler->errors_reported) return;
+
+                        deref->substitution = decl;
+                    }
                 }
             }
 
@@ -2541,6 +2572,12 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
             typecheck_expression(_struct);
 
             type_inst->type_value = _struct->type_value;
+            return type_inst->type_value;
+        } else if (decl->type == AST_ENUM) {
+            auto _enum = static_cast<Ast_Enum *>(decl);
+            typecheck_expression(_enum);
+
+            type_inst->type_value = _enum->type_value;
             return type_inst->type_value;
         } else {
             assert(false);

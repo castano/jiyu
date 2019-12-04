@@ -583,6 +583,29 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
     if (type->type == Ast_Type_Info::TYPE) {
         return di_type_type;
     }
+
+    if (type->type == Ast_Type_Info::ENUM) {
+        // if (type->debug_type_table_index >= 0) {
+        //     return llvm_debug_types[type->debug_type_table_index];
+        // }
+
+        // auto enum_decl = type->enum_decl;
+        // auto debug_file = get_debug_file(llvm_context, debug_decl);
+        // auto line_number = get_line_number(debug_decl);
+
+        // String name;
+        // if (enum_decl->identifier) name = enum_decl->identifier->name->name;
+
+
+        // auto final_type = dib->createEnumerationType()
+
+        //StructType(di_compile_unit, string_ref(name), debug_file,
+        //            line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
+        //            flags, derived_from, empty_elements);
+
+        return get_debug_type(type->enum_base_type);
+
+    }
     
     assert(false);
     return nullptr;
@@ -1133,6 +1156,10 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             
             auto src = get_final_type(get_type_info(cast->expression));
             auto dst = get_final_type(cast->type_info);
+
+            // @@ I'm treating enums like their underlying base type. Not sure this is the right thing!
+            if (src->type == Ast_Type_Info::ENUM) src = src->enum_base_type;
+            if (dst->type == Ast_Type_Info::ENUM) dst = dst->enum_base_type;
             
             auto src_type = get_type(src);
             auto dst_type = get_type(dst);

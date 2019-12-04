@@ -228,11 +228,15 @@ bool is_valid_primitive_cast(Ast_Type_Info *target, Ast_Type_Info *source) {
     }
     
     if (target->type == Ast_Type_Info::INTEGER) {
-        return (source->type == Ast_Type_Info::INTEGER || source->type == Ast_Type_Info::POINTER || source->type == Ast_Type_Info::FLOAT);
+        return (source->type == Ast_Type_Info::INTEGER || source->type == Ast_Type_Info::POINTER || source->type == Ast_Type_Info::FLOAT || source->type == Ast_Type_Info::ENUM);
     }
     
     if (target->type == Ast_Type_Info::FLOAT) {
         return (source->type == Ast_Type_Info::FLOAT || source->type == Ast_Type_Info::INTEGER);
+    }
+
+    if (target->type == Ast_Type_Info::ENUM) {
+        return (source->type == Ast_Type_Info::INTEGER);
     }
     
     return false;

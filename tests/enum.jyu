@@ -1,37 +1,75 @@
 #import "LibC";
+#import "Basic";
 
-
-
+/*
 struct Days {
     let Monday = 0;
-    let Tuesday = Monday + 1;
+}
+var monday : Days = Days.Monday;
+*/
+
+
+enum Days : uint {
+    //Monday;
+    //Tuesday;
+    Monday = 0;             // These implict casts are OK.
+    Tuesday = Monday + 1;
 }
 
-var monday = Days.Monday;
 
-let MONDAY = 0;
-let TUESDAY = MONDAY + 1;
 
-func test(day : int) -> int {
-    return day + 1;
+//var monday = Days.Monday;
+//var tuesday : Days = Days.Tuesday;
+//var my_day : Days;
+
+//let MONDAY = 0;
+//let TUESDAY = MONDAY + 1;
+
+func test(day : Days) -> int {
+    return cast(int)day + 1;
 }
+
 
 func main() {
+
+    // These require explicit casts.
+    //var f : float = 1;
+    //var i : int = 1.0;
+
+    // These do not:
+    var f : float = cast(float) 1;
+    var i : int = cast(int) 1.0;
+
+    {
+        var day : Days;
+
+        let Monday = Days.Monday;
+        assert(typeof(Monday) == Days);
+
+        let MONDAY = cast(int)Days.Monday;   // Type of MONDAY is int
+        assert(typeof(MONDAY) == int);
+    }
+
+    {
+        var day = Days.Monday;
+        assert(typeof(day) == Days);
+
+        var day_index = cast(int)Days.Monday;   // Type of dayIndex is int
+        assert(typeof(day_index) == int);
+    }
+
     var monday = Days.Monday;
 
-    test(Days.Monday + 1);
-    printf("MONDAY = %d\n", MONDAY);
-    printf("TUESDAY = %d\n", TUESDAY);
+    //test(Days.Monday + 1);
+    //printf("MONDAY = %d\n", MONDAY);
+    //printf("TUESDAY = %d\n", TUESDAY);
   
     printf("Monday = %d\n", Days.Monday);
     printf("Tuesday = %d\n", Days.Tuesday);
-    printf("Monday+1 = %d\n", test(Days.Monday));
+    //printf("Monday+1 = %d\n", test(Days.Monday));
 
     //printf("Whatever = %d\n", Days.Whatever); // This should trigger an error.
 }
-
-
-
 
 
 /*
