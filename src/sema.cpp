@@ -2288,6 +2288,38 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             size->substitution = lit;
             return;
         }
+        case AST_TYPEOF: {
+            Ast_Typeof *typeof = static_cast<Ast_Typeof *>(expression);
+
+            if (!typeof->expression) {
+                compiler->report_error(typeof, "typeof() must take one argument.\n");
+                return;
+            }
+
+            typecheck_expression(typeof->expression);
+            if (compiler->errors_reported) return;
+
+            //auto expr_type = get_type_info(typeof->expression);
+
+            // 
+
+
+            typeof->type_info = compiler->type_info_type;
+
+            // @@ Create a type instantiation for the type of the expression.
+            //Ast_Type_Instantiation *type_inst = PARSER_NEW(Ast_Type_Instantiation);
+
+
+            //auto type = resolve_type_inst(type_of->target_type_inst);
+
+            // @@ What do we resolve this exactly?
+            // auto lit = make_integer_literal(compiler, get_final_type(type)->size, compiler->type_int32);
+            // copy_location_info(lit, size);
+
+            // type_of->type_info = lit->type_info;
+            // type_of->substitution = lit;
+            return;
+        }
         case AST_OS: {
             auto os = static_cast<Ast_Os *>(expression);
 

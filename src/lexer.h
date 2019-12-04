@@ -73,12 +73,13 @@ struct Token {
         
         KEYWORD_CAST,
         KEYWORD_SIZEOF,
+        KEYWORD_TYPEOF,
         
         TAG_C_FUNCTION,
         TAG_META,
         TAG_EXPORT,
         
-        TEMPORARY_KEYWORD_C_VARARGS = 300,
+        TEMPORARY_KEYWORD_C_VARARGS = 400,
         
         GE_OP,                // >=
         LE_OP,                // <=

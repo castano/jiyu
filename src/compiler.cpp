@@ -337,6 +337,7 @@ void Compiler::init() {
     atom_main      = make_atom(to_string("main"));
     atom___strings_match = make_atom(to_string("__strings_match"));
     atom_os        = make_atom(to_string("os"));
+    atom_type_of        = make_atom(to_string("type_of"));
     atom_MacOSX    = make_atom(to_string("MacOSX"));
     atom_Windows   = make_atom(to_string("Windows"));
     atom_Linux     = make_atom(to_string("Linux"));
@@ -661,7 +662,9 @@ void Compiler::report_error(Token *tok, char *fmt, ...) {
     report_error_valist(filename, source, span, fmt, args);
     va_end(args);
     
-    // __builtin_debugtrap();
+    if (is_debugger_present()) {
+        debug_break();
+    }
 }
 
 

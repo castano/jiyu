@@ -93,6 +93,7 @@ String token_type_to_string(Token::Type type) {
         
         case Token::KEYWORD_CAST:   return copy_string(to_string("cast"));
         case Token::KEYWORD_SIZEOF: return copy_string(to_string("sizeof"));
+        case Token::KEYWORD_TYPEOF: return copy_string(to_string("typeof"));
         
         case Token::TAG_C_FUNCTION: return copy_string(to_string("@c_function"));
         case Token::TAG_META:       return copy_string(to_string("@metaprogram"));
@@ -170,6 +171,12 @@ Ast_Expression *Parser::parse_primary_expression() {
         auto ident = parse_identifier();
         return ident;
     }
+
+    // @@ Do not hardcode type keyword ranges.
+    if (token->type >= Token::KEYWORD_VOID && token->type <= Token::KEYWORD_BOOL) {
+        auto type_inst = parse_type_inst();
+        return type_inst;
+    }
     
     if (token->type == Token::INTEGER) {
         Ast_Literal *lit = PARSER_NEW(Ast_Literal);
@@ -236,6 +243,19 @@ Ast_Expression *Parser::parse_primary_expression() {
         if (!expect_and_eat(Token::RIGHT_PAREN)) return size;
         
         return size;
+    }
+
+    if (token->type == Token::KEYWORD_TYPEOF) {
+        Ast_Typeof *type_of = PARSER_NEW(Ast_Typeof);
+        next_token();
+        
+        if (!expect_and_eat(Token::LEFT_PAREN)) return type_of;
+        
+        type_of->expression = parse_expression();
+        
+        if (!expect_and_eat(Token::RIGHT_PAREN)) return type_of;
+        
+        return type_of;
     }
     
     return nullptr;

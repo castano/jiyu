@@ -34,6 +34,7 @@ enum Ast_Type {
     AST_TYPE_ALIAS,
     AST_ARRAY_DEREFERENCE,
     AST_SIZEOF,
+    AST_TYPEOF,
     AST_FOR,
     AST_STRUCT,
     AST_ENUM,
@@ -354,6 +355,11 @@ struct Ast_Cast : Ast_Expression {
 struct Ast_Sizeof : Ast_Expression {
     Ast_Sizeof() { type = AST_SIZEOF; }
     Ast_Type_Instantiation *target_type_inst = nullptr;
+};
+
+struct Ast_Typeof : Ast_Expression {
+    Ast_Typeof() { type = AST_TYPEOF; }
+    Ast_Expression *expression = nullptr;
 };
 
 struct Ast_Os : Ast_Expression {

@@ -250,6 +250,14 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             
             return _new;
         }
+        case AST_TYPEOF: {
+            auto old  = static_cast<Ast_Typeof *>(expression);
+            auto _new = COPIER_NEW(Ast_Typeof);
+            
+            COPY(expression);
+            
+            return _new;
+        }
         case AST_FOR: {
             auto old  = static_cast<Ast_For *>(expression);
             auto _new = COPIER_NEW(Ast_For);
