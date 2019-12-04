@@ -2088,8 +2088,13 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             cast->type_info = target;
 
             if (!is_valid_primitive_cast(target, expr_type)) {
-                // @TODO print the types we're trying to cast between
-                compiler->report_error(cast, "Cast is invalid.\n");
+                auto target_type_name = type_to_string(target);
+                defer { free(target_type_name.data); };
+
+                auto expr_type_name = type_to_string(expr_type);
+                defer { free(expr_type_name.data); };
+
+                compiler->report_error(cast, "Cast from '%.*s' to '%.*s' is invalid.\n", PRINT_ARG(expr_type_name), PRINT_ARG(target_type_name));
             }
 
             return;

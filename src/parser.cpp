@@ -529,9 +529,15 @@ Ast_Expression *Parser::parse_equality_expression() {
             bin->operator_type = token->type;
             bin->left = sub_expression;
             
+            if (token->type == Token::EQ_OP && sub_expression->type == AST_FUNCTION_CALL) {
+                //debug_break();
+            }
+
             auto right = parse_relational_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -563,7 +569,9 @@ Ast_Expression *Parser::parse_and_expression() {
             
             auto right = parse_equality_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -595,7 +603,9 @@ Ast_Expression *Parser::parse_exclusive_or_expression() {
             
             auto right = parse_and_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -627,7 +637,9 @@ Ast_Expression *Parser::parse_inclusive_or_expression() {
             
             auto right = parse_exclusive_or_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -659,7 +671,9 @@ Ast_Expression *Parser::parse_logical_and_expression() {
             
             auto right = parse_inclusive_or_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -691,7 +705,9 @@ Ast_Expression *Parser::parse_logical_xor_expression() {
             
             auto right = parse_logical_and_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -723,7 +739,9 @@ Ast_Expression *Parser::parse_logical_or_expression() {
             
             auto right = parse_logical_xor_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
