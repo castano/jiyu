@@ -66,7 +66,7 @@ static void add_type(String_Builder *builder, Ast_Type_Info *type) {
         add_type(builder, type->return_type);
         builder->putchar('_');
         if (type->is_c_function) builder->putchar('C');
-        if (type->is_c_function) builder->putchar('V');
+        if (type->is_c_varargs) builder->putchar('V');
         builder->putchar('_');
     } else {
         assert(false && "Internal error: unhandled type when creating function mangled name.");
