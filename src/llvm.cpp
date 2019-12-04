@@ -820,9 +820,21 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                         return irb->CreateSub(left, right);
                     }
                     case Token::EQ_OP: {
-                        return irb->CreateICmpEQ(left, right);
+                        auto info = get_type_info(bin->left);
+                        if (is_float_type(info)) {
+                            return irb->CreateFCmpUEQ(left, right);
+                        } else {
+                            return irb->CreateICmpEQ(left, right);
+                        }
                     }
-                    case Token::NE_OP: return irb->CreateICmpNE(left, right);
+                    case Token::NE_OP: {
+                        auto info = get_type_info(bin->left);
+                        if (is_float_type(info)) {
+                            return irb->CreateFCmpUNE(left, right);
+                        } else {
+                            return irb->CreateICmpNE(left, right);
+                        }
+                    }
                     case Token::LE_OP: {
                         auto info = get_type_info(bin->left);
                         if (is_int_type(info)) {
