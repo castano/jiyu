@@ -116,6 +116,7 @@ struct Compiler {
     Atom *atom_main;
     Atom *atom___strings_match;
     Atom *atom_os;
+    Atom *atom_type_of;
     Atom *atom_MacOSX;
     Atom *atom_Windows;
     Atom *atom_Linux;
