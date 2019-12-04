@@ -572,7 +572,7 @@ Atom *Compiler::make_atom(String name) {
 #define TTY_RED    "\033[0;31m"
 #define TTY_RESET  "\033[0m"
 
-void Compiler::report_error_valist(String filename, String source, Span error_location, char *fmt, va_list args) {
+void Compiler::report_diagnostic_valist(String filename, String source, Span error_location, char *level_name, char *fmt, va_list args) {
     
     string_length_type l0 = -1;
     string_length_type c0 = -1;
@@ -583,7 +583,7 @@ void Compiler::report_error_valist(String filename, String source, Span error_lo
     error_location.map_to_text_coordinates(source, &l0, &c0, &l1, &c1);
     
     // @Cleanup these static_casts by using the right printf format spec
-    printf("w%lld:%.*s:%d,%d: ", this->instance_number, PRINT_ARG(filename), static_cast<int>(l0), static_cast<int>(c0));
+    printf("w%lld:%.*s:%d,%d: %s: ", this->instance_number, PRINT_ARG(filename), static_cast<int>(l0), static_cast<int>(c0), level_name);
     vprintf(fmt, args);
     printf("\n");
     
@@ -635,8 +635,6 @@ void Compiler::report_error_valist(String filename, String source, Span error_lo
     }
     
     putchar('\n');
-    
-    errors_reported += 1;
 }
 
 void Compiler::report_error(Token *tok, char *fmt, ...) {
@@ -652,10 +650,10 @@ void Compiler::report_error(Token *tok, char *fmt, ...) {
         span = tok->text_span.span;
     }
     
-    report_error_valist(filename, source, span, fmt, args);
+    report_diagnostic_valist(filename, source, span, "error", fmt, args);
     va_end(args);
     
-    // __builtin_debugtrap();
+    errors_reported += 1;
 }
 
 
@@ -673,7 +671,47 @@ void Compiler::report_error(Ast *ast, char *fmt, ...) {
         span = ast->text_span.span;
     }
     
-    report_error_valist(filename, source, span, fmt, args);
+    report_diagnostic_valist(filename, source, span, "error", fmt, args);
+    va_end(args);
+
+    errors_reported += 1;
+}
+
+void Compiler::report_warning(Token *tok, char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    String filename;
+    String source;
+    Span span;
+    
+    if (tok) {
+        filename = tok->filename;
+        source = tok->text_span.string;
+        span = tok->text_span.span;
+    }
+    
+    report_diagnostic_valist(filename, source, span, "warning", fmt, args);
+    va_end(args);
+    
+    // __builtin_debugtrap();
+}
+
+
+void Compiler::report_warning(Ast *ast, char *fmt, ...) {
+    va_list args;
+    va_start(args, fmt);
+    
+    String filename;
+    String source;
+    Span span;
+    
+    if (ast) {
+        filename = ast->filename;
+        source = ast->text_span.string;
+        span = ast->text_span.span;
+    }
+    
+    report_diagnostic_valist(filename, source, span, "warning", fmt, args);
     va_end(args);
 }
 

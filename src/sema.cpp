@@ -3,9 +3,21 @@
 #include "ast.h"
 #include "compiler.h"
 #include "copier.h"
+#include "llvm.h"
 
 #include <stdio.h>
 #include <new> // for placement new
+
+#ifdef WIN32
+#pragma warning(push, 0)
+#endif
+
+// For Ast_Os
+#include "llvm/Target/TargetMachine.h"
+
+#ifdef WIN32
+#pragma warning(pop)
+#endif
 
 #define SEMA_NEW(type) (new (compiler->get_memory(sizeof(type))) type())
 
@@ -2302,16 +2314,20 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             lit->type_info = compiler->type_bool;
             lit->bool_value = false;
 
-            // @Incomplete @FixMe this should be based off of what the LLVM target is
-#ifdef WIN32
-            lit->bool_value = (ident->name == compiler->atom_Windows);
-#elif defined(MACOSX)
-            lit->bool_value = (ident->name == compiler->atom_MacOSX);
-#elif defined(LINUX)
-            lit->bool_value = (ident->name == compiler->atom_Linux);
-#else
-            assert(false);
-#endif
+            auto os_type = compiler->llvm_gen->TargetMachine->getTargetTriple().getOS();
+            auto os_name = llvm::Triple::getOSTypeName(os_type);
+
+            auto ident_string = copy_string(ident->name->name);
+            // @FixMe be weary of a UTF8 string here.
+            for (string_length_type i = 0; i < ident_string.length; ++i) {
+                ident_string.data[i] = tolower(ident_string.data[i]);
+            }
+
+            lit->bool_value = (ident_string == to_string(os_name.str().c_str()));
+
+            free(ident_string.data);
+
+
             Atom *name = ident->name;
             bool valid_option = (name == compiler->atom_Windows) || (name == compiler->atom_MacOSX) || (name == compiler->atom_Linux);
 

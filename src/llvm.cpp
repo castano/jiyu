@@ -80,11 +80,17 @@ void LLVM_Generator::preinit() {
     InitializeAllAsmParsers();
     InitializeAllAsmPrinters();
     
-    std::string TargetTriple = llvm::sys::getDefaultTargetTriple();
+    std::string default_target_triple = llvm::sys::getDefaultTargetTriple();
+    std::string process_triple = llvm::sys::getProcessTriple();
+    
+    std::string TargetTriple = default_target_triple;
+    if (compiler->is_metaprogram) {
+        TargetTriple = process_triple;
+    }
     if (compiler->build_options.target_triple.length) {
         TargetTriple = to_c_string(compiler->build_options.target_triple); // @Leak
     }
-    // printf("TRIPLE: '%s'\n", TargetTriple.c_str());
+    TargetTriple = Triple::normalize(TargetTriple);
     
     std::string Error;
     auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
@@ -1708,6 +1714,14 @@ void LLVM_Generator::emit_global_variable(Ast_Declaration *decl) {
 #include <stdio.h>
 
 void LLVM_Jitter::init() {
+    Triple target_triple  = llvm->TargetMachine->getTargetTriple();
+    Triple process_triple = Triple(llvm::sys::getProcessTriple());
+
+    if (!target_triple.isCompatibleWith(process_triple)) {
+        compiler->report_error((Ast *)nullptr, "Metaprogram target triple (%s) must be compatible with host process' target (%s).",
+                    target_triple.str().c_str(), process_triple.str().c_str());
+        return;
+    }
 
     for (auto lib: compiler->libraries) {
         String name = lib->libname;

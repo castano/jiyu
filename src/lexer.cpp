@@ -7,21 +7,21 @@ static bool is_whitespace(char c) {
     return c == ' ' || c == '\t' || c == '\v' || c == '\r' || c == '\n';
 }
 
-static char tolower(char c) {
+int to_lower(int c) {
     if (c >= 'A' && c <= 'Z') return c + 0x20;
     
     return c;
 }
 
-static bool is_letter(char c) {
-    c = tolower(c);
+static bool is_letter(int c) {
+    c = to_lower(c);
     return c >= 'a' && c <= 'z';
 }
 
-static bool is_digit(char c, int radix = 10) {
+static bool is_digit(int c, int radix = 10) {
     
     if (radix == 16) {
-        char l = tolower(c);
+        int l = to_lower(c);
         if (l >= 'a' && l <= 'f') return true;
     }
     

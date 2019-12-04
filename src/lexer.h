@@ -151,4 +151,6 @@ struct Lexer {
     void tokenize_text();
 };
 
+int to_lower(int c);
+
 #endif
