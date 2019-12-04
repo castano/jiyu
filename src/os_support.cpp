@@ -35,11 +35,18 @@ bool file_exists(String path) {
 
 	return result == TRUE;
 }
+
+bool is_debugger_present() {
+    return IsDebuggerPresent() == TRUE;
+}
+
 #endif
 
 #ifdef MACOSX
 #include <mach-o/dyld.h>
 #include <stdlib.h>
+#include <sys/sysctl.h>
+#include <unistd.h> // getpid
 
 String get_executable_path() {
     u32 bufsize = 0;
@@ -55,6 +62,21 @@ String get_executable_path() {
 
     return to_string(real_path);
 }
+
+bool is_debugger_present() {
+    int mib[4];
+    struct kinfo_proc info;
+    size_t size;
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_PROC;
+    mib[2] = KERN_PROC_PID;
+    mib[3] = getpid();
+    size = sizeof(info);
+    info.kp_proc.p_flag = 0;
+    sysctl(mib,4,&info,&size,NULL,0);
+    return ((info.kp_proc.p_flag & P_TRACED) == P_TRACED);
+}
+
 #endif // MACOSX
 
 #ifdef LINUX
