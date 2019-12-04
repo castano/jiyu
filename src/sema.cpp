@@ -641,6 +641,71 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             return nullptr;
         }
 
+        case AST_CAST: {
+            auto cast = static_cast<Ast_Cast *>(expression);
+            auto target_type = cast->type_info;
+
+            //Ast_Type_Instantiation *target_type_inst = nullptr;
+            // Ast_Expression *expression = nullptr;
+
+            auto literal = folds_to_literal(cast->expression);
+            if (literal) {
+                assert(literal->type == AST_LITERAL);
+
+                if (target_type->type == Ast_Type_Info::INTEGER) {
+                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                        return make_integer_literal(compiler, literal->integer_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::FLOAT) {
+                        return make_integer_literal(compiler, literal->float_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::BOOL) {
+                        return make_integer_literal(compiler, literal->bool_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::ENUM) {
+                        return make_integer_literal(compiler, literal->integer_value, target_type);
+                    }
+                }
+                else if (target_type->type == Ast_Type_Info::FLOAT) {
+                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                        return make_float_literal(compiler, literal->integer_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::FLOAT) {
+                        // @@ Should we avoid doing anything in this case?
+                        return make_float_literal(compiler, literal->float_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::BOOL) {
+                        return make_float_literal(compiler, literal->bool_value, target_type);
+                    }
+                }
+                else if (target_type->type == Ast_Type_Info::BOOL) {
+                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                        return make_bool_literal(compiler, literal->integer_value != 0);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::FLOAT) {
+                        // @@ Should we avoid doing anything in this case?
+                        return make_bool_literal(compiler, literal->float_value != 0.0);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::BOOL) {
+                        return literal;
+                    }
+                }
+                else if (target_type->type == Ast_Type_Info::ENUM) {
+                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                        return make_integer_literal(compiler, literal->integer_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::ENUM) {
+                        return make_integer_literal(compiler, literal->integer_value, target_type);
+                    }
+                }
+                else {
+                    return nullptr;
+                }
+            }
+
+            return nullptr; // @@ Other casts not suported yet.
+        }
+
         default: return nullptr;
     }
 }
