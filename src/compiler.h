@@ -259,7 +259,7 @@ void copy_location_info(Ast *left, Ast *right) {
 
 inline
 bool is_a_type_declaration(Ast *expression) {
-    return expression->type == AST_STRUCT || expression->type == AST_TYPE_ALIAS;
+    return expression->type == AST_STRUCT || expression->type == AST_TYPE_ALIAS || expression->type == AST_ENUM;
 }
 
 inline
@@ -273,6 +273,9 @@ get_type_declaration_resolved_type(Ast *expression) {
     } else if (expression->type == AST_TYPE_ALIAS) {
         auto alias = static_cast<Ast_Type_Alias *>(expression);
         return alias->type_value;
+    } else if (expression->type == AST_ENUM) {
+        auto _enum = static_cast<Ast_Enum *>(expression);
+        return _enum->type_value;
     }
 
     return nullptr;
