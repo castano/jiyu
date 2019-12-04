@@ -613,10 +613,14 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
 
         case AST_IDENTIFIER: {
             auto ident = static_cast<Ast_Identifier *>(expression);
-            auto decl = static_cast<Ast_Declaration *>(ident->resolved_declaration);
+            auto decl = ident->resolved_declaration;
 
             if (decl->type == AST_DECLARATION) {
-                return folds_to_literal(decl);
+                return folds_to_literal(static_cast<Ast_Declaration *>(decl));
+            }
+            if (decl->type == AST_TYPE_ALIAS) {
+                auto alias = static_cast<Ast_Type_Alias *>(decl);
+                return folds_to_literal(alias->internal_type_inst);
             }
 
             return nullptr;
@@ -1118,8 +1122,15 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             // only available attached to other AST nodes, which will call resolve_type_inst
             // on it.
             //assert(false);
+
             resolve_type_inst(static_cast<Ast_Type_Instantiation*>(expression));
             expression->type_info = compiler->type_info_type;
+
+            if (auto lit = folds_to_literal(expression)) {
+                expression->substitution = lit;
+                //expression = lit;
+            }
+
             return;
         }
         case AST_DIRECTIVE_LOAD: {

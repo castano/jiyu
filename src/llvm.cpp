@@ -780,6 +780,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             } else {
                 Value *left  = emit_expression(bin->left,  false);
                 Value *right = emit_expression(bin->right, false);
+                assert (left != nullptr && right != nullptr);
                 
                 // @TODO NUW NSW?
                 switch (bin->operator_type) {
