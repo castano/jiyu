@@ -1109,7 +1109,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             // call typecheck_expression on Ast_Type_Instantiation because it is normally
             // only available attached to other AST nodes, which will call resolve_type_inst
             // on it.
-            assert(false);
+            //assert(false);
+            expression->type_info = compiler->type_info_type;
             return;
         }
         case AST_DIRECTIVE_LOAD: {
