@@ -57,27 +57,4 @@ func main() {
     printf("union_test.x: %f, union_test.i: %d\n", union_test.x, union_test.i);
 }
 
-struct Frame {
-    var up: Vector3;
-}
-
-
-
-struct Vector3 {
-    //var x, y, z: float;
-    var x: float;
-    var y: float;
-    var z: float;
-    //var v: Vector3;     // This is crashing, but should give an error.
-    //let zero: Vector3;  // This should work!
-}
-
-
-
-/*
-func main() {
-    printf("bar = %d, foo = %d\n", Bla.foo, Bla.foo);
-}
-*/
-
 
