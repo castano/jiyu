@@ -80,11 +80,17 @@ void LLVM_Generator::preinit() {
     InitializeAllAsmParsers();
     InitializeAllAsmPrinters();
     
-    std::string TargetTriple = llvm::sys::getDefaultTargetTriple();
+    std::string default_target_triple = llvm::sys::getDefaultTargetTriple();
+    std::string process_triple = llvm::sys::getProcessTriple();
+    
+    std::string TargetTriple = default_target_triple;
+    if (compiler->is_metaprogram) {
+        TargetTriple = process_triple;
+    }
     if (compiler->build_options.target_triple.length) {
         TargetTriple = to_c_string(compiler->build_options.target_triple); // @Leak
     }
-    // printf("TRIPLE: '%s'\n", TargetTriple.c_str());
+    TargetTriple = Triple::normalize(TargetTriple);
     
     std::string Error;
     auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
@@ -398,6 +404,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
         
         for (auto arg_type : type->arguments) {
+            arg_type = get_final_type(arg_type);
             if (arg_type == compiler->type_void) continue;
             
             Type *type = make_llvm_type(arg_type);
@@ -419,7 +426,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
             arguments.add(type);
         }
         
-        Type *return_type = make_llvm_type(type->return_type);
+        Type *return_type = make_llvm_type(get_final_type(type->return_type));
         if (type->return_type->type == Ast_Type_Info::VOID) {
             return_type = type_void;
         }
@@ -861,9 +868,21 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                         return irb->CreateSub(left, right);
                     }
                     case Token::EQ_OP: {
-                        return irb->CreateICmpEQ(left, right);
+                        auto info = get_type_info(bin->left);
+                        if (is_float_type(info)) {
+                            return irb->CreateFCmpUEQ(left, right);
+                        } else {
+                            return irb->CreateICmpEQ(left, right);
+                        }
                     }
-                    case Token::NE_OP: return irb->CreateICmpNE(left, right);
+                    case Token::NE_OP: {
+                        auto info = get_type_info(bin->left);
+                        if (is_float_type(info)) {
+                            return irb->CreateFCmpUNE(left, right);
+                        } else {
+                            return irb->CreateICmpNE(left, right);
+                        }
+                    }
                     case Token::LE_OP: {
                         auto info = get_type_info(bin->left);
                         if (is_int_type(info)) {
@@ -1204,6 +1223,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 }
             } else if (is_pointer_type(src) && is_pointer_type(dst)) {
                 return irb->CreatePointerCast(value, dst_type);
+            } else if (is_function_type(src) && is_function_type(dst)) {
+                return irb->CreatePointerCast(value, dst_type);
             } else if (is_pointer_type(src) && is_int_type(dst)) {
                 return irb->CreatePtrToInt(value, dst_type);
             } else if (is_int_type(src) && is_pointer_type(dst)) {
@@ -1275,8 +1296,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             irb->CreateCondBr(cond, loop_body, next_block);
             
             irb->SetInsertPoint(loop_body);
-            if (loop->statement) {
-                emit_expression(loop->statement);
+            {
+                emit_scope(&loop->body);
                 // irb->SetInsertPoint(loop_body);
                 if (!irb->GetInsertBlock()->getTerminator()) irb->CreateBr(loop_header);
             }
@@ -1743,6 +1764,14 @@ void LLVM_Generator::emit_global_variable(Ast_Declaration *decl) {
 #include <stdio.h>
 
 void LLVM_Jitter::init() {
+    Triple target_triple  = llvm->TargetMachine->getTargetTriple();
+    Triple process_triple = Triple(llvm::sys::getProcessTriple());
+
+    if (!target_triple.isCompatibleWith(process_triple)) {
+        compiler->report_error((Ast *)nullptr, "Metaprogram target triple (%s) must be compatible with host process' target (%s).",
+                    target_triple.str().c_str(), process_triple.str().c_str());
+        return;
+    }
 
     for (auto lib: compiler->libraries) {
         String name = lib->libname;

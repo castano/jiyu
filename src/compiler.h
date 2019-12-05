@@ -157,9 +157,12 @@ struct Compiler {
     void queue_directive(Ast_Directive *directive);
     void resolve_directives();
     
-    void report_error_valist(String filename, String source, Span error_location, char *fmt, va_list args);
+    void report_diagnostic_valist(String filename, String source, Span error_location, char *level_name, char *fmt, va_list args);
     void report_error(Token *tok, char *fmt, ...);
     void report_error(Ast *ast, char *fmt, ...);
+
+    void report_warning(Token *tok, char *fmt, ...);
+    void report_warning(Ast *ast, char *fmt, ...);
 
     bool is_toplevel_scope(Ast_Scope *scope);
 };
@@ -204,6 +207,12 @@ inline
 bool is_aggregate_type(Ast_Type_Info *info) {
     info = get_final_type(info);
     return info->type == Ast_Type_Info::STRUCT || info->type == Ast_Type_Info::STRING;
+}
+
+inline
+bool is_function_type(Ast_Type_Info *info) {
+    info = get_final_type(info);
+    return info->type == Ast_Type_Info::FUNCTION;
 }
 
 inline

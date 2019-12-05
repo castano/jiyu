@@ -160,6 +160,7 @@ func __strings_match(a: string, b: string) -> bool {
 
 String __default_module_search_path;
 s64    __compiler_instance_count = 0; // @ThreadSafety
+String __default_target_triple;
 
 
 extern "C" {
@@ -170,7 +171,11 @@ extern "C" {
 
         // these are copies to prevent the user program from modifying the strings after-the-fact.
         compiler->build_options.executable_name = copy_string(options->executable_name);
-        compiler->build_options.target_triple   = copy_string(options->target_triple);
+        if (options->target_triple != String()) {
+            compiler->build_options.target_triple   = copy_string(options->target_triple);
+        } else {
+            compiler->build_options.target_triple   = __default_target_triple;
+        }
         compiler->build_options.only_want_obj_file = options->only_want_obj_file;
 
         compiler->llvm_gen = new LLVM_Generator(compiler);
@@ -497,6 +502,7 @@ int main(int argc, char **argv) {
         options.executable_name = to_string("output");
     }
 
+    __default_target_triple = target_triple;
     options.target_triple = target_triple;
     options.only_want_obj_file = only_want_obj_file;
     

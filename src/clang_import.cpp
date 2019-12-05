@@ -131,6 +131,10 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
 
         case CXType_Pointer: {
             CXType pointee = clang_getPointeeType(type);
+            if (pointee.kind == CXType_FunctionProto) {
+                // the plain function-pointer-type in Jiyu is 1 level of indirection away from C (which defaults to a pointer-to-function).
+                return get_jiyu_type(data, pointee);
+            }
             return compiler->make_pointer_type(get_jiyu_type(data, pointee));
         }
         
@@ -179,9 +183,10 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
         case CXType_FunctionProto: {
             // @Cutnpaste from Compiler::make_function_type
             Ast_Type_Info *info = IMPORT_NEW(Ast_Type_Info);
-            info->type   = Ast_Type_Info::FUNCTION;
-            info->size   = compiler->type_ptr_void->size;
-            info->stride = compiler->type_ptr_void->stride;
+            info->type      = Ast_Type_Info::FUNCTION;
+            info->size      = compiler->type_ptr_void->size;
+            info->stride    = compiler->type_ptr_void->stride;
+            info->alignment = compiler->type_ptr_void->stride;
             
             info->is_c_function = true;
             info->is_c_varargs  = (clang_isFunctionTypeVariadic(type) != 0);
@@ -263,7 +268,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
             return CXChildVisit_Recurse;
         }
         case CXCursor_FunctionDecl: {
-            cursor = clang_getCursorDefinition(cursor);
+            cursor = clang_getCanonicalCursor(cursor);
             if (find_ast(usr_map, my_usr_string)) {
                 break; // Skip, we've already filled this function
             }
@@ -310,6 +315,9 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
                 function->linkage_name = compiler->copy_string(name);
             }
 
+            function->return_decl = IMPORT_NEW(Ast_Declaration);
+            function->return_decl->type_info = get_jiyu_type(visitor_data, clang_getCursorResultType(cursor));
+
             // We should maybe make get_jiyu_type work for the function prototype type, but
             // doing this for now just to get things going.
             function->type_info = compiler->make_function_type(function);
@@ -322,7 +330,6 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
         case CXCursor_TypedefDecl: {
             Ast_Type_Alias *alias = IMPORT_NEW(Ast_Type_Alias);
             add_usr_mapping(usr_map, my_usr_string, alias);
-            alias->type_info = compiler->type_info_type;
 
             CXString cxstring = clang_getCursorSpelling(cursor);
             defer { clang_disposeString(cxstring); };
@@ -351,7 +358,6 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
             // a typealias to the underlying C type and import enumerates as lets.
             Ast_Type_Alias *alias = IMPORT_NEW(Ast_Type_Alias);
             add_usr_mapping(usr_map, my_usr_string, alias);
-            alias->type_info = compiler->type_info_type;
 
             CXString cxstring = clang_getCursorSpelling(cursor);
             defer { clang_disposeString(cxstring); };

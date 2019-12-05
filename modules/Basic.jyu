@@ -13,6 +13,7 @@ func New<T>(initializer: T) -> *T {
     return mem;
 }
 
+// @TODO this doesnt need to be a template...
 func Delete<T>(mem: *T) {
     free(mem);
 }
@@ -38,6 +39,15 @@ func assert(cond: bool, msg: string) {
     #if os(MacOSX) {
         exit(-1);
     }
+}
+
+typealias string_length_type = int64; // @TODO
+
+func advance(s: *string, amount: string_length_type) {
+    assert(amount >= 0 && amount <= s.length);
+
+    s.data   += amount;
+    s.length -= amount;
 }
 
 func basename(_s: string) -> string {
@@ -166,8 +176,6 @@ func get_slice<T>(arr: [..] T) -> [] T {
 }
 
 func get_command_line(strings: [] string) -> *uint8 {
-    typealias string_length_type = int64; // @TODO
-
     var total_length: string_length_type = 0;
 
     for strings total_length += it.length;

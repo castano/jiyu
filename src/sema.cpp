@@ -3,9 +3,21 @@
 #include "ast.h"
 #include "compiler.h"
 #include "copier.h"
+#include "llvm.h"
 
 #include <stdio.h>
 #include <new> // for placement new
+
+#ifdef WIN32
+#pragma warning(push, 0)
+#endif
+
+// For Ast_Os
+#include "llvm/Target/TargetMachine.h"
+
+#ifdef WIN32
+#pragma warning(pop)
+#endif
 
 #define SEMA_NEW(type) (new (compiler->get_memory(sizeof(type))) type())
 
@@ -278,6 +290,14 @@ void print_type_to_builder(String_Builder *builder, Ast_Type_Info *info) {
     if (info->type == Ast_Type_Info::TYPE) {
         // @@ Print type name properly.
         builder->print("<type>");
+        return;
+    }
+
+    if (info->type == Ast_Type_Info::FUNCTION) {
+        // @Incomplete
+        builder->putchar('(');
+        builder->append("func");
+        builder->putchar(')');
         return;
     }
 
@@ -817,6 +837,8 @@ void Sema::typecheck_scope(Ast_Scope *scope) {
     for (auto &it : scope->statements) {
         // @TODO should we do replacements at the scope level?
         typecheck_expression(it);
+
+        if (compiler->errors_reported) return;
     }
 }
 
@@ -2007,7 +2029,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 compiler->report_error(cond, "'while' condition isn't of boolean type.\n");
             }
 
-            if (loop->statement) typecheck_expression(loop->statement);
+            typecheck_scope(&loop->body);
 
             return;
         }
@@ -2221,13 +2243,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             cast->type_info = target;
 
             if (!is_valid_primitive_cast(target, expr_type)) {
-                auto target_type_name = type_to_string(target);
-                defer { free(target_type_name.data); };
 
-                auto expr_type_name = type_to_string(expr_type);
-                defer { free(expr_type_name.data); };
-
-                compiler->report_error(cast, "Cast from '%.*s' to '%.*s' is invalid.\n", PRINT_ARG(expr_type_name), PRINT_ARG(target_type_name));
             }
 
             return;
@@ -2235,6 +2251,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
         case AST_TYPE_ALIAS: {
             auto alias = static_cast<Ast_Type_Alias *>(expression);
+
             if (alias->internal_type_inst) {
                 resolve_type_inst(alias->internal_type_inst);
                 if (compiler->errors_reported) return;
@@ -2247,6 +2264,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 // alias system. No need to create an _alias_ type, but maybe
                 // we should for error reporting clarity.
                 assert(alias->type_value);
+
+                // In the case that we got here due to clang_import, typecheck struct_decl if able
+                // Otherwise something might try to resolve before struct_decl is fully typechecked.
+                if (get_final_type(alias->type_value)->struct_decl) typecheck_expression(get_final_type(alias->type_value)->struct_decl);
             }
             alias->type_info = compiler->type_info_type;
             return;
@@ -2470,16 +2491,20 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             lit->type_info = compiler->type_bool;
             lit->bool_value = false;
 
-            // @Incomplete @FixMe this should be based off of what the LLVM target is
-#ifdef WIN32
-            lit->bool_value = (ident->name == compiler->atom_Windows);
-#elif defined(MACOSX)
-            lit->bool_value = (ident->name == compiler->atom_MacOSX);
-#elif defined(LINUX)
-            lit->bool_value = (ident->name == compiler->atom_Linux);
-#else
-            assert(false);
-#endif
+            auto os_type = compiler->llvm_gen->TargetMachine->getTargetTriple().getOS();
+            auto os_name = llvm::Triple::getOSTypeName(os_type);
+
+            auto ident_string = copy_string(ident->name->name);
+            // @FixMe be weary of a UTF8 string here.
+            for (string_length_type i = 0; i < ident_string.length; ++i) {
+                ident_string.data[i] = tolower(ident_string.data[i]);
+            }
+
+            lit->bool_value = (ident_string == to_string(os_name.str().c_str()));
+
+            free(ident_string.data);
+
+
             Atom *name = ident->name;
             bool valid_option = (name == compiler->atom_Windows) || (name == compiler->atom_MacOSX) || (name == compiler->atom_Linux);
 
@@ -2639,19 +2664,25 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
         return type_inst->type_value;
     }
 
-    if (type_inst->typename_identifier) {
-        typecheck_expression(type_inst->typename_identifier);
+    if (type_inst->type_dereference_expression) {
+        typecheck_expression(type_inst->type_dereference_expression);
         if (compiler->errors_reported) return nullptr;
 
-        auto ident = type_inst->typename_identifier;
+        auto expr = type_inst->type_dereference_expression;
+        while (expr->substitution) expr = expr->substitution;
 
-        if (ident->type_info->type != Ast_Type_Info::TYPE) {
-            String name = ident->name->name;
-            compiler->report_error(ident, "Identifier '%.*s' doesn't name a type.\n", name.length, name.data);
+        if (get_type_info(expr)->type != Ast_Type_Info::TYPE) {
+            // @TODO it would be nice if this could print out a dereference chain:
+            // struct Test { func T (){ ...} ... }
+            // Typename expression 'Test.T' doesn't name a type.
+            compiler->report_error(expr, "Typename expression doesn't name a type.\n");
             return nullptr;
         }
 
-        auto decl = ident->resolved_declaration;
+        auto decl = expr;
+        if (expr->type == AST_IDENTIFIER) {
+            decl = static_cast<Ast_Identifier *>(expr)->resolved_declaration;
+        }
 
         if (decl->type == AST_TYPE_ALIAS) {
             auto alias = static_cast<Ast_Type_Alias *>(decl);
