@@ -271,7 +271,8 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
     }
 
     if (type->type == Ast_Type_Info::TYPE) {
-        return type_i8->getPointerTo();
+        return type_i64;
+        //return type_i8->getPointerTo();
     }
     
     if (type->type == Ast_Type_Info::INTEGER) {
@@ -1013,9 +1014,11 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             } else if (is_a_type_declaration(ident->resolved_declaration)) {
                 Ast_Type_Info *type_value = get_type_declaration_resolved_type(ident->resolved_declaration);
 
+                // @@ Why not use the table index directly?
                 // @Incomplete just stuff the type table index in here for now.. until are able to emit a full type table.
                 auto const_int = ConstantInt::get(type_intptr, type_value->type_table_index, true);
-                return ConstantExpr::getIntToPtr(const_int, type_i8->getPointerTo());
+                //return ConstantExpr::getIntToPtr(const_int, type_i8->getPointerTo());
+                return const_int;
             } else {
                 assert(false);
             }
@@ -1091,9 +1094,10 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     auto arg   = call->argument_list[i];
                     
                     auto type = value->getType();
+                    //auto bitSize = type->getPrimitiveSizeInBits();
                     if (type->isIntegerTy() && type->getPrimitiveSizeInBits() < type_i32->getPrimitiveSizeInBits()) {
-                        assert(is_int_type(get_type_info(arg)) ||
-                               get_final_type(get_type_info(arg))->type == Ast_Type_Info::BOOL);
+                        auto arg_type = get_final_type(get_type_info(arg));
+                        assert(arg_type->type == Ast_Type_Info::INTEGER || arg_type->type == Ast_Type_Info::BOOL);
                         if (get_type_info(arg)->is_signed) {
                             args[i] = irb->CreateSExt(value, type_i32);
                         } else {
