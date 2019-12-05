@@ -840,7 +840,7 @@ Ast_Expression *Parser::parse_statement() {
         }
 
         _enum->enum_type_inst = PARSER_NEW(Ast_Type_Instantiation);
-        _enum->enum_type_inst->typename_identifier = _enum->identifier;
+        _enum->enum_type_inst->type_dereference_expression = _enum->identifier;
 
         _enum->member_scope.parent = get_current_scope();
         _enum->member_scope.owning_enum = _enum;
