@@ -1,5 +1,6 @@
-#import "LibC";
-#import "Basic";
+
+//#import "LibC";
+//#import "Basic";
 
 /*
 struct Days {
@@ -10,12 +11,19 @@ var monday : Days = Days.Monday;
 
 
 enum Days : uint {
-    //Monday;
-    //Tuesday;
-    Monday = 0;             // These implict casts are OK.
-    Tuesday = Monday + 1;
+    Monday;
+    Tuesday = cast(Days)(Monday + 1);   // + should give a type error -> Days, literal?
+    
+    Wednesday = cast(Days)2;            // This cast should not be necessary!
+
+    Thursday;
+    Friday = cast(Days)(Thursday + 1);
+
+    Saturday;
+    Sunday;
 }
 
+/*
 
 
 //var monday = Days.Monday;
@@ -44,7 +52,12 @@ func main() {
         var day : Days;
 
         let Monday = Days.Monday;
-        assert(typeof(Monday) == Days);
+        let Tuesday = Monday + 1;
+        printf("typeof(Monday) = %d\n", typeof(Monday));
+        printf("typeof(Days.Monday) = %d\n", typeof(Days.Monday));
+        printf("Days = %d\n", Days);
+        printf("typeof(Days) = %d\n", typeof(Days));
+        assert(typeof(Monday) == Days);      // Type instantiations need to be folded to literals.
 
         let MONDAY = cast(int)Days.Monday;   // Type of MONDAY is int
         assert(typeof(MONDAY) == int);
@@ -53,6 +66,12 @@ func main() {
     {
         var day = Days.Monday;
         assert(typeof(day) == Days);
+
+        //day = day + 1;            // This correctly fails.
+        //day = Days.Monday + 1;    // Here the assignment fails, but not the +!
+
+
+
 
         var day_index = cast(int)Days.Monday;   // Type of dayIndex is int
         assert(typeof(day_index) == int);
@@ -66,11 +85,18 @@ func main() {
   
     printf("Monday = %d\n", Days.Monday);
     printf("Tuesday = %d\n", Days.Tuesday);
+    printf("Wednesday = %d\n", Days.Wednesday);
+    printf("Thursday = %d\n", Days.Thursday);
+    printf("Friday = %d\n", Days.Friday);
+    printf("Saturday = %d\n", Days.Saturday);
+    printf("Sunday = %d\n", Days.Sunday);
+
     //printf("Monday+1 = %d\n", test(Days.Monday));
 
     //printf("Whatever = %d\n", Days.Whatever); // This should trigger an error.
 }
 
+*/
 
 /*
 enum Days : uint8 {

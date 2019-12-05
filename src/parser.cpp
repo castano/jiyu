@@ -839,6 +839,9 @@ Ast_Expression *Parser::parse_statement() {
             _enum->base_type = wrap_primitive_type(compiler->type_uint32);
         }
 
+        _enum->enum_type_inst = PARSER_NEW(Ast_Type_Instantiation);
+        _enum->enum_type_inst->typename_identifier = _enum->identifier;
+
         _enum->member_scope.parent = get_current_scope();
         _enum->member_scope.owning_enum = _enum;
         parse_enum_scope(&_enum->member_scope);
@@ -1170,7 +1173,7 @@ void Parser::parse_enum_scope(Ast_Scope *scope) {
 
     if (!expect_and_eat((Token::Type) '{')) return;
     
-    Ast_Declaration * prev_item = nullptr;
+    //Ast_Declaration * prev_item = nullptr;
     Token *token = peek_token();
     while (token->type != Token::END) {
         
@@ -1181,12 +1184,19 @@ void Parser::parse_enum_scope(Ast_Scope *scope) {
         
         decl->is_let = true;
 
-        decl->type_inst = scope->owning_enum->base_type;
+        // This is wrong, the type of the enum members is the enum type, not the base type!
+        decl->type_inst = scope->owning_enum->enum_type_inst;
 
-        if (!decl->initializer_expression && prev_item) {
-            //decl->initializer_expression = prev_item + 1;
-        }
-        prev_item = decl;
+        /*if (!decl->initializer_expression) {
+            if (prev_item) {
+                //decl->initializer_expression = prev_item + 1;
+            }
+            else {
+                auto zero_expression = make_integer_literal(compiler, 0, decl->type_info, decl);
+                decl->initializer_expression = prev_item + 1;
+            }
+        }*/
+        //prev_item = decl;
 
         scope->statements.add(decl);
         scope->declarations.add(decl);

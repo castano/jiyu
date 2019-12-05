@@ -204,6 +204,7 @@ struct Ast_Enum : Ast_Expression {
     
     Ast_Identifier *identifier = nullptr;
     Ast_Type_Instantiation *base_type = nullptr;
+    Ast_Type_Instantiation *enum_type_inst = nullptr;   // This is the type inst shared by all the enum members.
     Ast_Scope member_scope;
     
     Ast_Type_Info *type_value = nullptr;

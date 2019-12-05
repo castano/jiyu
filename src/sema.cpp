@@ -2557,6 +2557,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             auto base_type_info = resolve_type_inst(_enum->base_type);
             if (compiler->errors_reported) return;
 
+            _enum->type_value->size = base_type_info->size;
+            _enum->type_value->alignment = base_type_info->alignment;
+            _enum->type_value->stride = base_type_info->stride;
+            _enum->type_value->is_signed = base_type_info->is_signed;
+            // _enum->type_value->type_table_index?
+
             // flag stuct member declarations
             for (auto _decl : _enum->member_scope.declarations) {
                 assert (_decl->type == AST_DECLARATION);
@@ -2570,39 +2576,38 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 assert(info->enum_decl == _enum);
 
                 info->enum_base_type = base_type_info;
-                
-                s64 size_cursor = 0;
-                s64 biggest_alignment = 1;
-                s64 element_path_index = 0;
-                
-                // This is likely super @Incomplete
+                                
+                // Set to -1 so that first item is initialized to 0.
+                s64 prev_value = -1;
+
                 for (auto expr : _enum->member_scope.declarations) {
                     assert (expr->type == AST_DECLARATION);
-
-                    // @Cleanup @Hack we need to be able to handle other structs, functions, typealiases or at least punt on them.
                     auto decl = static_cast<Ast_Declaration *>(expr);
+                    assert(decl->is_let);
+
+                    Ast_Literal * literal = nullptr;
+                    if (!decl->initializer_expression) {
+                        decl->initializer_expression = make_integer_literal(compiler, prev_value + 1, _enum->type_value, decl);
+                    }
+                    
+                    literal = folds_to_literal(decl->initializer_expression);
+
                     typecheck_expression(decl);
                     if (compiler->errors_reported) return;
+
+                    assert(literal && literal->type == AST_LITERAL && literal->literal_type == Ast_Literal::INTEGER);
+                    prev_value = literal->integer_value;
                     
                     assert(decl && decl->type_info);
                     
+
                     //Ast_Type_Info::Struct_Member member;
                     //member.name = decl->identifier->name;
                     //member.type_info = decl->type_info;
                     //member.is_let = decl->is_let;
-
-                    if (!decl->is_let) {
-                        compiler->report_error(decl, "Enums only accept let declarations. %.*s must be invariant.\n", PRINT_ARG(decl->identifier->name->name));
-                        return;
-                    }
                                         
                     //info->enum_members.add(member);
                 }
-
-                // How to init _enum->type_value ?                
-                //info->alignment = _enum->base_type->type_value->alignment;
-                //info->size = _enum->base_type->type_value->size;
-                //info->stride = _enum->base_type->type_value->stride;
 
                 compiler->add_to_type_table(info);
             }
