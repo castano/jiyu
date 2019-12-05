@@ -699,10 +699,6 @@ void Compiler::report_warning(Token *tok, char *fmt, ...) {
     
     report_diagnostic_valist(filename, source, span, "warning", fmt, args);
     va_end(args);
-    
-    if (is_debugger_present()) {
-        debug_break();
-    }
 }
 
 
