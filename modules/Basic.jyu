@@ -18,12 +18,17 @@ func Delete<T>(mem: *T) {
 }
 
 func assert(cond: bool) {
+    assert(cond, "");
+}
+
+func assert(cond: bool, msg: string) {
 
     if cond {
         return;
     }
 
-    printf("Assertion failed!\n");
+    if msg  printf("Assertion failed: %.*s\n", msg.length, msg.data);
+    else    printf("Assertion failed!\n");
 
     #if os(Windows) {
         func @c_function DebugBreak() -> void;
