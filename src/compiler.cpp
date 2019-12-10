@@ -54,6 +54,12 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
         return left->struct_decl == right->struct_decl;
     }
 
+    if (left->type == Ast_Type_Info::ENUM) {
+        assert(left->enum_decl);
+        assert(right->enum_decl);
+        return left->enum_decl == right->enum_decl;
+    }
+
     if (left->type == Ast_Type_Info::FUNCTION) {
         if (left->is_c_function != right->is_c_function) return false;
         if (left->is_c_varargs  != right->is_c_varargs) return false;
