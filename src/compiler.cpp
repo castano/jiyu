@@ -254,7 +254,7 @@ void Compiler::init() {
 
     if (this->build_options.verbose_diagnostics) {
         // @TODO compiler->print_diagnostic
-        printf("w%d: Target machine pointer size: %d\n", this->instance_number, pointer_size);
+        printf("w%" PRId64 ": Target machine pointer size: %" PRId64 "\n", this->instance_number, pointer_size);
     }
 
 
