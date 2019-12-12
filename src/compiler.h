@@ -197,6 +197,12 @@ bool is_struct_type(Ast_Type_Info *info) {
 }
 
 inline
+bool is_enum_type(Ast_Type_Info *info) {
+    info = get_final_type(info);
+    return info->type == Ast_Type_Info::ENUM;
+}
+
+inline
 bool is_array_type(Ast_Type_Info *info) {
     info = get_final_type(info);
     return info->type == Ast_Type_Info::ARRAY;
@@ -244,7 +250,7 @@ bool is_valid_primitive_cast(Ast_Type_Info *target, Ast_Type_Info *source) {
     }
 
     if (target->type == Ast_Type_Info::ENUM) {
-        return (source->type == Ast_Type_Info::INTEGER);
+        return (source->type == Ast_Type_Info::INTEGER) || (source->type == Ast_Type_Info::ENUM);
     }
     
     return false;

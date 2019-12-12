@@ -367,7 +367,7 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_t
 
     u64 viability_score = 0;
     if (lit->literal_type == Ast_Literal::INTEGER) {
-        if (want_numeric_type && (want_numeric_type->type == Ast_Type_Info::INTEGER || want_numeric_type->type == Ast_Type_Info::FLOAT)) {
+        if (want_numeric_type && (want_numeric_type->type == Ast_Type_Info::INTEGER || want_numeric_type->type == Ast_Type_Info::ENUM || want_numeric_type->type == Ast_Type_Info::FLOAT)) {
             if (!types_match(get_type_info(lit), want_numeric_type)) {
                 viability_score += 1;
             }
@@ -557,7 +557,7 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                 return nullptr;
             }
 
-            if (left_type->type == Ast_Type_Info::INTEGER) {
+            if (left_type->type == Ast_Type_Info::INTEGER || left_type->type == Ast_Type_Info::ENUM || left_type->type == Ast_Type_Info::TYPE) {
                 s64 left_int  = left->integer_value;
                 s64 right_int = right->integer_value;
                 switch (bin->operator_type) {
@@ -641,6 +641,16 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             if (decl->type == AST_TYPE_ALIAS) {
                 auto alias = static_cast<Ast_Type_Alias *>(decl);
                 return folds_to_literal(alias->internal_type_inst);
+            }
+            if (decl->type == AST_STRUCT) {
+                auto _struct = static_cast<Ast_Struct *>(decl);
+                auto literal = make_integer_literal(compiler, _struct->type_value->type_table_index, compiler->type_info_type, decl);
+                return literal;
+            }
+            if (decl->type == AST_ENUM) {
+                auto _enum = static_cast<Ast_Enum *>(decl);
+                auto literal = make_integer_literal(compiler, _enum->type_value->type_table_index, compiler->type_info_type, decl);
+                return literal;
             }
 
             return nullptr;
@@ -742,11 +752,50 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
     }
 }
 
+// @@ Should this be an atribute of the literal that is propagated? Is 1+1 mutable?
+static bool mutable_literal(Ast_Literal * literal) {
+    if (literal->type_info->type == Ast_Type_Info::INTEGER || literal->type_info->type == Ast_Type_Info::FLOAT) {
+        return true;
+    }
+    if (literal->type_info->type == Ast_Type_Info::POINTER) {
+        return literal->literal_type == Ast_Literal::NULLPTR;
+    }
+    return false;
+}
+
 // @Cleanup if we introduce expression substitution, then we can remove the resut parameters and just set (left/right)->substitution
 // Actually, if we do that, then we can't really use this for checking function calls.
 // Actually, this is being deprecated for things other than binary operators and for-loop ranges... since function calls now use typecheck_and_implicit_cast_single_expression, declarations need only do one-way casting, returns are one-way.
 // Perhaps also, we should break this out into several calls to typecheck_and_implicit_cast_single_expression... -josh 21 July 2019
 Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression *left, Ast_Expression *right, Ast_Expression **result_left, Ast_Expression **result_right, bool allow_coerce_to_ptr_void) {
+    
+    auto lit_left = folds_to_literal(left);
+    if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
+
+    auto lit_right = folds_to_literal(right);
+    if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
+
+    // @@ Shouldn't we do substitution regardless of whether we mutate the type?
+    // if (lit_left) {
+    //     left->substitution = lit_left;
+    // }
+    // if (lit_right) {
+    //     right->substitution = lit_right;
+    // }
+
+    if (lit_left && mutable_literal(lit_left)) {
+        maybe_mutate_literal_to_type(lit_left, get_type_info(right));
+        left = lit_left;
+        //left->substitution = lit_left;
+    }
+    else if (lit_right && mutable_literal(lit_right)) {
+        maybe_mutate_literal_to_type(lit_right, get_type_info(left));
+        right = lit_right;
+        //right->substitution = lit_right;
+    }
+
+
+    /*
     if (auto lit = folds_to_literal(left)) {
         typecheck_expression(right);
         if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
@@ -769,6 +818,7 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
 
         typecheck_expression(right, get_type_info(left));
     }
+    */
 
     if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
 
@@ -1278,6 +1328,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (decl->type_info && decl->initializer_expression) {
                 auto result = typecheck_and_implicit_cast_single_expression(decl->initializer_expression, get_type_info(decl), ALLOW_COERCE_TO_PTR_VOID);
+                if (compiler->errors_reported) return;
 
                 if (decl->initializer_expression != result.item2) decl->initializer_expression = result.item2; // Don't do a substitution here, otherwise we can cause a loop
                 
@@ -1404,7 +1455,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     return;
                 }
 
-                // @TOOD report operator
+                // @TODO report operator
                 auto lhs = type_to_string(left_type);
                 auto rhs = type_to_string(right_type);
                 compiler->report_error(bin, "Incompatible types found on lhs and rhs of binary operator (%.*s, %.*s).", lhs.length, lhs.data, rhs.length, rhs.data);
@@ -1413,57 +1464,80 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 return;
             }
 
-            if (bin->operator_type == Token::LE_OP ||
-                bin->operator_type == Token::GE_OP ||
-                bin->operator_type == Token::RIGHT_ANGLE ||
-                bin->operator_type == Token::LEFT_ANGLE) {
-                if (!is_int_type(left_type) && !is_float_type(left_type)) {
-                    compiler->report_error(bin, "Comparison operators are only valid for integer and floating-point operands.\n");
+            if (is_enum_type(left_type)) {
+                if (bin->operator_type == Token::SLASH ||
+                    bin->operator_type == Token::STAR || 
+                    bin->operator_type == Token::DEREFERENCE_OR_SHIFT ||
+                    bin->operator_type == Token::RIGHT_SHIFT) 
+                {
+                    // From parser.cpp
+                    extern String token_type_to_string(Token::Type type);
+
+                    // @@ Can we get a string that we don't have to deallocate?
+                    auto token_string = token_type_to_string(bin->operator_type);
+                    defer { free(token_string.data); };
+
+                    auto type_name = type_to_string(left_type);
+                    defer { free(type_name.data); };
+                    
+                    compiler->report_error(bin, "Operator '%s' not valid on '%.*s' type.\n", token_string, type_name);
                     return;
                 }
             }
-
-            if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
-                if (!is_int_type(left_type) && !is_float_type(left_type) &&
-                    left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
-                    && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE) {
-                    compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, and Type operands.\n");
-                    return;
+            else {
+                if (bin->operator_type == Token::LE_OP ||
+                    bin->operator_type == Token::GE_OP ||
+                    bin->operator_type == Token::RIGHT_ANGLE ||
+                    bin->operator_type == Token::LEFT_ANGLE) {
+                    if (!is_int_type(left_type) && !is_float_type(left_type) && !is_enum_type(left_type)) {
+                        // @@ Reverse error message? Comparison op not valid for this type.
+                        compiler->report_error(bin, "Comparison operators are only valid for integer, floating-point, and enum operands.\n");
+                        return;
+                    }
                 }
-            }
 
-            if (bin->operator_type == Token::PLUS  ||
-                bin->operator_type == Token::MINUS ||
-                bin->operator_type == Token::SLASH ||
-                bin->operator_type == Token::STAR) {
-                bool pointer_arithmetic_allowed = (bin->operator_type == Token::MINUS) && is_pointer_type(left_type);
-                if (!is_int_type(left_type) && !is_float_type(left_type) && !pointer_arithmetic_allowed) {
-                    compiler->report_error(bin, "Arithmetic operators are only valid for integer and floating-point operands.\n");
-                    return;
+                if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
+                    if (!is_int_type(left_type) && !is_float_type(left_type) && !is_enum_type(left_type) &&
+                        left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
+                        && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE) {
+                        compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, and Type operands.\n");
+                        return;
+                    }
                 }
-            }
 
-            if (bin->operator_type == Token::AMPERSAND    ||
-                bin->operator_type == Token::VERTICAL_BAR ||
-                bin->operator_type == Token::CARET) {
-                if (!is_int_type(left_type)) {
-                    compiler->report_error(bin, "Bitwise logical operators are only valid for integer operands.\n");
-                    return;
+                if (bin->operator_type == Token::PLUS  ||
+                    bin->operator_type == Token::MINUS ||
+                    bin->operator_type == Token::SLASH ||
+                    bin->operator_type == Token::STAR) {
+                    bool pointer_arithmetic_allowed = (bin->operator_type == Token::MINUS) && is_pointer_type(left_type);
+                    if (!is_int_type(left_type) && !is_float_type(left_type) && !pointer_arithmetic_allowed) {
+                        compiler->report_error(bin, "Arithmetic operators are only valid for integer and floating-point operands.\n");
+                        return;
+                    }
                 }
-            }
 
-            if (bin->operator_type == Token::DEREFERENCE_OR_SHIFT    ||
-                bin->operator_type == Token::RIGHT_SHIFT) {
-                if (!is_int_type(left_type)) {
-                    compiler->report_error(bin, "Bitwise arithmetic operators are only valid for integer operands.\n");
-                    return;
+                if (bin->operator_type == Token::AMPERSAND    ||
+                    bin->operator_type == Token::VERTICAL_BAR ||
+                    bin->operator_type == Token::CARET) {
+                    if (!is_int_type(left_type)) {
+                        compiler->report_error(bin, "Bitwise logical operators are only valid for integer operands.\n");
+                        return;
+                    }
                 }
-            }
 
-            if (bin->operator_type == Token::PERCENT) {
-                if (!is_int_type(left_type) && !is_float_type(left_type)) {
-                    compiler->report_error(bin, "Remainder operator is only valid for integer and floating-point operands.\n");
-                    return;
+                if (bin->operator_type == Token::DEREFERENCE_OR_SHIFT    ||
+                    bin->operator_type == Token::RIGHT_SHIFT) {
+                    if (!is_int_type(left_type)) {
+                        compiler->report_error(bin, "Bitwise arithmetic operators are only valid for integer operands.\n");
+                        return;
+                    }
+                }
+
+                if (bin->operator_type == Token::PERCENT) {
+                    if (!is_int_type(left_type) && !is_float_type(left_type)) {
+                        compiler->report_error(bin, "Remainder operator is only valid for integer and floating-point operands.\n");
+                        return;
+                    }
                 }
             }
 
@@ -1969,27 +2043,31 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 if (!found) {
                     String field_name = field_atom->name;
                     String name = left_type->struct_decl->identifier->name->name;
-                    compiler->report_error(deref, "No member '%.*s' in struct %.*s.\n", field_name.length, field_name.data, name.length, name.data);
+                    compiler->report_error(deref, "No member '%.*s' in struct %.*s.\n", PRINT_ARG(field_name), PRINT_ARG(name));
                 }
             } else if (left_type->type == Ast_Type_Info::ENUM) {
                 auto _enum = left_type->enum_decl;
 
-                // @Incomplete this should perform a scope lookup for a declaration so we can handle
-                // lets, functions, typealiases, etc..
-                //int index = 0;
+                bool found = false;
                 for (auto member : _enum->member_scope.declarations) {
                     auto decl = static_cast<Ast_Declaration *>(member);
                     if (decl->identifier->name == field_atom) {
-                        //deref->element_path_index = index;
-                        //deref->type_info = member.type_info;
-                        //deref->byte_offset = 0;
-                        //break;
+                        assert(decl->is_let);
 
-                        typecheck_expression(decl); // @@ Is this necessary here?
+                        typecheck_expression(decl);
                         if (compiler->errors_reported) return;
 
+                        // Substitute Enum.Value by Value's declaration.
                         deref->substitution = decl;
+                        found = true;
+                        break;
                     }
+                }
+
+                if (!found) {
+                    String field_name = field_atom->name;
+                    String name = left_type->enum_decl->identifier->name->name;
+                    compiler->report_error(deref, "No member '%.*s' in enum %.*s.\n", PRINT_ARG(field_name), PRINT_ARG(name));
                 }
             }
 
@@ -2243,7 +2321,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             cast->type_info = target;
 
             if (!is_valid_primitive_cast(target, expr_type)) {
-
+                compiler->report_error(cast, "Invalid cast.\n");
+                return;
             }
 
             return;
@@ -2463,6 +2542,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             Ast_Type_Instantiation *type_inst = new (compiler->get_memory(sizeof(Ast_Type_Instantiation))) Ast_Type_Instantiation();
             copy_location_info(type_inst, typeof);
             type_inst->type_value = expr_type;
+            type_inst->type_info = compiler->type_info_type;
 
             typeof->substitution = type_inst;
             typeof->type_info = compiler->type_info_type;

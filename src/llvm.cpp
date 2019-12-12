@@ -278,6 +278,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
     if (type->type == Ast_Type_Info::TYPE) {
         return type_i64;
+        // In the future this should return a pointer to the runtime type info.
         //return type_i8->getPointerTo();
     }
     
@@ -1077,7 +1078,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
             
             Array<Value *> args;
-            for (auto &it : call->argument_list) {
+            for (auto it : call->argument_list) {
                 bool is_aggregate_value = is_aggregate_type(get_type_info(it));
                 auto value = emit_expression(it, is_aggregate_value);
                 
@@ -1486,16 +1487,18 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         case AST_UNINITIALIZED:
             assert(false && "Unitialized AST Node!");
         // No-ops
-        case AST_TYPE_INSTANTIATION:
         case AST_TYPE_ALIAS:
         case AST_STRUCT:
         case AST_DIRECTIVE_LOAD:
         case AST_DIRECTIVE_IMPORT:
         case AST_DIRECTIVE_STATIC_IF:
         case AST_LIBRARY:
+            break;
+        case AST_TYPE_INSTANTIATION:
         case AST_OS:     // This is always subtituted by a literal at the AST level.
         case AST_SIZEOF: // This is always subtituted by a literal at the AST level.
         case AST_TYPEOF: // This is always subtituted by a literal at the AST level.
+            assert(false);
             break;
     }
     
