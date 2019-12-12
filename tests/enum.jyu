@@ -1,39 +1,56 @@
+/*#import "LibC";
 
-//#import "LibC";
-//#import "Basic";
-
-/*
-struct Days {
-    let Monday = 0;
-}
-var monday : Days = Days.Monday;
-*/
-
-
-enum Days : uint {
+enum Day : uint {
     Monday;
-    Tuesday = cast(Days)(Monday + 1);   // + should give a type error -> Days, literal?
-    
-    Wednesday = cast(Days)2;            // This cast should not be necessary!
+}
+
+func main() {
+    printf("typeof(Day.Monday) = %d\n", typeof(Day.Monday));
+    printf("typeof(Day.Monday + 1) = %d\n", typeof(Day.Monday + 1));
+    printf("typeof(1 + Day.Monday) = %d\n", typeof(1 + Day.Monday));
+
+    //let MyDay = uint8;  // @@ This should not be allowed.
+
+}*/
+
+
+
+#import "LibC";
+#import "Basic";
+
+
+enum Day : uint {
+    Monday;
+    Tuesday = Monday + 1;       // + should give a type error -> Day, literal?
+    Wednesday = 2;
 
     Thursday;
-    Friday = cast(Days)(Thursday + 1);
+    Friday = Thursday + 1;
 
     Saturday;
     Sunday;
 }
 
-/*
+enum WeekendDay {
+    Saturday = Day.Saturday;   // This should require a cast. Do not allow implicit cast from one enum to another.
+    Sunday;
+}
+
+enum Bool : uint8 { False; True; }
 
 
-//var monday = Days.Monday;
-//var tuesday : Days = Days.Tuesday;
-//var my_day : Days;
+
+var monday = Day.Monday;
+var tuesday : Day = Day.Tuesday;
+var sunday : Day = WeekendDay.Sunday;   // This should require a cast. Do not allow implicit cast from one enum to another.
+var my_day : Day;
+
+
 
 //let MONDAY = 0;
 //let TUESDAY = MONDAY + 1;
 
-func test(day : Days) -> int {
+func test(day : Day) -> int {
     return cast(int)day + 1;
 }
 
@@ -49,88 +66,51 @@ func main() {
     var i : int = cast(int) 1.0;
 
     {
-        var day : Days;
+        var day : Day;
 
-        let Monday = Days.Monday;
+        let Monday = Day.Monday;
         let Tuesday = Monday + 1;
         printf("typeof(Monday) = %d\n", typeof(Monday));
-        printf("typeof(Days.Monday) = %d\n", typeof(Days.Monday));
-        printf("Days = %d\n", Days);
-        printf("typeof(Days) = %d\n", typeof(Days));
-        assert(typeof(Monday) == Days);      // Type instantiations need to be folded to literals.
+        printf("typeof(Day.Monday) = %d\n", typeof(Day.Monday));
+        printf("typeof(Day.Monday + 1) = %d\n", typeof(Day.Monday + 1));    // This is incorrectly being cast to an integer.
+        printf("typeof(1 + Day.Monday) = %d\n", typeof(1 + Day.Monday));
+        printf("typeof(day) = %d\n", typeof(day));
+        printf("typeof(day + 1) = %d\n", typeof(day + 1));
+        printf("Day = %d\n", Day);
+        printf("typeof(Day) = %d\n", typeof(Day));
+        assert(typeof(Monday) == Day);      // Type instantiations need to be folded to literals.
 
-        let MONDAY = cast(int)Days.Monday;   // Type of MONDAY is int
+        let MONDAY = cast(int)Day.Monday;   // Type of MONDAY is int
         assert(typeof(MONDAY) == int);
     }
 
-    {
-        var day = Days.Monday;
-        assert(typeof(day) == Days);
+    /*{
+        var day = Day.Monday;
+        assert(typeof(day) == Day);
 
         //day = day + 1;            // This correctly fails.
-        //day = Days.Monday + 1;    // Here the assignment fails, but not the +!
+        //day = Day.Monday + 1;    // Here the assignment fails, but not the +!
 
-
-
-
-        var day_index = cast(int)Days.Monday;   // Type of dayIndex is int
+        var day_index = cast(int)Day.Monday;   // Type of dayIndex is int
         assert(typeof(day_index) == int);
-    }
+    }*/
 
-    var monday = Days.Monday;
+    //var monday = Day.Monday;
 
-    //test(Days.Monday + 1);
+    //test(Day.Monday + 1);
     //printf("MONDAY = %d\n", MONDAY);
     //printf("TUESDAY = %d\n", TUESDAY);
   
-    printf("Monday = %d\n", Days.Monday);
-    printf("Tuesday = %d\n", Days.Tuesday);
-    printf("Wednesday = %d\n", Days.Wednesday);
-    printf("Thursday = %d\n", Days.Thursday);
-    printf("Friday = %d\n", Days.Friday);
-    printf("Saturday = %d\n", Days.Saturday);
-    printf("Sunday = %d\n", Days.Sunday);
+    printf("Monday = %d\n", Day.Monday);
+    printf("Tuesday = %d\n", Day.Tuesday);
+    printf("Wednesday = %d\n", Day.Wednesday);
+    printf("Thursday = %d\n", Day.Thursday);
+    printf("Friday = %d\n", Day.Friday);
+    printf("Saturday = %d\n", Day.Saturday);
+    printf("Sunday = %d\n", Day.Sunday);
 
-    //printf("Monday+1 = %d\n", test(Days.Monday));
+    printf("Monday+1 = %d\n", test(Day.Monday));
 
-    //printf("Whatever = %d\n", Days.Whatever); // This should trigger an error.
+    //printf("Whatever = %d\n", Day.Whatever); // This should trigger an error.
 }
 
-*/
-
-/*
-enum Days : uint8 {
-    Monday = 0;
-//    Tuesday = Monday + 1;
-//    Wednesday;
-//    Thursday;
-//    Friday;
-//    Saturday;
-//    Sunday;
-}
-*/
-
-/*
-
-enum Days : uint8 {
-    Monday = 0;
-    Tuesday = 1;
-    Wednesday;
-    Thursday;
-    Friday;
-    Saturday;
-    Sunday;
-}
-
-enum Days : uint8 {
-    Monday = 0,
-    Tuesday = 1,
-    Wednesday,
-    Thursday,
-    Friday,
-    Saturday,
-    Sunday,
-}
-enum Bool : uint8 { False, True }
-
-*/
