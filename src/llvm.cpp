@@ -90,6 +90,13 @@ void LLVM_Generator::preinit() {
     }
     TargetTriple = Triple::normalize(TargetTriple);
 
+    if (compiler->build_options.verbose_diagnostics) {
+        // @TODO we should have a compiler->print_diagnostic function
+        printf("w%d: LLVM default target: %s\n",        compiler->instance_number, default_target_triple.c_str());
+        printf("w%d: LLVM process target: %s\n",        compiler->instance_number, process_triple.c_str());
+        printf("w%d: LLVM target: %s\n",                compiler->instance_number, process_triple.c_str());
+    }
+
     std::string Error;
     auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
 
