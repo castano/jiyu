@@ -475,7 +475,7 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
 
                 right = deref;
                 viability_score += 1;
-                
+
                 if (!types_match(ltype, compiler->type_string_data)) {
                     // Add a pointer cast to the target type if it is *int8, or otherwise not the internal type of string.data.
                     auto cast = cast_ptr_to_ptr(compiler, deref, ltype);
@@ -1859,7 +1859,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         case AST_WHILE: {
             auto loop = static_cast<Ast_While *>(expression);
 
-            typecheck_expression(loop->condition);
+            auto result = typecheck_and_implicit_cast_single_expression(loop->condition, compiler->type_bool, ALLOW_COERCE_TO_BOOL);
+            loop->condition = result.item2;
 
             if (compiler->errors_reported) return;
 
@@ -2128,7 +2129,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 assert(_struct->type_value->struct_members.count == 0);
                 assert(_struct->type_value->type_table_index == -1);
             }
-            
+
             _struct->type_info = compiler->type_info_type;
 
             // flag stuct member declarations
@@ -2181,7 +2182,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                         offset_cursor = pad_to_alignment(offset_cursor, final_type->alignment);
                         member.offset_in_struct = offset_cursor;
-                        
+
                         assert(final_type->stride >= 0);
                         if (!_struct->is_union) {
                             offset_cursor += final_type->stride;
@@ -2201,7 +2202,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
 
                 if (info->alignment <= 0) info->alignment = biggest_alignment;
-                
+
                 if (info->size >= 0) assert(pad_to_alignment(size, info->alignment) == info->size); //this came from clang
                 info->size = size;
                 info->stride = pad_to_alignment(info->size, info->alignment);
