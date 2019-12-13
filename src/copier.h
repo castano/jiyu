@@ -28,7 +28,7 @@ struct Copier {
     Ast_Expression *copy(Ast_Expression *Ast_Expression);
     void copy_scope(Ast_Scope *_new, Ast_Scope *old);
     Ast_Function *copy_function(Ast_Function *old);
-    Ast_Function *polymoprh_function_with_arguments(Ast_Function *poly, Array<Ast_Expression *> *arguments);
+    Tuple<Ast_Function *, bool> polymoprh_function_with_arguments(Ast_Function *poly, Array<Ast_Expression *> *arguments);
 };
 
 #endif

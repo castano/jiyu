@@ -779,10 +779,14 @@ Ast_Function *Sema::get_polymorph_for_function_call(Ast_Function *template_funct
     // and then attempt to resolve the types of the function arguments
     // and resolve the targets of the template type aliases
 
-    auto polymorph = compiler->copier->polymoprh_function_with_arguments(template_function, &call->argument_list);
+    auto result = compiler->copier->polymoprh_function_with_arguments(template_function, &call->argument_list);
+    auto polymorph   = result.item1;
+    bool is_existing = result.item2;
     if (polymorph) {
-        typecheck_function(polymorph);
-        template_function->polymorphed_overloads.add(polymorph);
+        if (!is_existing) {
+            typecheck_function(polymorph);
+            template_function->polymorphed_overloads.add(polymorph);
+        }
     }
     if (compiler->errors_reported) return nullptr;
 
