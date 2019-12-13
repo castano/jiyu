@@ -1846,7 +1846,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             auto cond = _if->condition;
             if (get_type_info(cond)->type != Ast_Type_Info::BOOL) {
-                // @TODO check for coercion to bool
                 compiler->report_error(cond, "'if' condition isn't of boolean type.\n");
             }
 
@@ -1866,7 +1865,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             auto cond = loop->condition;
             if (get_type_info(cond)->type != Ast_Type_Info::BOOL) {
-                // @TODO check for coercion to bool
                 compiler->report_error(cond, "'while' condition isn't of boolean type.\n");
             }
 
