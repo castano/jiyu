@@ -135,7 +135,7 @@ Ast_Type_Info *Compiler::make_pointer_type(Ast_Type_Info *pointee) {
 
 #define COPY(name) do { info->name = aliasee->name; } while(0)
 
-Ast_Type_Info *Compiler::make_type_alias(Ast_Type_Info *aliasee) {
+Ast_Type_Info *Compiler::make_type_alias_type(Ast_Type_Info *aliasee) {
     Ast_Type_Info *info = COMPILER_NEW(Ast_Type_Info);
     info->type = Ast_Type_Info::ALIAS;
     info->alias_of  = aliasee;
@@ -890,6 +890,13 @@ Ast_Binary_Expression *make_binary(Compiler *compiler, Token::Type op, Ast_Expre
     if (location) copy_location_info(bin, location);
 
     return bin;
+}
+
+Ast_Type_Alias *make_type_alias(Compiler *compiler, Ast_Identifier *ident, Ast_Type_Info *type_value) {
+    Ast_Type_Alias *alias = COMPILER_NEW2(Ast_Type_Alias);
+    alias->identifier = ident;
+    alias->type_value = type_value;
+    return alias;
 }
 
 Ast_Type_Info *get_final_type(Ast_Type_Info *info) {

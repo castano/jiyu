@@ -194,6 +194,20 @@ extern "C" {
 
         perform_load_from_string(compiler, to_string((char *)preload_text), compiler->preload_scope);
 
+        // Insert some built-in definitions so code can reason about the types of array and string fields.
+        {
+            Ast_Identifier *ident = make_identifier(compiler, compiler->make_atom(to_string("__builtin_string_length_type")));
+            Ast_Type_Alias *alias = make_type_alias(compiler, ident, compiler->type_string_length);
+
+            compiler->preload_scope->statements.add(alias);
+            compiler->preload_scope->declarations.add(alias);
+
+            ident = make_identifier(compiler, compiler->make_atom(to_string("__builtin_array_count_type")));
+            alias = make_type_alias(compiler, ident, compiler->type_array_count);
+
+            compiler->preload_scope->statements.add(alias);
+            compiler->preload_scope->declarations.add(alias);
+        }
         return compiler;
     }
 

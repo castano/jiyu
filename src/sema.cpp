@@ -2108,7 +2108,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 if (compiler->errors_reported) return;
 
                 assert(alias->internal_type_inst->type_value);
-                alias->type_value = compiler->make_type_alias(alias->internal_type_inst->type_value);
+                alias->type_value = compiler->make_type_alias_type(alias->internal_type_inst->type_value);
                 alias->type_value->alias_decl = alias;
             } else {
                 // We got here due to polymorphing taking advantage of the

@@ -347,7 +347,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
 
             auto info = get_jiyu_type(visitor_data, underlying_type);
             assert(info);
-            alias->type_value = compiler->make_type_alias(info);
+            alias->type_value = compiler->make_type_alias_type(info);
             alias->type_value->alias_decl = alias;
 
             current_scope->statements.add(alias);
@@ -375,7 +375,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
 
             auto info = get_jiyu_type(visitor_data, underlying_type);
             assert(info);
-            alias->type_value = compiler->make_type_alias(info);
+            alias->type_value = compiler->make_type_alias_type(info);
             alias->type_value->alias_decl = alias;
 
             current_scope->statements.add(alias);
@@ -560,7 +560,7 @@ bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *targe
         alias->type_info = compiler->type_info_type;
 
         auto info = compiler->type_ptr_void;
-        alias->type_value = compiler->make_type_alias(info);
+        alias->type_value = compiler->make_type_alias_type(info);
         alias->type_value->alias_decl = alias;
 
         target_scope->statements.add(alias);

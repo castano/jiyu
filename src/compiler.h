@@ -145,7 +145,7 @@ struct Compiler {
 
     // All these functions add to the type table before returning. Their results should not be modified!
     Ast_Type_Info *make_pointer_type(Ast_Type_Info *pointee);
-    Ast_Type_Info *make_type_alias(Ast_Type_Info *aliasee);
+    Ast_Type_Info *make_type_alias_type(Ast_Type_Info *aliasee);
     Ast_Type_Info *make_array_type(Ast_Type_Info *element, array_count_type count, bool is_dynamic);
     Ast_Type_Info *make_function_type(Ast_Function *function);
     void add_to_type_table(Ast_Type_Info *info);
@@ -313,5 +313,7 @@ Ast_Dereference *make_dereference(Compiler *compiler, Ast_Expression *aggregate_
 Ast_Unary_Expression *make_unary(Compiler *compiler, Token::Type op, Ast_Expression *subexpr);
 
 Ast_Binary_Expression *make_binary(Compiler *compiler, Token::Type op, Ast_Expression *left, Ast_Expression *right, Ast *location);
+
+Ast_Type_Alias *make_type_alias(Compiler *compiler, Ast_Identifier *ident, Ast_Type_Info *type_value);
 
 #endif
