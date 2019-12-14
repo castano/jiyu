@@ -557,6 +557,14 @@ struct Pool {
     }
 
     void *allocate(array_count_type amount) {
+        s64 pad_to_alignment(s64 current, s64 align);
+        int alignment = 8; // @Temporary
+        // Ensure the _next_ allocation will be properly aligned.
+        // Kind of a @Hack, but doing this in the short term in order
+        // to make sure we don't crash on something like an ARM chip
+        // where the alignment of things matter a little more.
+        amount = pad_to_alignment(amount, alignment);
+
         for (auto &chunk : chunks) {
             auto available = chunk.allocated - chunk.used;
             assert(available >= 0);
