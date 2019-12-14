@@ -1133,6 +1133,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (decl->is_let && !decl->is_readonly_variable && !decl->initializer_expression) {
                 compiler->report_error(decl, "let constant must be initialized by an expression.\n");
+                return;
             }
 
             if (decl->is_let && !decl->is_readonly_variable && decl->initializer_expression) {
@@ -1140,6 +1141,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 if (!literal) {
                     compiler->report_error(decl->initializer_expression, "let constant may only be initialized by a literal expression.\n");
+                    return;
                 } else {
                     if (decl->initializer_expression != literal) decl->initializer_expression->substitution = literal;
                 }
@@ -1150,6 +1152,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             if (!decl->is_let && decl->is_struct_member && decl->initializer_expression) {
                 if (!resolves_to_literal_value(decl->initializer_expression)) {
                     compiler->report_error(decl->initializer_expression, "Struct member may only be initialized by a literal expression.\n");
+                    return;
                 }
             }
 
