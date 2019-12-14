@@ -566,12 +566,12 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     case Token::STAR : return make_float_literal(compiler, l * r, left_type, bin);
                     case Token::SLASH: return make_float_literal(compiler, l / r, left_type, bin);
 
-                    case Token::LE_OP: make_bool_literal(compiler, l <= r, bin);
-                    case Token::GE_OP: make_bool_literal(compiler, l >= r, bin);
-                    case Token::EQ_OP: make_bool_literal(compiler, l == r, bin);
-                    case Token::NE_OP: make_bool_literal(compiler, l != r, bin);
-                    case Token::LEFT_ANGLE : make_bool_literal(compiler, l <  r, bin);
-                    case Token::RIGHT_ANGLE: make_bool_literal(compiler, l >  r, bin);
+                    case Token::LE_OP: return make_bool_literal(compiler, l <= r, bin);
+                    case Token::GE_OP: return make_bool_literal(compiler, l >= r, bin);
+                    case Token::EQ_OP: return make_bool_literal(compiler, l == r, bin);
+                    case Token::NE_OP: return make_bool_literal(compiler, l != r, bin);
+                    case Token::LEFT_ANGLE : return make_bool_literal(compiler, l <  r, bin);
+                    case Token::RIGHT_ANGLE: return make_bool_literal(compiler, l >  r, bin);
 
                     default: assert(false);
                 }
@@ -1061,6 +1061,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         }
         case AST_DIRECTIVE_CLANG_IMPORT: {
             expression->type_info = compiler->type_void;
+            return;
         }
 
         case AST_SCOPE_EXPANSION: {
