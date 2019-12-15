@@ -2334,19 +2334,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             free(ident_string.data);
 
-
-            Atom *name = ident->name;
-            bool valid_option = (name == compiler->atom_Windows) || (name == compiler->atom_MacOSX) || (name == compiler->atom_Linux);
-
-            if (!valid_option) {
-                String op = name->name;
-                compiler->report_error(ident, "Unrecognized os() option '%.*s'.\n", op.length, op.data);
-                return;
-            }
-
-            // String op = name->name;
-            // printf("os(): %.*s: %s\n", op.length, op.data, lit->bool_value ? "true" : "false");
-
+            // @TODO add an error if the input to os() is not a valid, maybe.
             os->type_info = lit->type_info;
             os->substitution = lit;
             return;

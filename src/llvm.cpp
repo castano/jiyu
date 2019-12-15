@@ -1604,6 +1604,10 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
 
     Function *func = get_or_create_function(function);
 
+    {
+        func->addFnAttr(Attribute::AttrKind::NoUnwind);
+    }
+
     if (!function->scope) return; // forward declaration of external thing
 
     if (!func->empty()) {

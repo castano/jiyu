@@ -28,10 +28,145 @@ typedef s32 array_count_type;
 typedef s32 string_length_type;
 #endif
 
+#ifdef WIN32
+#define PATH_SEPARATOR "\\"
+#else
+#define PATH_SEPARATOR "/"
+#endif
+
 static_assert(sizeof(array_count_type) == sizeof(void *), "sizeof(array_count_type) must match sizeof(void *).");
 // static_assert(sizeof(string_length_type) == sizeof(void *), "sizeof(string_length_type) must match sizeof(void *).");
 
 const int BYTES_TO_BITS = 8;
+
+template<typename T>
+struct Array {
+    T *data = nullptr;
+    array_count_type count = 0;
+    array_count_type allocated = 0;
+
+    const int NEW_MEM_CHUNK_ELEMENT_COUNT =  16;
+
+    Array(array_count_type reserve_amount = 0) {
+        reserve(reserve_amount);
+    }
+
+    ~Array() {
+        reset();
+    }
+
+    void reserve(array_count_type amount) {
+        if (amount <= 0) amount = NEW_MEM_CHUNK_ELEMENT_COUNT;
+        if (amount <= allocated) return;
+
+        T *new_mem = (T *)malloc(amount * sizeof(T));
+
+        if (data) {
+            memcpy(new_mem, data, count * sizeof(T));
+            free(data);
+        }
+
+        data = new_mem;
+        allocated = amount;
+    }
+
+    void resize(array_count_type amount) {
+        auto old_count = count;
+        reserve(amount);
+        count = amount;
+
+        memset((char *)data + (old_count * sizeof(T)), 0, (count - old_count) * sizeof(T));
+        // @TODO maybe default initalized all elements
+        // that we grew by?
+    }
+
+    void insert(array_count_type index, T element) {
+        auto old_count = count;
+        resize(count + 1);
+        memmove((char *)data + ((index+1) * sizeof(T)), (char *)data + (index * sizeof(T)), (old_count-index) * sizeof(T));
+
+        data[index] = element;
+    }
+
+    void add(T element) {
+        if (count+1 >= allocated) reserve(allocated + NEW_MEM_CHUNK_ELEMENT_COUNT);
+
+        data[count] = element;
+        count += 1;
+    }
+
+    T unordered_remove(array_count_type index) {
+        assert(index >= 0 && index < count);
+        assert(count);
+
+        T last = pop();
+        // if index is still within the valid range (index was not referencing the last item)
+        // we put the last item in the slot we're removing.
+        if (index < count) {
+            (*this)[index] = last;
+        }
+
+        return last;
+    }
+
+    T ordered_remove(array_count_type index) {
+        assert(index >= 0 && index < count);
+        assert(count);
+
+        T item = (*this)[index];
+        memmove(data + index, data + index + 1, ((count - index) - 1) * sizeof(T));
+
+        count--;
+        return item;
+    }
+
+    T pop() {
+        assert(count > 0);
+        T result = data[count-1];
+        count -= 1;
+        return result;
+    }
+
+    void clear() {
+        count = 0;
+    }
+
+    void reset() {
+        count = 0;
+        allocated = 0;
+
+        if (data) free(data);
+        data = nullptr;
+    }
+
+    T &operator[] (array_count_type index) {
+        assert(index >= 0 && index < count);
+        return data[index];
+    }
+
+    T *begin() {
+        return &data[0];
+    }
+
+    T *end() {
+        return &data[count];
+    }
+};
+
+template<typename A, typename B>
+struct Tuple {
+    A item1;
+    B item2;
+};
+
+template<typename A, typename B>
+Tuple<A, B> MakeTuple(A a, B b) {
+    Tuple<A, B> t;
+    t.item1 = a;
+    t.item2 = b;
+    return t;
+}
+
 
 struct String {
     char *data = nullptr;
@@ -155,6 +290,36 @@ inline String basename(String s) {
     }
 
     return s;
+}
+
+inline
+void split(String input, int delim, Array<String> *output) {
+    string_length_type start  = 0;
+    string_length_type cursor = 0;
+
+    while (cursor < input.length) {
+        if (input.data[cursor] == delim) {
+            String o;
+            o.data = input.data + start;
+            o.length = cursor - start;
+
+            if (o.length > 0) {
+                output->add(o);
+            }
+
+            start = cursor + 1;
+        }
+
+        cursor += 1;
+    }
+
+    String o;
+    o.data = input.data + start;
+    o.length = cursor - start;
+
+    if (o.length > 0) {
+        output->add(o);
+    }
 }
 
 String mprintf(char *fmt, ...);
@@ -294,134 +459,6 @@ struct TextSpan {
 
     String get_text();
 };
-
-template<typename T>
-struct Array {
-    T *data = nullptr;
-    array_count_type count = 0;
-    array_count_type allocated = 0;
-
-    const int NEW_MEM_CHUNK_ELEMENT_COUNT =  16;
-
-    Array(array_count_type reserve_amount = 0) {
-        reserve(reserve_amount);
-    }
-
-    ~Array() {
-        reset();
-    }
-
-    void reserve(array_count_type amount) {
-        if (amount <= 0) amount = NEW_MEM_CHUNK_ELEMENT_COUNT;
-        if (amount <= allocated) return;
-
-        T *new_mem = (T *)malloc(amount * sizeof(T));
-
-        if (data) {
-            memcpy(new_mem, data, count * sizeof(T));
-            free(data);
-        }
-
-        data = new_mem;
-        allocated = amount;
-    }
-
-    void resize(array_count_type amount) {
-        auto old_count = count;
-        reserve(amount);
-        count = amount;
-
-        memset((char *)data + (old_count * sizeof(T)), 0, (count - old_count) * sizeof(T));
-        // @TODO maybe default initalized all elements
-        // that we grew by?
-    }
-
-    void insert(array_count_type index, T element) {
-        auto old_count = count;
-        resize(count + 1);
-        memmove((char *)data + ((index+1) * sizeof(T)), (char *)data + (index * sizeof(T)), (old_count-index) * sizeof(T));
-
-        data[index] = element;
-    }
-
-    void add(T element) {
-        if (count+1 >= allocated) reserve(allocated + NEW_MEM_CHUNK_ELEMENT_COUNT);
-
-        data[count] = element;
-        count += 1;
-    }
-
-    T unordered_remove(array_count_type index) {
-        assert(index >= 0 && index < count);
-        assert(count);
-
-        T last = pop();
-        // if index is still within the valid range (index was not referencing the last item)
-        // we put the last item in the slot we're removing.
-        if (index < count) {
-            (*this)[index] = last;
-        }
-
-        return last;
-    }
-
-    T ordered_remove(array_count_type index) {
-        assert(index >= 0 && index < count);
-        assert(count);
-
-        T item = (*this)[index];
-        memmove(data + index, data + index + 1, ((count - index) - 1) * sizeof(T));
-
-        count--;
-        return item;
-    }
-
-    T pop() {
-        assert(count > 0);
-        T result = data[count-1];
-        count -= 1;
-        return result;
-    }
-
-    void clear() {
-        count = 0;
-    }
-
-    void reset() {
-        count = 0;
-        allocated = 0;
-
-        if (data) free(data);
-        data = nullptr;
-    }
-
-    T &operator[] (array_count_type index) {
-        assert(index >= 0 && index < count);
-        return data[index];
-    }
-
-    T *begin() {
-        return &data[0];
-    }
-
-    T *end() {
-        return &data[count];
-    }
-};
-
-template<typename A, typename B>
-struct Tuple {
-    A item1;
-    B item2;
-};
-
-template<typename A, typename B>
-Tuple<A, B> MakeTuple(A a, B b) {
-    Tuple<A, B> t;
-    t.item1 = a;
-    t.item2 = b;
-    return t;
-}
 
 #include <cstdio>
 #include <cstdarg>

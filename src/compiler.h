@@ -71,7 +71,7 @@ struct Compiler {
 
     s64 pointer_size = -1; // @TargetInfo
 
-    s32 metaprogram_argc = 0;
+    s32    metaprogram_argc = 0;
     char **metaprogram_argv = nullptr;
 
     Sema *sema;
@@ -164,6 +164,8 @@ struct Compiler {
     void report_warning(Ast *ast, char *fmt, ...);
 
     bool is_toplevel_scope(Ast_Scope *scope);
+
+    Tuple<bool, String> find_file_in_library_search_paths(String filename);
 };
 
 // Structs must be added to the type table manually

@@ -18,6 +18,18 @@
 #define EXPORT
 #endif
 
+#ifdef WIN32
+#pragma warning(push, 0)
+#endif
+
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/ADT/Triple.h"
+
+#ifdef WIN32
+#pragma warning(pop)
+#endif
+
+
 #include <stdio.h>
 
 String TextSpan::get_text() {
@@ -208,6 +220,8 @@ extern "C" {
             compiler->preload_scope->statements.add(alias);
             compiler->preload_scope->declarations.add(alias);
         }
+
+        os_init(compiler);
         return compiler;
     }
 
@@ -318,6 +332,58 @@ extern "C" {
 
         for (auto obj: compiler->user_supplied_objs) {
             args.add(obj);
+        }
+
+        auto triple = compiler->llvm_gen->TargetMachine->getTargetTriple();
+        if (triple.isOSLinux()) {
+            // CRT files
+            // these seem to be GCC specific
+//             auto crtbegin = compiler->find_file_in_library_search_paths(to_string("crtbegin.o")); // @Leak
+//             auto crtend   = compiler->find_file_in_library_search_paths(to_string("crtend.o")); // @Leak
+            auto crti     = compiler->find_file_in_library_search_paths(to_string("crti.o")); // @Leak
+            auto crtn     = compiler->find_file_in_library_search_paths(to_string("crtn.o")); // @Leak
+            auto crt1     = compiler->find_file_in_library_search_paths(to_string("crt1.o")); // @Leak
+
+            if (compiler->build_options.verbose_diagnostics) {
+//                 if (!crtbegin.item1) printf("Could not find crtbegin.\n");
+//                 if (!crtend.item1)   printf("Could not find crtend.\n");
+                if (!crti.item1)     printf("Could not find crti.o.\n");
+                if (!crtn.item1)     printf("Could not find crtn.o.\n");
+                if (!crt1.item1)     printf("Could not find crt1.o.\n");
+            }
+
+//             if (crtbegin.item1) args.add(crtbegin.item2);
+//             if (crtend.item1)   args.add(crtend.item2);
+            if (crti.item1) args.add(crti.item2);
+            if (crtn.item1) args.add(crtn.item2);
+            if (crt1.item1) args.add(crt1.item2);
+
+            args.add(to_string("--eh-frame-hdr"));
+
+            // dynamic linker
+            args.add(to_string("-dynamic-linker"));
+            // @TODO clang also checks if the user supplied arguments to use hardfloats. Maybe we can query that through TargetMachine..
+            auto arch = triple.getArch();
+
+            // @TODO aarch64 and others.
+            // @TODO MUSL
+            using namespace llvm;
+            if (triple.isARM() || triple.isThumb()) {
+                bool hardfloats = (triple.getEnvironment() == Triple::GNUEABIHF);
+
+                String linker_name = to_string("/lib/ld-linux.so.3");
+                if (hardfloats) linker_name = to_string("/lib/ld-linux-armhf.so.3");
+
+                args.add(linker_name);
+            } else if (arch == Triple::x86_64) {
+                // @TODO this probably isnt correct if you're compiling 32-bit programs on 64-bit OS.
+                String linker_string = to_string("/lib64/ld-linux-x86-64.so.2");
+                args.add(linker_string);
+            } else {
+                if (compiler->build_options.verbose_diagnostics) {
+                    printf("Could not determine the dynamic linker needed for this platform.\n");
+                }
+            }
         }
 
         args.add(to_string("-o"));

@@ -732,6 +732,19 @@ bool Compiler::is_toplevel_scope(Ast_Scope *scope) {
     return false;
 }
 
+Tuple<bool, String> Compiler::find_file_in_library_search_paths(String filename) {
+    for (auto &path: this->library_search_paths) {
+        String fullpath = mprintf("%.*s" PATH_SEPARATOR "%.*s", PRINT_ARG(path), PRINT_ARG(filename));
+        if (file_exists(fullpath)) {
+            return MakeTuple(true, fullpath);
+        } else {
+            free(fullpath.data);
+        }
+    }
+
+    return MakeTuple(false, String());
+}
+
 // Expression construction stuff, primarily used by sema and clang_import
 
 Ast_Expression *cast_int_to_int(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
