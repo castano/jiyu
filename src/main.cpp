@@ -11,14 +11,6 @@
 #include "clang_import.h"
 
 #ifdef WIN32
-#include "microsoft_craziness.h"
-
-#define EXPORT __declspec(dllexport)
-#else
-#define EXPORT
-#endif
-
-#ifdef WIN32
 #pragma warning(push, 0)
 #endif
 
@@ -27,6 +19,14 @@
 
 #ifdef WIN32
 #pragma warning(pop)
+#endif
+
+#ifdef WIN32
+#include "microsoft_craziness.h"
+
+#define EXPORT __declspec(dllexport)
+#else
+#define EXPORT
 #endif
 
 
