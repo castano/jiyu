@@ -306,10 +306,10 @@ func get_command_line(strings: [] string) -> *uint8 {
 
 #if os(Linux) {
     func get_executable_path() -> string {
-        func @c_function readlink(path: string, buf: *uint8, bufsize: uint32) -> int32;
+        func @c_function readlink(path: c_string, buf: *uint8, bufsize: size_t) -> int32;
 
         var buf: [512] uint8;
-        var bufsize: uint32 = cast(uint32) buf.count;
+        var bufsize: size_t = cast(size_t) buf.count;
         var result = readlink("/proc/self/exe", buf.data, bufsize);
         if (result < 0) return "";
 

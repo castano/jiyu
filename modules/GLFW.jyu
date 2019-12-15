@@ -10,8 +10,8 @@
 
 typealias GLFWwindow = void; // opaque
 
-func @c_function glfwInit();
-func @c_function glfwCreateWindow(width: int32, height: int32, title: *uint8, unk: int64, unk1: int64) -> *void;
+func @c_function glfwInit() -> int32;
+func @c_function glfwCreateWindow(width: int32, height: int32, title: *uint8, monitor: *void, share: *void) -> *void;
 func @c_function glfwTerminate();
 func @c_function glfwMakeContextCurrent(window: *void);
 func @c_function glfwWindowShouldClose(window: *void) -> bool;
@@ -27,3 +27,6 @@ let GLFW_OPENGL_FORWARD_COMPAT = 0x00022006;
 let GLFW_OPENGL_PROFILE        = 0x00022008;
 
 let GLFW_OPENGL_CORE_PROFILE   = 0x00032001;
+
+let GLFW_CLIENT_API            = 0x00022001;
+let GLFW_OPENGL_ES_API         = 0x00030002;
