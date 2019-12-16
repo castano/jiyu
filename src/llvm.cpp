@@ -62,9 +62,8 @@ DIFile *get_debug_file(LLVMContext *ctx, Ast *ast) {
 string_length_type get_line_number(Ast *ast) {
     // @Speed we should probably just track line_start on Ast itself
     // and have the lexer set this on tokens.
-    string_length_type line_start, char_start, line_end, char_end;
+    string_length_type line_start = 0, char_start = 0, line_end = 0, char_end = 0;
     ast->text_span.calculate_text_coordinates(&line_start, &char_start, &line_end, &char_end);
-
     return line_start;
 }
 
@@ -1200,38 +1199,37 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
         case AST_IF: {
             auto _if = static_cast<Ast_If *>(expression);
+
+            auto loc = irb->getCurrentDebugLocation();
+            assert(loc.getLine() != 0);
             auto cond = emit_expression(_if->condition);
 
             auto current_block = irb->GetInsertBlock();
+            auto current_debug_location = irb->getCurrentDebugLocation();
 
-            BasicBlock *next_block = BasicBlock::Create(*llvm_context, "", current_block->getParent());
-            BasicBlock *then_block = nullptr;
+            BasicBlock *then_block = BasicBlock::Create(*llvm_context, "then_target", current_block->getParent());
             BasicBlock *else_block = nullptr;
+            if (_if->else_scope) else_block = BasicBlock::Create(*llvm_context, "else_target", current_block->getParent());
+            BasicBlock *next_block = BasicBlock::Create(*llvm_context, "", current_block->getParent());
+            BasicBlock *failure_target = else_block ? else_block : next_block;
 
-            BasicBlock *failure_target = next_block;
+            irb->CreateCondBr(cond, then_block, failure_target);
 
-            then_block = BasicBlock::Create(*llvm_context, "then_target", current_block->getParent());
-            if (_if->then_statement) {
-                irb->SetInsertPoint(then_block);
-                emit_expression(_if->then_statement);
-
-            }
+            irb->SetInsertPoint(then_block);
+            emit_scope(&_if->then_scope);
             if (!irb->GetInsertBlock()->getTerminator()) irb->CreateBr(next_block);
 
-            if (_if->else_statement) {
-                else_block = BasicBlock::Create(*llvm_context, "else_target", current_block->getParent());
+
+            if (_if->else_scope) {
                 irb->SetInsertPoint(else_block);
-                emit_expression(_if->else_statement);
+                emit_scope(_if->else_scope);
 
                 if (!irb->GetInsertBlock()->getTerminator()) irb->CreateBr(next_block);
 
                 failure_target = else_block;
             }
 
-            irb->SetInsertPoint(current_block);
-            irb->CreateCondBr(cond, then_block, failure_target);
             irb->SetInsertPoint(next_block);
-
             break;
         }
 
@@ -1251,6 +1249,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             irb->CreateBr(loop_header);
 
             irb->SetInsertPoint(loop_header);
+            irb->SetCurrentDebugLocation(DebugLoc::get(get_line_number(loop->condition), 0, di_current_scope));
             // emit the condition in the loop header so that it always executes when we loop back around
             auto cond = emit_expression(loop->condition);
             irb->SetInsertPoint(loop_header);
@@ -1263,7 +1262,9 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 if (!irb->GetInsertBlock()->getTerminator()) irb->CreateBr(loop_header);
             }
 
+            auto current_debug_loc = irb->getCurrentDebugLocation();
             irb->SetInsertPoint(next_block);
+            irb->SetCurrentDebugLocation(current_debug_loc);
             break;
         }
 
@@ -1293,19 +1294,17 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
             auto current_block = irb->GetInsertBlock();
 
-            BasicBlock *next_block = BasicBlock::Create(*llvm_context, "for_exit", current_block->getParent());
             BasicBlock *loop_header = BasicBlock::Create(*llvm_context, "for_header", current_block->getParent());
             BasicBlock *loop_body = BasicBlock::Create(*llvm_context, "for_body", current_block->getParent());
 
             // Where the iterator increment happens. This is factored out to be the target of _continue_ statements.
             BasicBlock *loop_body_end = BasicBlock::Create(*llvm_context, "for_body_end", current_block->getParent());
-
             loop_header_map.add(MakeTuple(static_cast<Ast_Expression *>(_for), loop_body_end));
+
+            BasicBlock *next_block = BasicBlock::Create(*llvm_context, "for_exit", current_block->getParent());
             loop_exit_map.add(MakeTuple(static_cast<Ast_Expression *>(_for), next_block));
 
-
             irb->CreateBr(loop_header);
-
             irb->SetInsertPoint(loop_header);
             // emit the condition in the loop header so that it always executes when we loop back around
             auto it_index = irb->CreateLoad(it_index_alloca);
@@ -1453,6 +1452,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         case AST_DIRECTIVE_LOAD:
         case AST_DIRECTIVE_IMPORT:
         case AST_DIRECTIVE_STATIC_IF:
+        case AST_DIRECTIVE_CLANG_IMPORT:
         case AST_LIBRARY:
         case AST_OS:     // This is always subtituted by a literal at the AST level.
         case AST_SIZEOF: // This is always subtituted by a literal at the AST level.
@@ -1522,7 +1522,7 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
         auto di_local_var = dib->createAutoVariable(di_current_scope, string_ref(name),
                                 get_debug_file(llvm_context, it), get_line_number(it), di_type, always_preserve);
         auto declare = dib->insertDeclare(alloca, di_local_var, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(it), 0, di_current_scope),
-                            entry_block);
+                            current_block);
     }
 
     // @Cleanup private decclarations should just be denoted by a flag.
@@ -1563,8 +1563,6 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
 
 DISubroutineType *LLVM_Generator::get_debug_subroutine_type(Ast_Type_Info *type) {
     Array<Metadata *> arguments;
-
-
     DIType *return_type = get_debug_type(type->return_type);
     // @Incomplete void return types need to be null?
 
@@ -1606,6 +1604,7 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
 
     {
         func->addFnAttr(Attribute::AttrKind::NoUnwind);
+        func->addFnAttr(Attribute::AttrKind::UWTable);
     }
 
     if (!function->scope) return; // forward declaration of external thing
@@ -1628,14 +1627,12 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
     auto old_di_scope = di_current_scope;
     di_current_scope = di_subprogram;
 
-    irb->SetCurrentDebugLocation(DebugLoc());
-
     // create entry block
     BasicBlock *entry = BasicBlock::Create(*llvm_context, "entry", func);
     BasicBlock *starting_block = BasicBlock::Create(*llvm_context, "start", func);
 
-
     irb->SetInsertPoint(entry);
+    irb->SetCurrentDebugLocation(DebugLoc::get(get_line_number(function), 0, di_current_scope));
 
     auto arg_it = func->arg_begin();
     for (array_count_type i = 0; i < function->arguments.count; ++i) {

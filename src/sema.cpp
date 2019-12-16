@@ -1857,8 +1857,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 compiler->report_error(cond, "'if' condition isn't of boolean type.\n");
             }
 
-            if (_if->then_statement) typecheck_expression(_if->then_statement);
-            if (_if->else_statement) typecheck_expression(_if->else_statement);
+            typecheck_scope(&_if->then_scope);
+            if (_if->else_scope) typecheck_scope(_if->else_scope);
 
             return;
         }

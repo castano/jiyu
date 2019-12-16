@@ -6,10 +6,15 @@
 #define PARSER_NEW(type) (type *)ast_init(this, new (compiler->get_memory(sizeof(type))) type() );
 
 static
+void set_location_info_from_token(Ast *ast, Token *token) {
+    ast->text_span = token->text_span;
+    ast->filename  = token->filename;
+}
+
+static
 Ast *ast_init(Parser *parser, Ast *ast) {
     Token *token = parser->peek_token();
-    ast->text_span = token->text_span;
-    ast->filename = token->filename;
+    set_location_info_from_token(ast, token);
     return ast;
 }
 
@@ -771,6 +776,8 @@ Ast_Expression *Parser::parse_statement() {
         _struct->member_scope.parent = get_current_scope();
         _struct->member_scope.owning_struct = _struct;
         _struct->is_union = (token->type == Token::KEYWORD_UNION);
+
+        set_location_info_from_token(&_struct->member_scope, peek_token());
         parse_scope(&_struct->member_scope, true);
         return _struct;
     }
@@ -804,13 +811,17 @@ Ast_Expression *Parser::parse_statement() {
             return _if;
         }
 
-        _if->then_statement = parse_statement();
+        set_location_info_from_token(&_if->then_scope, peek_token());
+        _if->then_scope.parent = get_current_scope();
+        parse_scope(&_if->then_scope, false, true);
 
         token = peek_token();
         if (token->type == Token::KEYWORD_ELSE) {
             next_token();
 
-            _if->else_statement = parse_statement();
+            _if->else_scope = PARSER_NEW(Ast_Scope);
+            _if->else_scope->parent = get_current_scope();
+            parse_scope(_if->else_scope, false, true);
         }
 
         return _if;
@@ -845,6 +856,7 @@ Ast_Expression *Parser::parse_statement() {
         _for->iterator_declaration_scope.parent = get_current_scope();
         _for->body.parent = &_for->iterator_declaration_scope;
         _for->body.owning_statement = _for;
+        set_location_info_from_token(&_for->body, peek_token());
         parse_scope(&_for->body, false, true);
         return _for;
     }
@@ -874,6 +886,7 @@ Ast_Expression *Parser::parse_statement() {
 
         loop->body.parent = get_current_scope();
         loop->body.owning_statement = loop;
+        set_location_info_from_token(&loop->body, peek_token());
         parse_scope(&loop->body, false, true);
         return loop;
     }
@@ -1063,6 +1076,11 @@ bool Parser::add_declaration(Array<Ast_Expression *> * declarations, Ast_Express
 
 void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_statement, bool push_scope) {
     if (push_scope) push_scopes(scope);
+
+    if (!requires_braces && only_one_statement == true && peek_token()->type == '{') {
+        requires_braces    = true;
+        only_one_statement = false;
+    }
 
     if (requires_braces && !expect_and_eat((Token::Type) '{')) return;
 
