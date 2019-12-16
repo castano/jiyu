@@ -1604,7 +1604,13 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
 
     {
         func->addFnAttr(Attribute::AttrKind::NoUnwind);
-        func->addFnAttr(Attribute::AttrKind::UWTable);
+
+        // Unwind tables are necessary on Windows regardless if we support exceptions or not
+        // in order for stack unwinding to work in debuggers, and probably for SEH too. This
+        // doesnt seem to be necessary on Unix-style platforms. -josh 15 December 2019
+        if (TargetMachine->getTargetTriple().isOSWindows()) {
+            func->addFnAttr(Attribute::AttrKind::UWTable);
+        }
     }
 
     if (!function->scope) return; // forward declaration of external thing
