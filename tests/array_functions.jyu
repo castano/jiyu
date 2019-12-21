@@ -1,0 +1,41 @@
+#import "LibC";
+#import "Array";
+
+// Array module defines:
+// __array_add<T>(arr: *[..] T, T)
+// __array_reset<T>(arr: *[..] T)
+// __array_reserve<T>(arr: *[..] T)
+// __array_resize<T>(array: *[..] T, _amount: int)
+// __array_pop<T>(array: *[..] T) -> T
+
+func main() {
+    // When the compiler sees <array>.func(...), it will attempt to transform this sequence into
+    // __array_func(<array>, ...) or __array_func(*<array>, ...).
+    var arr: [..] int64;
+    arr.add(1);
+    arr.add(2);
+    arr.add(3);
+
+    for arr printf("Value: %lld\n", it);
+
+    printf("Popped value: %lld\n", arr.pop());
+
+    for arr printf("Remaining Value: %lld\n", it);
+
+    arr.reset();
+    for arr printf("Remaining Value ????: %lld\n", it); // This should not output anything!
+
+    locally_scoped_functions();
+}
+
+func locally_scoped_functions() {
+    // Since this special syntax turns into a scope-lookup,
+    // we can override the defaults defined in the Array module.
+    func __array_add<T>(array: *[..] T, item: T) {
+        printf("Hello, Sailor!");
+    }
+
+    var arr: [..] int64;
+    arr.add(1);
+    for arr printf("Remaining Value ????: %lld\n", it); // should not print anything!
+}
