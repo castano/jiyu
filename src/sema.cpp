@@ -96,6 +96,17 @@ void maybe_add_parent_scope_name(String_Builder *builder, Ast_Scope *start) {
 
             builder->print("%d%.*s", name.length, name.length, name.data);
         }
+    } else if (start->owning_function) {
+        Ast_Function *function = start->owning_function;
+
+        String name = function->identifier->name->name;
+        builder->print("%d%.*s", name.length, name.length, name.data);
+        builder->putchar('_');
+
+        for (auto arg: function->arguments) {
+            auto type = get_type_info(arg);
+            add_type(builder, type);
+        }
     }
 }
 
@@ -110,7 +121,6 @@ String get_mangled_name(Compiler *compiler, Ast_Function *function) {
 
     String name = function->identifier->name->name;
     builder.print("%d%.*s", name.length, name.length, name.data);
-
     builder.putchar('_');
 
     for (auto arg: function->arguments) {
@@ -511,7 +521,15 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
 
     while (expression->substitution) expression = expression->substitution;
 
-    if (expression->type == AST_LITERAL) return static_cast<Ast_Literal *>(expression);
+    if (expression->type == AST_LITERAL) {
+        // @FixMe maybe, we're returning a copy here because if function-call typechecking mutates
+        // the literal, it will try to mutate the literal multiple times while checking two or more
+        // overloads. This means that without a copy, we end up messing up viability scores on subsequent
+        // overload checks. -josh 21 December 2019
+        auto lit = static_cast<Ast_Literal *>(compiler->copier->copy(expression));
+        lit->type_info = get_type_info(expression);
+        return lit;
+    }
 
     switch (expression->type) {
         case AST_BINARY_EXPRESSION: {
