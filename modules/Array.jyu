@@ -31,6 +31,12 @@ func __array_add<T>(array: *[..] T, item: T) {
     (<<array)[array.count-1] = item;
 }
 
+func __array_pop<T>(array: *[..] T) -> T {
+    var last = array.data[array.count-1];
+    array.count -= 1;
+    return last;
+}
+
 func __array_reset<T>(array: *[..] T) {
     array.count = 0;
     array.allocated = 0;
