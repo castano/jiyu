@@ -779,7 +779,7 @@ Ast_Function *Sema::get_polymorph_for_function_call(Ast_Function *template_funct
     // and then attempt to resolve the types of the function arguments
     // and resolve the targets of the template type aliases
 
-    auto result = compiler->copier->polymoprh_function_with_arguments(template_function, &call->argument_list);
+    auto result = compiler->copier->polymoprh_function_with_arguments(template_function, &call->argument_list, call->implicit_argument_inserted);
     auto polymorph   = result.item1;
     bool is_existing = result.item2;
     if (polymorph) {
@@ -820,7 +820,9 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
             auto param_type  = function_type->arguments[0];
 
             if (!types_match(source_type, param_type)) {
-                if (is_struct_type(source_type) && is_pointer_type(param_type) && types_match(source_type, param_type->pointer_to)) {
+                bool is_struct_or_array = is_struct_type(source_type) || is_array_type(source_type);
+                bool is_param_struct_or_array = is_struct_type(param_type) || is_array_type(param_type);
+                if (is_struct_or_array && is_pointer_type(param_type) && types_match(source_type, param_type->pointer_to)) {
                     // Turn this struct into a pointer
                     auto unary = make_unary(compiler, Token::STAR, source);
                     // @Speed we can probably just assign the right type here.
@@ -830,7 +832,7 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
                     // We still add a viability score increment in case the user has two functions
                     // that overload between the const-ref and pointer types.
                     viability_score += 1;
-                } else if (is_pointer_type(source_type) && is_struct_type(param_type) && types_match(source_type->pointer_to, param_type)) {
+                } else if (is_pointer_type(source_type) && is_param_struct_or_array && types_match(source_type->pointer_to, param_type)) {
                     // Turn this into a dereference
                     auto unary = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, source);
                     // @Speed we can probably just assign the right type here.
@@ -1516,8 +1518,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 auto deref = static_cast<Ast_Dereference *>(subexpression);
                 if (!deref->is_type_dereference) {
                     auto left_type = get_type_info(deref->original_left);
-                    if ((is_pointer_type(left_type) && is_struct_type(left_type->pointer_to))
-                        || is_struct_type(left_type)) {
+                    bool is_struct = (is_pointer_type(left_type) && is_struct_type(left_type->pointer_to))
+                                    || is_struct_type(left_type);
+                    bool is_array  = (is_pointer_type(left_type) && is_array_type(left_type->pointer_to))
+                                    || is_array_type(left_type);
+                    if (is_struct || is_array) {
                         implicit_argument = deref->original_left;
                     }
                 }
@@ -1728,8 +1733,17 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         deref->byte_offset = 16; // @TargetInfo
                         deref->type_info = compiler->type_array_count;
                     } else {
-                        String field_name = field_atom->name;
-                        compiler->report_error(deref, "No member '%.*s' in type array.\n", field_name.length, field_name.data);
+                        String func_name = mprintf("__array_%.*s", PRINT_ARG(field_atom->name));
+                        auto ident = make_identifier(compiler, compiler->make_atom(func_name));
+                        free(func_name.data);
+
+                        ident->enclosing_scope = deref->field_selector->enclosing_scope;
+                        copy_location_info(ident, deref);
+
+                        typecheck_expression(ident, want_numeric_type, overload_set_allowed);
+                        if (compiler->errors_reported) return;
+
+                        deref->substitution = ident;
                     }
                 } else {
                     assert(left_type->is_dynamic == false);
@@ -1751,6 +1765,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         copy_location_info(lit, deref);
                         deref->substitution = lit;
                     } else {
+                        // @TODO should we allow <array>.func() => __array_func() syntax for known-size arrays?
                         String field_name = field_atom->name;
                         compiler->report_error(deref, "No member '%.*s' in known-size array.\n", field_name.length, field_name.data);
                     }

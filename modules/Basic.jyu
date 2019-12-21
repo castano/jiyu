@@ -119,7 +119,7 @@ func split(input: string, delim: uint8) -> [] string {
             o.data = input.data + start;
             o.length = cursor - start;
 
-            array_add(*output, o);
+            output.add(o);
 
             start = cursor + 1;
         }
@@ -130,7 +130,7 @@ func split(input: string, delim: uint8) -> [] string {
     var o: string;
     o.data = input.data + start;
     o.length = cursor - start;
-    array_add(*output, o);
+    output.add(o);
 
     var static: [] string;
     static.data = output.data;
@@ -363,7 +363,7 @@ struct String_Builder {
             it.data = null;
         }
 
-        array_reset(*builder.buckets);
+        builder.buckets.reset();
     }
 
     func make_bucket(builder: *String_Builder, amount: array_count_type) {
@@ -371,7 +371,7 @@ struct String_Builder {
         b.data = cast(*uint8) malloc(cast(size_t) amount);
         b.allocated = amount;
         b.count = 0;
-        array_add(*builder.buckets, b);
+        builder.buckets.add(b);
     }
 
     func putchar(builder: *String_Builder, c: uint8) {

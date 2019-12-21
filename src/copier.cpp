@@ -358,7 +358,7 @@ void Copier::copy_scope(Ast_Scope *_new, Ast_Scope *old) {
     scope_stack.pop();
 }
 
-Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Function *poly, Array<Ast_Expression *> *arguments) {
+Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Function *poly, Array<Ast_Expression *> *arguments, bool do_stuff_for_implicit_arg) {
     assert(arguments->count == poly->arguments.count);
 
     scope_stack.add(poly->polymorphic_type_alias_scope->parent);
@@ -372,7 +372,7 @@ Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Functi
         assert(target_type_info);
 
         auto arg_type_inst = poly_copy->arguments[i]->type_inst;
-        bool success = try_to_fill_polymorphic_type_aliases(arg_type_inst, target_type_info);
+        bool success = try_to_fill_polymorphic_type_aliases(arg_type_inst, target_type_info, do_stuff_for_implicit_arg && i == 0);
 
         if (!success) break;
     }
@@ -415,11 +415,20 @@ Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Functi
     return MakeTuple(poly_copy, false);
 }
 
-bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_inst, Ast_Type_Info *target_type_info) {
+// @Incomplete do_stuff_for_implicit_arg currently allows you to dereference a struct-or-array-type
+// and automatically fill one level of indirection of a pointer, but it doesnt allow you to dereference
+// a pointer-type and fill a struct-or-array-type argument.
+bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_inst, Ast_Type_Info *target_type_info, bool do_stuff_for_implicit_arg) {
     if (type_inst->pointer_to) {
-        if (target_type_info->type != Ast_Type_Info::POINTER) return false;
+        if (do_stuff_for_implicit_arg) {
+            bool is_struct_or_array = is_struct_type(target_type_info) || is_array_type(target_type_info);
+            if (is_struct_or_array) {
+                return try_to_fill_polymorphic_type_aliases(type_inst->pointer_to, target_type_info, false);
+            }
+        }
 
-        return try_to_fill_polymorphic_type_aliases(type_inst->pointer_to, target_type_info->pointer_to);
+        if (target_type_info->type != Ast_Type_Info::POINTER) return false;
+        return try_to_fill_polymorphic_type_aliases(type_inst->pointer_to, target_type_info->pointer_to, false);
     }
 
     if (type_inst->builtin_primitive) {
@@ -471,7 +480,7 @@ bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_i
         if (target_type_info->type != Ast_Type_Info::ARRAY) return false;
 
         // we dont worry about the size or anything here becuase our main goal if filling in the typealiases in the template parameter block
-        bool success = try_to_fill_polymorphic_type_aliases(type_inst->array_element_type, target_type_info->array_element);
+        bool success = try_to_fill_polymorphic_type_aliases(type_inst->array_element_type, target_type_info->array_element, false);
         if (compiler->errors_reported) return false;
 
         return success;
