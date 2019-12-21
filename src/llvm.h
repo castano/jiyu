@@ -8,6 +8,7 @@ namespace llvm {
     class Module;
     class LLVMContext;
 
+    class Constant;
     class Value;
 
     class Type;
@@ -113,6 +114,7 @@ struct LLVM_Generator {
     llvm::Value *create_string_literal(Ast_Literal *lit, bool want_lvalue = false);
     llvm::Value *get_value_for_decl(Ast_Declaration *decl);
     llvm::Value *dereference(llvm::Value *value, s64 element_path_index, bool is_lvalue = false);
+    llvm::Constant *get_constant_struct_initializer(Ast_Type_Info *info);
     void default_init_struct(llvm::Value *decl_value, Ast_Type_Info *info);
 
     llvm::Function *get_or_create_function(Ast_Function *function);

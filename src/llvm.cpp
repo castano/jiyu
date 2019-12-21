@@ -660,6 +660,48 @@ Value *LLVM_Generator::dereference(Value *value, s64 element_path_index, bool is
     }
 }
 
+// This is different from default_init_struct, because with global variables, we have to
+// use a constant-expression, but on the stack, it should generally be better to write to
+// the individual fields because the optimizers can better reason about splitting aggregates
+// into registers, or something...
+Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
+    info = get_final_type(info);
+
+    assert(info->type == Ast_Type_Info::STRUCT);
+    assert(info->struct_decl);
+
+    auto _struct = info->struct_decl;
+
+    Array<Constant *> element_values;
+    for (auto member: _struct->member_scope.declarations) {
+        if (member->type == AST_DECLARATION) {
+            auto decl = static_cast<Ast_Declaration *>(member);
+
+            if (decl->is_let) continue;
+            assert(decl->is_struct_member);
+
+            Ast_Type_Info *member_info = get_type_info(decl);
+            Constant *init = nullptr;
+            if (decl->initializer_expression) {
+                auto expr = emit_expression(decl->initializer_expression);
+                assert(dyn_cast<Constant>(expr));
+
+                init = static_cast<Constant *>(expr);
+            } else if (is_struct_type(member_info)) {
+                init = get_constant_struct_initializer(member_info);
+            } else {
+                init = Constant::getNullValue(get_type(member_info));
+            }
+
+            assert(init);
+            element_values.add(init);
+        }
+    }
+
+    auto llvm_type = static_cast<StructType *>(get_type(info));
+    return ConstantStruct::get(llvm_type, ArrayRef<Constant *>(element_values.data, element_values.count));
+}
+
 void LLVM_Generator::default_init_struct(Value *decl_value, Ast_Type_Info *info) {
     info = get_final_type(info);
 
@@ -1713,6 +1755,12 @@ void LLVM_Generator::emit_global_variable(Ast_Declaration *decl) {
         auto init = emit_expression(decl->initializer_expression);
         const_init = dyn_cast<llvm::Constant>(init);
         assert(const_init);
+    } else if (is_struct_type(get_type_info(decl))) {
+        // If this is a struct type, and maybe @TODO Tuples too, then
+        // we need to build a constant-initializer of the default values
+        // of the struct fields.
+
+        const_init = get_constant_struct_initializer(get_type_info(decl));
     } else {
         const_init = Constant::getNullValue(type);
     }
