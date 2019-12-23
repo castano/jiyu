@@ -1542,6 +1542,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         // No-ops
         case AST_TYPE_ALIAS:
         case AST_STRUCT:
+        case AST_ENUM:
         case AST_DIRECTIVE_LOAD:
         case AST_DIRECTIVE_IMPORT:
         case AST_DIRECTIVE_STATIC_IF:

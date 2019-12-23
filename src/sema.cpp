@@ -834,7 +834,7 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
         //right->substitution = lit_right;
     }
 
-
+    // Original code:
     /*
     if (auto lit = folds_to_literal(left)) {
         typecheck_expression(right);
@@ -1514,6 +1514,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 return;
             }
 
+            // IC: I think it's more clear to check the operators for each type independently.
             if (is_enum_type(left_type)) {
                 if (bin->operator_type == Token::SLASH ||
                     bin->operator_type == Token::STAR || 
