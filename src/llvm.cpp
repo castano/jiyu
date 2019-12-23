@@ -241,7 +241,7 @@ void LLVM_Generator::finalize() {
     }
 
     String exec_name = compiler->build_options.executable_name;
-    String obj_name = mprintf("%.*s.o", exec_name.length, exec_name.data);
+    String obj_name = mprintf("%.*s.o", PRINT_ARG(exec_name));
 
     std::error_code EC;
     raw_fd_ostream dest(string_ref(obj_name), EC, sys::fs::F_None);
@@ -255,6 +255,16 @@ void LLVM_Generator::finalize() {
     auto FileType = TargetMachine::CGFT_ObjectFile;
 
     // llvm_module->dump();
+    if (compiler->build_options.emit_llvm_ir) {
+        String ll_name = mprintf("%.*s.ll", PRINT_ARG(exec_name));
+        raw_fd_ostream ir_stream(string_ref(ll_name), EC, sys::fs::F_None);
+        if (EC) {
+            compiler->report_error((Ast *)nullptr, "Could not open file: %s\n", EC.message().c_str());
+            return;
+        }
+        llvm_module->print(ir_stream, nullptr);
+        free(ll_name.data);
+    }
 
     pass.add(createVerifierPass(false));
     if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, FileType)) {

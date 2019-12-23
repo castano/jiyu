@@ -54,6 +54,7 @@ struct Build_Options {
     String target_triple;
     bool only_want_obj_file  = false;
     bool verbose_diagnostics = false;
+    bool emit_llvm_ir = false;
 };
 
 // @Volatile must match Compiler.jyu stuff
