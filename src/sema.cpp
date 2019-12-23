@@ -336,7 +336,8 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
                 if (parent_wants_lvalue) return true;
                 return expr; // I think this is correct, but I havent thought about it deeply -josh 18 April 2019
             } else {
-                assert(false);
+                assert(false && "Unhandled Unary Expression type in expression_is_lvalue.");
+                return false;
             }
         }
 
@@ -572,7 +573,9 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     case Token::LEFT_ANGLE : FOLD_COMPARE(<,  left_int, right_int, left_type, bin);
                     case Token::RIGHT_ANGLE: FOLD_COMPARE(>,  left_int, right_int, left_type, bin);
 
-                    default: assert(false);
+                    default:
+                        assert(false && "Unhandled binary operator in folds_to_literal.");
+                        return nullptr;
                 }
             } else if (left_type->type == Ast_Type_Info::FLOAT) {
                 double l = left->float_value;
@@ -591,7 +594,9 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     case Token::LEFT_ANGLE : return make_bool_literal(compiler, l <  r, bin);
                     case Token::RIGHT_ANGLE: return make_bool_literal(compiler, l >  r, bin);
 
-                    default: assert(false);
+                    default:
+                        assert(false && "Unhandled binary operator in folds_to_literal.");
+                        return nullptr;
                 }
             } else {
                 return nullptr;
@@ -1821,10 +1826,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                     auto decl = find_declaration_for_atom_in_scope(&_struct->member_scope, field_atom);
                     if (decl && decl->type == AST_DECLARATION) {
-                        auto declaration = static_cast<Ast_Declaration *>(decl);
-
                         // this is not supposed to happen because regular var's should be handled by the above code.
-                        if (is_type_use) assert(declaration->is_let);
+                        if (is_type_use) assert(static_cast<Ast_Declaration *>(decl)->is_let);
                     } else if (decl && decl->type == AST_FUNCTION) {
                         // @Hack substitute to an identifier to get the quick benefit of the overloading sytem.
 
