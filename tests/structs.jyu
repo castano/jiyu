@@ -8,19 +8,19 @@ struct My_Struct {
     }
 
     func my_cool_func(my_struct: *My_Struct) {
-        printf("Hello, Sailor! %d\n", my_struct.i);
+        printf("Hello, Sailor! %lld\n", my_struct.i);
     }
 
     func my_cool_func(my_struct: My_Struct) {
-        printf("Hello, Pilot! %d\n", my_struct.i);
+        printf("Hello, Pilot! %lld\n", my_struct.i);
     }
 
     func func2(my_struct: My_Struct) {
-        printf("Goodbye, Moonmen! %d\n", my_struct.i);
+        printf("Goodbye, Moonmen! %lld\n", my_struct.i);
     }
 
     func func3(my_struct: *My_Struct) {
-        printf("Shut up, Morty! %d\n", my_struct.i);
+        printf("Shut up, Morty! %lld\n", my_struct.i);
     }
 }
 

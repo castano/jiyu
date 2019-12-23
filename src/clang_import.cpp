@@ -228,6 +228,10 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
         case CXType_Elaborated: { // Why Clang, why.
             return get_jiyu_type(data, clang_Type_getNamedType(type));
         }
+
+        // @Temporary just silencing a GCC warning. Remove when we have individual cases for all CXTypeKind's.
+        default:
+            break;
     }
 
     CXString kind_string = clang_getTypeKindSpelling(type.kind);
@@ -262,7 +266,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
     unsigned offset;
     clang_getFileLocation(location, &file, &line, &column, &offset);
 
-    auto filename = copy_and_dispose(compiler, clang_getFileName(file));
+//     auto filename = copy_and_dispose(compiler, clang_getFileName(file));
 
     switch (cursor.kind) {
         case CXCursor_UnexposedAttr: {
@@ -529,7 +533,6 @@ bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *targe
 
     if (error != 0) return false;
 
-    bool has_errors = false;
     for (unsigned i = 0; i < clang_getNumDiagnostics(translation_unit); ++i) {
         CXDiagnostic diag = clang_getDiagnostic(translation_unit, i);
         CXString diag_string = clang_formatDiagnostic(diag, CXDiagnostic_DisplaySourceLocation | CXDiagnostic_DisplayColumn);
