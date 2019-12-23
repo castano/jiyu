@@ -22,6 +22,9 @@ enum WeekendDay {
 
 enum Bool : uint8 { False; True; }
 
+typealias DAY = Day;
+
+var another_day : DAY = Day.Monday;
 
 
 var monday = Day.Monday;
@@ -61,6 +64,7 @@ func main() {
         printf("typeof(day) = %d\n", typeof(day));
         printf("typeof(day + 1) = %d\n", typeof(day + 1));
         printf("Day = %d\n", Day);
+        printf("DAY = %d\n", DAY);
         printf("typeof(Day) = %d\n", typeof(Day));
         assert(typeof(Monday) == Day);      // Type instantiations need to be folded to literals.
 
@@ -93,7 +97,19 @@ func main() {
     printf("Saturday = %d\n", Day.Saturday);
     printf("Sunday = %d\n", Day.Sunday);
 
-    printf("Monday+1 = %d\n", test(Day.Monday));
+    printf("test(Day.Monday) = %d\n", test(Day.Monday));
+
+    // Implicit calls from integer to enum:
+    // Currently these are only allowed when the expression is a mutable literal.
+    {
+        var one : int = 1;
+        var day : Day = 0;
+        //var day_one : Day = one;              // Should we allow this?
+        printf("test(0) = %d\n", test(0));
+        //printf("test(0) = %d\n", test(one));  // What about this?
+        //var day2 : Day = Day.Monday + one;       // And this?
+    }
+    
 
     //printf("Whatever = %d\n", Day.Whatever); // This should trigger an error.
 
