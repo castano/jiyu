@@ -1236,6 +1236,10 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto src = get_final_type(get_type_info(cast->expression));
             auto dst = get_final_type(cast->type_info);
 
+            // When casting, treat enums as if they were integers.
+            if (src->type == Ast_Type_Info::ENUM) src = src->enum_base_type;
+            if (dst->type == Ast_Type_Info::ENUM) dst = dst->enum_base_type;
+
             auto dst_type = get_type(dst);
             if (is_int_type(src) && is_int_type(dst)) {
                 if (src->size > dst->size) {
