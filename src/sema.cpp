@@ -103,6 +103,17 @@ void maybe_add_parent_scope_name(String_Builder *builder, Ast_Scope *start) {
 
             builder->print("%d%.*s", name.length, name.length, name.data);
         }
+    } else if (start->owning_function) {
+        Ast_Function *function = start->owning_function;
+
+        String name = function->identifier->name->name;
+        builder->print("%d%.*s", name.length, name.length, name.data);
+        builder->putchar('_');
+
+        for (auto arg: function->arguments) {
+            auto type = get_type_info(arg);
+            add_type(builder, type);
+        }
     }
 }
 
@@ -117,7 +128,6 @@ String get_mangled_name(Compiler *compiler, Ast_Function *function) {
 
     String name = function->identifier->name->name;
     builder.print("%d%.*s", name.length, name.length, name.data);
-
     builder.putchar('_');
 
     for (auto arg: function->arguments) {
@@ -526,7 +536,7 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
 
                 right = deref;
                 viability_score += 1;
-                
+
                 if (!types_match(ltype, compiler->type_string_data)) {
                     // Add a pointer cast to the target type if it is *int8, or otherwise not the internal type of string.data.
                     auto cast = cast_ptr_to_ptr(compiler, deref, ltype);
@@ -561,7 +571,15 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
 
     while (expression->substitution) expression = expression->substitution;
 
-    if (expression->type == AST_LITERAL) return static_cast<Ast_Literal *>(expression);
+    if (expression->type == AST_LITERAL) {
+        // @FixMe maybe, we're returning a copy here because if function-call typechecking mutates
+        // the literal, it will try to mutate the literal multiple times while checking two or more
+        // overloads. This means that without a copy, we end up messing up viability scores on subsequent
+        // overload checks. -josh 21 December 2019
+        auto lit = static_cast<Ast_Literal *>(compiler->copier->copy(expression));
+        lit->type_info = get_type_info(expression);
+        return lit;
+    }
 
     switch (expression->type) {
         case AST_BINARY_EXPRESSION: {
@@ -616,12 +634,12 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     case Token::STAR : return make_float_literal(compiler, l * r, left_type, bin);
                     case Token::SLASH: return make_float_literal(compiler, l / r, left_type, bin);
 
-                    case Token::LE_OP: make_bool_literal(compiler, l <= r, bin);
-                    case Token::GE_OP: make_bool_literal(compiler, l >= r, bin);
-                    case Token::EQ_OP: make_bool_literal(compiler, l == r, bin);
-                    case Token::NE_OP: make_bool_literal(compiler, l != r, bin);
-                    case Token::LEFT_ANGLE : make_bool_literal(compiler, l <  r, bin);
-                    case Token::RIGHT_ANGLE: make_bool_literal(compiler, l >  r, bin);
+                    case Token::LE_OP: return make_bool_literal(compiler, l <= r, bin);
+                    case Token::GE_OP: return make_bool_literal(compiler, l >= r, bin);
+                    case Token::EQ_OP: return make_bool_literal(compiler, l == r, bin);
+                    case Token::NE_OP: return make_bool_literal(compiler, l != r, bin);
+                    case Token::LEFT_ANGLE : return make_bool_literal(compiler, l <  r, bin);
+                    case Token::RIGHT_ANGLE: return make_bool_literal(compiler, l >  r, bin);
 
                     default: assert(false);
                 }
@@ -948,10 +966,14 @@ Ast_Function *Sema::get_polymorph_for_function_call(Ast_Function *template_funct
     // and then attempt to resolve the types of the function arguments
     // and resolve the targets of the template type aliases
 
-    auto polymorph = compiler->copier->polymoprh_function_with_arguments(template_function, &call->argument_list);
+    auto result = compiler->copier->polymoprh_function_with_arguments(template_function, &call->argument_list, call->implicit_argument_inserted);
+    auto polymorph   = result.item1;
+    bool is_existing = result.item2;
     if (polymorph) {
-        typecheck_function(polymorph);
-        template_function->polymorphed_overloads.add(polymorph);
+        if (!is_existing) {
+            typecheck_function(polymorph);
+            template_function->polymorphed_overloads.add(polymorph);
+        }
     }
     if (compiler->errors_reported) return nullptr;
 
@@ -985,7 +1007,9 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
             auto param_type  = function_type->arguments[0];
 
             if (!types_match(source_type, param_type)) {
-                if (is_struct_type(source_type) && is_pointer_type(param_type) && types_match(source_type, param_type->pointer_to)) {
+                bool is_struct_or_array = is_struct_type(source_type) || is_array_type(source_type);
+                bool is_param_struct_or_array = is_struct_type(param_type) || is_array_type(param_type);
+                if (is_struct_or_array && is_pointer_type(param_type) && types_match(source_type, param_type->pointer_to)) {
                     // Turn this struct into a pointer
                     auto unary = make_unary(compiler, Token::STAR, source);
                     // @Speed we can probably just assign the right type here.
@@ -995,7 +1019,7 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
                     // We still add a viability score increment in case the user has two functions
                     // that overload between the const-ref and pointer types.
                     viability_score += 1;
-                } else if (is_pointer_type(source_type) && is_struct_type(param_type) && types_match(source_type->pointer_to, param_type)) {
+                } else if (is_pointer_type(source_type) && is_param_struct_or_array && types_match(source_type->pointer_to, param_type)) {
                     // Turn this into a dereference
                     auto unary = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, source);
                     // @Speed we can probably just assign the right type here.
@@ -1241,6 +1265,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         }
         case AST_DIRECTIVE_CLANG_IMPORT: {
             expression->type_info = compiler->type_void;
+            return;
         }
 
         case AST_SCOPE_EXPANSION: {
@@ -1313,6 +1338,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             
             if (decl->is_let && !decl->is_readonly_variable && !decl->initializer_expression && !decl->is_enum_member) {
                 compiler->report_error(decl, "let constant must be initialized by an expression.\n");
+                return;
             }
 
             if (decl->is_let && !decl->is_readonly_variable && decl->initializer_expression) {
@@ -1320,6 +1346,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 if (!literal) {
                     compiler->report_error(decl->initializer_expression, "let constant may only be initialized by a literal expression.\n");
+                    return;
                 } else {
                     if (decl->initializer_expression != literal) decl->initializer_expression->substitution = literal;
                 }
@@ -1330,6 +1357,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             if (!decl->is_let && decl->is_struct_member && decl->initializer_expression) {
                 if (!resolves_to_literal_value(decl->initializer_expression)) {
                     compiler->report_error(decl->initializer_expression, "Struct member may only be initialized by a literal expression.\n");
+                    return;
                 }
             }
 
@@ -1732,8 +1760,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 auto deref = static_cast<Ast_Dereference *>(subexpression);
                 if (!deref->is_type_dereference) {
                     auto left_type = get_type_info(deref->original_left);
-                    if ((is_pointer_type(left_type) && is_struct_type(left_type->pointer_to))
-                        || is_struct_type(left_type)) {
+                    bool is_struct = (is_pointer_type(left_type) && is_struct_type(left_type->pointer_to))
+                                    || is_struct_type(left_type);
+                    bool is_array  = (is_pointer_type(left_type) && is_array_type(left_type->pointer_to))
+                                    || is_array_type(left_type);
+                    if (is_struct || is_array) {
                         implicit_argument = deref->original_left;
                     }
                 }
@@ -1951,8 +1982,17 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         deref->byte_offset = 16; // @TargetInfo
                         deref->type_info = compiler->type_array_count;
                     } else {
-                        String field_name = field_atom->name;
-                        compiler->report_error(deref, "No member '%.*s' in type array.\n", field_name.length, field_name.data);
+                        String func_name = mprintf("__array_%.*s", PRINT_ARG(field_atom->name));
+                        auto ident = make_identifier(compiler, compiler->make_atom(func_name));
+                        free(func_name.data);
+
+                        ident->enclosing_scope = deref->field_selector->enclosing_scope;
+                        copy_location_info(ident, deref);
+
+                        typecheck_expression(ident, want_numeric_type, overload_set_allowed);
+                        if (compiler->errors_reported) return;
+
+                        deref->substitution = ident;
                     }
                 } else {
                     assert(left_type->is_dynamic == false);
@@ -1974,6 +2014,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         copy_location_info(lit, deref);
                         deref->substitution = lit;
                     } else {
+                        // @TODO should we allow <array>.func() => __array_func() syntax for known-size arrays?
                         String field_name = field_atom->name;
                         compiler->report_error(deref, "No member '%.*s' in known-size array.\n", field_name.length, field_name.data);
                     }
@@ -2101,12 +2142,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             auto cond = _if->condition;
             if (get_type_info(cond)->type != Ast_Type_Info::BOOL) {
-                // @TODO check for coercion to bool
                 compiler->report_error(cond, "'if' condition isn't of boolean type.\n");
             }
 
-            if (_if->then_statement) typecheck_expression(_if->then_statement);
-            if (_if->else_statement) typecheck_expression(_if->else_statement);
+            typecheck_scope(&_if->then_scope);
+            if (_if->else_scope) typecheck_scope(_if->else_scope);
 
             return;
         }
@@ -2114,13 +2154,13 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         case AST_WHILE: {
             auto loop = static_cast<Ast_While *>(expression);
 
-            typecheck_expression(loop->condition);
+            auto result = typecheck_and_implicit_cast_single_expression(loop->condition, compiler->type_bool, ALLOW_COERCE_TO_BOOL);
+            loop->condition = result.item2;
 
             if (compiler->errors_reported) return;
 
             auto cond = loop->condition;
             if (get_type_info(cond)->type != Ast_Type_Info::BOOL) {
-                // @TODO check for coercion to bool
                 compiler->report_error(cond, "'while' condition isn't of boolean type.\n");
             }
 
@@ -2353,7 +2393,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 if (compiler->errors_reported) return;
 
                 assert(alias->internal_type_inst->type_value);
-                alias->type_value = compiler->make_type_alias(alias->internal_type_inst->type_value);
+                alias->type_value = compiler->make_type_alias_type(alias->internal_type_inst->type_value);
                 alias->type_value->alias_decl = alias;
             } else {
                 // We got here due to polymorphing taking advantage of the
@@ -2380,7 +2420,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 assert(_struct->type_value->struct_members.count == 0);
                 assert(_struct->type_value->type_table_index == -1);
             }
-            
+
             _struct->type_info = compiler->type_info_type;
 
             // flag stuct member declarations
@@ -2433,7 +2473,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                         offset_cursor = pad_to_alignment(offset_cursor, final_type->alignment);
                         member.offset_in_struct = offset_cursor;
-                        
+
                         assert(final_type->stride >= 0);
                         if (!_struct->is_union) {
                             offset_cursor += final_type->stride;
@@ -2453,7 +2493,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
 
                 if (info->alignment <= 0) info->alignment = biggest_alignment;
-                
+
                 if (info->size >= 0) assert(pad_to_alignment(size, info->alignment) == info->size); //this came from clang
                 info->size = size;
                 info->stride = pad_to_alignment(info->size, info->alignment);
@@ -2601,19 +2641,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             free(ident_string.data);
 
-
-            Atom *name = ident->name;
-            bool valid_option = (name == compiler->atom_Windows) || (name == compiler->atom_MacOSX) || (name == compiler->atom_Linux);
-
-            if (!valid_option) {
-                String op = name->name;
-                compiler->report_error(ident, "Unrecognized os() option '%.*s'.\n", op.length, op.data);
-                return;
-            }
-
-            // String op = name->name;
-            // printf("os(): %.*s: %s\n", op.length, op.data, lit->bool_value ? "true" : "false");
-
+            // @TODO add an error if the input to os() is not a valid, maybe.
             os->type_info = lit->type_info;
             os->substitution = lit;
             return;

@@ -2,6 +2,9 @@
 #import "LibC";
 #import "Array";
 
+typealias string_length_type = __builtin_string_length_type;
+typealias array_count_type   = __builtin_array_count_type;
+
 // Okay, so, there's nothing in the language right now to do something like new(My_Struct)
 // SO we take an initializer parameter so we can use the already established template system.
 // If this ends up sucking for everyone then we can figure something else out, but in the short
@@ -40,8 +43,6 @@ func assert(cond: bool, msg: string) {
         exit(-1);
     }
 }
-
-typealias string_length_type = int64; // @TODO
 
 func advance(s: *string, amount: string_length_type) {
     assert(amount >= 0 && amount <= s.length);
@@ -95,13 +96,13 @@ func to_c_string(input: string) -> c_string {
     return data;
 }
 
-func c_style_strlen(input: c_string) -> int64 {
+func c_style_strlen(input: c_string) -> string_length_type {
     var cursor = input;
     while <<cursor != 0 {
         cursor += 1;
     }
 
-    return cast(int64) (cursor - input);
+    return cast(string_length_type) (cursor - input);
 }
 
 func to_string(input: c_string) -> string {
@@ -123,7 +124,7 @@ func split(input: string, delim: uint8) -> [] string {
             o.data = input.data + start;
             o.length = cursor - start;
 
-            array_add(*output, o);
+            output.add(o);
 
             start = cursor + 1;
         }
@@ -134,7 +135,7 @@ func split(input: string, delim: uint8) -> [] string {
     var o: string;
     o.data = input.data + start;
     o.length = cursor - start;
-    array_add(*output, o);
+    output.add(o);
 
     var static: [] string;
     static.data = output.data;
@@ -310,10 +311,10 @@ func get_command_line(strings: [] string) -> *uint8 {
 
 #if os(Linux) {
     func get_executable_path() -> string {
-        func @c_function readlink(path: string, buf: *uint8, bufsize: uint32) -> int32;
+        func @c_function readlink(path: c_string, buf: *uint8, bufsize: size_t) -> int32;
 
         var buf: [512] uint8;
-        var bufsize: uint32 = cast(uint32) buf.count;
+        var bufsize: size_t = cast(size_t) buf.count;
         var result = readlink("/proc/self/exe", buf.data, bufsize);
         if (result < 0) return "";
 
@@ -351,8 +352,6 @@ func wchar_to_mbstring(input: *wchar_t) -> string {
 
 // @Incomplete, we need some sort of print function here..
 struct String_Builder {
-    typealias array_count_type = int64; // @TODO @FixMe array_count_type
-
     let BUCKET_ALLOC_SIZE = 4096;
 
     typealias Bucket = [..] uint8;
@@ -369,7 +368,7 @@ struct String_Builder {
             it.data = null;
         }
 
-        array_reset(*builder.buckets);
+        builder.buckets.reset();
     }
 
     func make_bucket(builder: *String_Builder, amount: array_count_type) {
@@ -377,7 +376,7 @@ struct String_Builder {
         b.data = cast(*uint8) malloc(cast(size_t) amount);
         b.allocated = amount;
         b.count = 0;
-        array_add(*builder.buckets, b);
+        builder.buckets.add(b);
     }
 
     func putchar(builder: *String_Builder, c: uint8) {

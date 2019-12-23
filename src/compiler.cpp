@@ -35,18 +35,18 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
     if (left->type == Ast_Type_Info::INTEGER) {
         return left->is_signed == right->is_signed;
     }
-    
+
     if (left->type == Ast_Type_Info::POINTER) {
         assert(left->pointer_to && right->pointer_to);
         return types_match(left->pointer_to, right->pointer_to);
     }
-    
+
     if (left->type == Ast_Type_Info::ARRAY) {
         return types_match(left->array_element, right->array_element) &&
             left->array_element_count == right->array_element_count &&
             left->is_dynamic == right->is_dynamic;
     }
-    
+
     if (left->type == Ast_Type_Info::STRUCT) {
         // @Incomplete how would this work for anonymous structs for which a struct declaration doesnt exist? Do we always just create a faux declaration in that case?
         assert(left->struct_decl);
@@ -76,7 +76,7 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
 
         return true;
     }
-    
+
     return true;
 }
 
@@ -87,7 +87,7 @@ void *Compiler::get_memory(array_count_type amount) {
 String Compiler::copy_string(String s) {
     String out;
     out.length = s.length;
-    
+
     auto length = s.length;
     if (s.data && s.length) {
         out.data = (char *)this->get_memory(length);
@@ -102,7 +102,7 @@ Ast_Type_Info *Compiler::make_array_type(Ast_Type_Info *element, array_count_typ
     info->array_element       = element;
     info->array_element_count = count;
     info->is_dynamic = is_dynamic;
-    
+
     if (count >= 0) {
         auto element_final_type = get_final_type(element);
 
@@ -116,7 +116,7 @@ Ast_Type_Info *Compiler::make_array_type(Ast_Type_Info *element, array_count_typ
         } else {
             info->size = this->pointer_size * 3;
         }
-        
+
         info->alignment = this->pointer_size; // @TargetInfo @PointerSize
         info->stride = info->size;
     }
@@ -141,7 +141,7 @@ Ast_Type_Info *Compiler::make_pointer_type(Ast_Type_Info *pointee) {
 
 #define COPY(name) do { info->name = aliasee->name; } while(0)
 
-Ast_Type_Info *Compiler::make_type_alias(Ast_Type_Info *aliasee) {
+Ast_Type_Info *Compiler::make_type_alias_type(Ast_Type_Info *aliasee) {
     Ast_Type_Info *info = COMPILER_NEW(Ast_Type_Info);
     info->type = Ast_Type_Info::ALIAS;
     info->alias_of  = aliasee;
@@ -198,18 +198,18 @@ Ast_Type_Info *Compiler::make_function_type(Ast_Function *function) {
     info->size      = this->type_ptr_void->size;
     info->stride    = this->type_ptr_void->stride;
     info->alignment = this->type_ptr_void->alignment;
-    
+
     info->is_c_function = function->is_c_function;
     info->is_c_varargs  = function->is_c_varargs;
-    
+
     for (auto arg: function->arguments) {
         assert(get_type_info(arg));
-        
+
         auto arg_info = get_type_info(arg);
-        
+
         info->arguments.add(arg_info);
     }
-    
+
     if (function->return_decl) {
         assert(function->return_decl);
         info->return_type = get_type_info(function->return_decl);
@@ -217,7 +217,7 @@ Ast_Type_Info *Compiler::make_function_type(Ast_Function *function) {
     } else {
         info->return_type = this->type_void;
     }
-    
+
     add_to_type_table(info);
     return info;
 }
@@ -254,7 +254,7 @@ static Ast_Type_Info *make_float_type(Compiler *compiler, s64 size) {
 
 char *Compiler::get_temp_c_string(String s) {
     char *mem = (char *)malloc(s.length + 1); // @Leak
-    
+
     memcpy(mem, s.data, s.length);
     mem[s.length] = 0;
     return mem;
@@ -265,6 +265,12 @@ void Compiler::init() {
 
     pointer_size = target_machine->getPointerSize(0);
 
+    if (this->build_options.verbose_diagnostics) {
+        // @TODO compiler->print_diagnostic
+        printf("w%" PRId64 ": Target machine pointer size: %" PRId64 "\n", this->instance_number, pointer_size);
+    }
+
+
     bool is_64bits = false;
     bool is_32bits = false;
     if (pointer_size == 4) {
@@ -272,7 +278,7 @@ void Compiler::init() {
         is_32bits = true;
     } else if (pointer_size == 8) {
         is_64bits = true;
-        is_32bits = false; 
+        is_32bits = false;
     } else {
         assert(false);
         // @TODO Not sure what the right thing to do would be on a 128-bit machine
@@ -289,20 +295,20 @@ void Compiler::init() {
     type_bool->stride = 1;
     type_bool->alignment = 1;
     add_to_type_table(type_bool);
-    
+
     type_int8  = make_int_type(this, true, 1);
     type_int16 = make_int_type(this, true, 2);
     type_int32 = make_int_type(this, true, 4);
     type_int64 = make_int_type(this, true, 8);
-    
+
     type_uint8  = make_int_type(this, false, 1);
     type_uint16 = make_int_type(this, false, 2);
     type_uint32 = make_int_type(this, false, 4);
     type_uint64 = make_int_type(this, false, 8);
-    
+
     type_float32 = make_float_type(this, 4);
     type_float64 = make_float_type(this, 8);
-    
+
     type_string_data = make_pointer_type(type_uint8);
 
     if (is_64bits) {
@@ -310,31 +316,31 @@ void Compiler::init() {
     } else if (is_32bits) {
         type_string_length = type_int32; // @TargetInfo
     }
-    
+
     type_string = COMPILER_NEW(Ast_Type_Info);
     type_string->type = Ast_Type_Info::STRING;
     type_string->size = type_string_length->size + type_string_data->size;
     type_string->stride = type_string->size;
     type_string->alignment = type_string_length->alignment;
     add_to_type_table(type_string);
-    
+
     if (is_64bits) {
         type_array_count = type_int64; // @TargetInfo
     } else if (is_32bits) {
         type_array_count = type_int32; // @TargetInfo
     }
-    
+
     type_info_type = COMPILER_NEW(Ast_Type_Info);
     type_info_type->type = Ast_Type_Info::TYPE;
     type_info_type->size = this->pointer_size;
     type_info_type->stride = type_info_type->size;
     type_info_type->alignment = type_info_type->size;
     add_to_type_table(type_info_type);
-    
+
     type_ptr_void = make_pointer_type(type_void);
-    
+
     add_to_type_table(type_ptr_void);
-    
+
     atom_data      = make_atom(to_string("data"));
     atom_length    = make_atom(to_string("length"));
     atom_count     = make_atom(to_string("count"));
@@ -366,7 +372,7 @@ void Compiler::add_to_type_table(Ast_Type_Info *info) {
 void Compiler::queue_directive(Ast_Directive *directive) {
     assert(directive->type == AST_DIRECTIVE_LOAD   || directive->type == AST_DIRECTIVE_STATIC_IF
         || directive->type == AST_DIRECTIVE_IMPORT || directive->type == AST_DIRECTIVE_CLANG_IMPORT);
-    
+
     directive_queue.add(directive);
 }
 
@@ -375,7 +381,7 @@ void Compiler::resolve_directives() {
     // queued up, then directives that depend on static_if may resolve before the outer static_if does.
     // All-in-all, I'm not sure if this system is as robust as I'd like and this may need to change,
     // perhaps to a top-down tree-descent system.
-    
+
     // Spin on the queue length since directives can cause more directives to be added in
     while (directive_queue.count) {
         auto directive = directive_queue[0];
@@ -387,33 +393,33 @@ void Compiler::resolve_directives() {
                 rejected = true;
                 break;
             }
-            
+
             scope_i_belong_to = scope_i_belong_to->parent;
         }
-        
+
         if (rejected) {
             directive_queue.ordered_remove(0);
             continue;
         }
-        
+
         if (directive->type == AST_DIRECTIVE_LOAD) {
             auto load = static_cast<Ast_Directive_Load *>(directive);
-            
+
             // auto name = load->target_filename;
             // printf("%d DEBUG: load '%.*s', rejected? : %s\n", this->instance_number, name.length, name.data, rejected ? "true" : "false");
-            
+
             void perform_load(Compiler *compiler, Ast *ast, String filename, Ast_Scope *target_scope);
             perform_load(this, load, load->target_filename, load->target_scope);
 
             if (this->errors_reported) return;
-            
+
             directive_queue.ordered_remove(0);
         } else if (directive->type == AST_DIRECTIVE_IMPORT) {
             // @Incomplete we need a way to stop imports into a module scope from leaking into the global scope lookup
             // Actually, doesn't this already do that? If we import Basic right now, LibC isnt exposed to the application
             // unless the application also imports LibC. -josh 30 November 2019
             auto import = static_cast<Ast_Directive_Import *>(directive);
-            
+
             auto name = import->target_filename;
 
             bool success = false;
@@ -460,35 +466,35 @@ void Compiler::resolve_directives() {
             Ast_Scope_Expansion *exp = COMPILER_NEW(Ast_Scope_Expansion);
             exp->text_span = import->imported_scope->text_span;
             exp->filename = import->imported_scope->filename;
-            
+
             import->scope_i_belong_to->private_declarations.add(exp);
-            
+
             exp->scope = import->imported_scope;
             exp->expanded_via_import_directive = import;
             import->substitution = exp;
-            
+
             if (this->errors_reported) return;
-            
+
             directive_queue.ordered_remove(0);
         } else if (directive->type == AST_DIRECTIVE_STATIC_IF) {
             auto _if = static_cast<Ast_Directive_Static_If *>(directive);
             if (_if->then_scope) _if->then_scope->rejected_by_static_if = true;
             if (_if->else_scope) _if->else_scope->rejected_by_static_if = true;
-            
+
             sema->typecheck_expression(_if->condition);
             if (this->errors_reported) return;
-            
+
             auto lit = resolves_to_literal_value(_if->condition);
-            
+
             if (!lit) {
                 this->report_error(_if->condition, "#if condition must be a literal expression.\n");
                 return;
             }
-            
+
             assert(get_type_info(lit));
-            
+
             Ast_Scope *chosen_block = nullptr;
-            
+
             switch(lit->literal_type) {
                 case Ast_Literal::INTEGER: {
                     if (lit->integer_value != 0) {
@@ -506,7 +512,7 @@ void Compiler::resolve_directives() {
                     }
                     break;
                 }
-                
+
                 case Ast_Literal::FLOAT: {
                     if (lit->float_value != 0) {
                         chosen_block = _if->then_scope;
@@ -528,20 +534,20 @@ void Compiler::resolve_directives() {
                     break;
                 }
             }
-            
+
             if (chosen_block) {
                 chosen_block->rejected_by_static_if = false;
-                
+
                 Ast_Scope_Expansion *exp = COMPILER_NEW(Ast_Scope_Expansion);
                 exp->text_span = chosen_block->text_span;
                 exp->filename = chosen_block->filename;
 
                 _if->scope_i_belong_to->declarations.add(exp);
-                
+
                 exp->scope = chosen_block;
                 _if->substitution = exp;
             }
-            
+
             directive_queue.ordered_remove(0);
         } else if (directive->type == AST_DIRECTIVE_CLANG_IMPORT) {
             auto import = static_cast<Ast_Directive_Clang_Import *>(directive);
@@ -575,10 +581,10 @@ Atom *Compiler::make_atom(String name) {
         atom = COMPILER_NEW(Atom);
         atom->name = this->copy_string(name);
         atom->hash = atom_table->hash_key(name);
-        
+
         atom_table->data.add(atom);
     }
-    
+
     return atom;
 }
 
@@ -586,44 +592,44 @@ Atom *Compiler::make_atom(String name) {
 #define TTY_RESET  "\033[0m"
 
 void Compiler::report_diagnostic_valist(String filename, String source, Span error_location, char *level_name, char *fmt, va_list args) {
-    
+
     string_length_type l0 = -1;
     string_length_type c0 = -1;
-    
+
     string_length_type l1 = -1;
     string_length_type c1 = -1;
-    
+
     error_location.map_to_text_coordinates(source, &l0, &c0, &l1, &c1);
-    
+
     // @Cleanup these static_casts by using the right printf format spec
     printf("w%lld:%.*s:%d,%d: %s: ", this->instance_number, PRINT_ARG(filename), static_cast<int>(l0), static_cast<int>(c0), level_name);
     vprintf(fmt, args);
     printf("\n");
-    
+
     string_length_type start_char = -1;
     string_length_type end_char   = -1;
     string_length_type num_lines  = -1;
     error_location.get_surrounding_lines(source, 1, &start_char, &end_char, &num_lines);
-    
+
     assert(start_char >= 0 && end_char >= 0);
     assert(end_char <= source.length);
     assert(start_char <= end_char);
     // assert(num_lines >= 0);
-    
+
     // printf("start char: %d\n", start_char);
     // printf("end   char: %d\n", end_char);
     // printf("Span: %d, %d\n", error_location.start, error_location.start + error_location.length - 1);
-    
+
     String s;
     s.data = source.data + start_char;
     s.length = end_char - start_char;
-    
+
     string_length_type char_current = start_char;
     for (string_length_type i = 0; i < num_lines; ++i) {
         // String temp = s;
-        
+
         printf(">    ");
-        
+
         while (s.length > 0 && s[0] != '\n') {
             // printf("char_current: %d\n", char_current);
             if (char_current == error_location.start) {
@@ -631,22 +637,22 @@ void Compiler::report_diagnostic_valist(String filename, String source, Span err
             } else if (char_current == (error_location.start + error_location.length)) {
                 printf(TTY_RESET);
             }
-            
+
             putchar(s[0]);
             advance(&s);
             char_current++;
         }
-        
+
         char_current++; // count newline character
         if (char_current == (error_location.start + error_location.length)) {
             printf(TTY_RESET);
         }
-        
+
         advance(&s);
-        
+
         putchar('\n');
     }
-    
+
     putchar('\n');
 }
 
@@ -656,16 +662,16 @@ void Compiler::report_error(Token *tok, char *fmt, ...) {
     String filename;
     String source;
     Span span;
-    
+
     if (tok) {
         filename = tok->filename;
         source = tok->text_span.string;
         span = tok->text_span.span;
     }
-    
+
     report_diagnostic_valist(filename, source, span, "error", fmt, args);
     va_end(args);
-    
+
     errors_reported += 1;
 }
 
@@ -673,17 +679,17 @@ void Compiler::report_error(Token *tok, char *fmt, ...) {
 void Compiler::report_error(Ast *ast, char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    
+
     String filename;
     String source;
     Span span;
-    
+
     if (ast) {
         filename = ast->filename;
         source = ast->text_span.string;
         span = ast->text_span.span;
     }
-    
+
     report_diagnostic_valist(filename, source, span, "error", fmt, args);
     va_end(args);
 
@@ -696,32 +702,34 @@ void Compiler::report_warning(Token *tok, char *fmt, ...) {
     String filename;
     String source;
     Span span;
-    
+
     if (tok) {
         filename = tok->filename;
         source = tok->text_span.string;
         span = tok->text_span.span;
     }
-    
+
     report_diagnostic_valist(filename, source, span, "warning", fmt, args);
     va_end(args);
+
+    // __builtin_debugtrap();
 }
 
 
 void Compiler::report_warning(Ast *ast, char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
-    
+
     String filename;
     String source;
     Span span;
-    
+
     if (ast) {
         filename = ast->filename;
         source = ast->text_span.string;
         span = ast->text_span.span;
     }
-    
+
     report_diagnostic_valist(filename, source, span, "warning", fmt, args);
     va_end(args);
 }
@@ -737,16 +745,29 @@ bool Compiler::is_toplevel_scope(Ast_Scope *scope) {
     return false;
 }
 
+Tuple<bool, String> Compiler::find_file_in_library_search_paths(String filename) {
+    for (auto &path: this->library_search_paths) {
+        String fullpath = mprintf("%.*s" PATH_SEPARATOR "%.*s", PRINT_ARG(path), PRINT_ARG(filename));
+        if (file_exists(fullpath)) {
+            return MakeTuple(true, fullpath);
+        } else {
+            free(fullpath.data);
+        }
+    }
+
+    return MakeTuple(false, String());
+}
+
 // Expression construction stuff, primarily used by sema and clang_import
 
 Ast_Expression *cast_int_to_int(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
-    
+
     assert(is_int_type(expr->type_info));
     assert(is_int_type(target));
-    
+
     if (target->size == expr->type_info->size) return expr;
-    
+
     Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
     copy_location_info(cast, expr);
     cast->expression = expr;
@@ -757,12 +778,12 @@ Ast_Expression *cast_int_to_int(Compiler *compiler, Ast_Expression *expr, Ast_Ty
 
 Ast_Expression *cast_float_to_float(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
-    
+
     assert(is_float_type(expr->type_info));
     assert(is_float_type(target));
-    
+
     if (target->size == expr->type_info->size) return expr;
-    
+
     Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
     copy_location_info(cast, expr);
     cast->expression = expr;
@@ -773,25 +794,25 @@ Ast_Expression *cast_float_to_float(Compiler *compiler, Ast_Expression *expr, As
 
 Ast_Expression *cast_int_to_float(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
-    
+
     assert(is_int_type(expr->type_info));
     assert(is_float_type(target));
-    
+
     Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
     copy_location_info(cast, expr);
     cast->expression = expr;
     // cast->target_type_info = nullptr;
     cast->type_info = target;
     return cast;
-    
+
 }
 
 Ast_Expression *cast_ptr_to_ptr(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
     while (expr->substitution) expr = expr->substitution;
-    
+
     assert(is_pointer_type(expr->type_info));
     assert(is_pointer_type(target));
-    
+
     Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
     copy_location_info(cast, expr);
     cast->expression = expr;
@@ -804,7 +825,7 @@ Ast_Literal *make_string_literal(Compiler *compiler, String value, Ast *source_l
     lit->literal_type = Ast_Literal::STRING;
     lit->string_value = value;
     lit->type_info = compiler->type_string;
-    
+
     if (source_loc) copy_location_info(lit, source_loc);
     return lit;
 }
@@ -814,7 +835,7 @@ Ast_Literal *make_integer_literal(Compiler *compiler, s64 value, Ast_Type_Info *
     lit->literal_type = Ast_Literal::INTEGER;
     lit->integer_value = value;
     lit->type_info = type_info;
-    
+
     if (source_loc) copy_location_info(lit, source_loc);
     return lit;
 }
@@ -824,7 +845,7 @@ Ast_Literal *make_float_literal(Compiler *compiler, double value, Ast_Type_Info 
     lit->literal_type = Ast_Literal::FLOAT;
     lit->float_value = value;
     lit->type_info = type_info;
-    
+
     if (source_loc) copy_location_info(lit, source_loc);
     return lit;
 }
@@ -834,7 +855,7 @@ Ast_Literal *make_bool_literal(Compiler *compiler, bool value, Ast *source_loc) 
     lit->literal_type = Ast_Literal::BOOL;
     lit->bool_value = value;
     lit->type_info = compiler->type_bool;
-    
+
     if (source_loc) copy_location_info(lit, source_loc);
     return lit;
 }
@@ -843,7 +864,7 @@ Ast_Literal *make_null_literal(Compiler *compiler, Ast_Type_Info *pointer_type, 
     Ast_Literal *lit = COMPILER_NEW2(Ast_Literal);
     lit->literal_type = Ast_Literal::NULLPTR;
     lit->type_info = pointer_type;
-    
+
     if (source_loc) copy_location_info(lit, source_loc);
     return lit;
 }
@@ -869,7 +890,7 @@ Ast_Array_Dereference *make_array_index(Compiler *compiler, Ast_Expression *arra
 Ast_Dereference *make_dereference(Compiler *compiler, Ast_Expression *aggregate_expression, Atom *field) {
     auto ident = make_identifier(compiler, field);
     copy_location_info(ident, aggregate_expression);
-    
+
     Ast_Dereference *deref = COMPILER_NEW2(Ast_Dereference);
     copy_location_info(deref, aggregate_expression);
     deref->left = aggregate_expression;
@@ -895,6 +916,13 @@ Ast_Binary_Expression *make_binary(Compiler *compiler, Token::Type op, Ast_Expre
     if (location) copy_location_info(bin, location);
 
     return bin;
+}
+
+Ast_Type_Alias *make_type_alias(Compiler *compiler, Ast_Identifier *ident, Ast_Type_Info *type_value) {
+    Ast_Type_Alias *alias = COMPILER_NEW2(Ast_Type_Alias);
+    alias->identifier = ident;
+    alias->type_value = type_value;
+    return alias;
 }
 
 Ast_Type_Info *get_final_type(Ast_Type_Info *info) {

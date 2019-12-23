@@ -4,40 +4,35 @@ set -ex
 JIYU_DIR=$PWD
 
 LLVM_VERSION=8.0.0
-LLVM_URL=http://releases.llvm.org/8.0.0/llvm-$LLVM_VERSION.src.tar.xz
-CLANG_URL=http://releases.llvm.org/8.0.0/cfe-$LLVM_VERSION.src.tar.xz
+LLVM_URL=https://github.com/llvm/llvm-project/archive/llvmorg-$LLVM_VERSION.tar.gz
 
 if [ -z $LLVM_TARGETS ]
 then
     LLVM_TARGETS="X86;ARM;AArch64"
 fi
 
-if [[ ! -f llvm-$LLVM_VERSION.src.tar.xz ]]
+if [ -z $LLVM_BUILD_TYPE ]
 then
-    wget $LLVM_URL || curl -L --output llvm-$LLVM_VERSION.src.tar.xz $LLVM_URL
+    LLVM_BUILD_TYPE=Release
 fi
 
-if [[ ! -f cfe-$LLVM_VERSION.src.tar.xz ]]
+
+if [[ ! -f llvmorg-$LLVM_VERSION.tar.gz ]]
 then
-    wget $CLANG_URL || curl -L --output cfe-$LLVM_VERSION.src.tar.xz $CLANG_URL
+    wget $LLVM_URL || curl -L --output llvm-$LLVM_VERSION.tar.gz $LLVM_URL
 fi
 
-if [[ ! -d llvm-$LLVM_VERSION.src ]]
+if [[ ! -d llvm-project-llvmorg-$LLVM_VERSION ]]
 then
-    tar -vxzf llvm-$LLVM_VERSION.src.tar.xz
+    tar -vxzf llvmorg-$LLVM_VERSION.tar.gz
 fi
 
-if [[ ! -d llvm-$LLVM_VERSION.src/tools/clang ]]
-then
-    tar -vxzf cfe-$LLVM_VERSION.src.tar.xz
-    mv cfe-$LLVM_VERSION.src llvm-$LLVM_VERSION.src/tools/clang
-fi
-
-cd llvm-$LLVM_VERSION.src
+cd llvm-project-llvmorg-$LLVM_VERSION
 mkdir -p build
 cd build
 
-cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLLVM_TARGETS_TO_BUILD=$LLVM_TARGETS -DLLVM_ENABLE_DUMP=ON -DCMAKE_INSTALL_PREFIX=$JIYU_DIR/llvm
-cmake --build . --target install
+# Turn off as many unneeded build steps in clang+llvm as possible to speedup the build and require less resources so that this works on SBC's with a small amount of memory.
+cmake ../llvm -DCMAKE_BUILD_TYPE=$LLVM_BUILD_TYPE -DLLVM_TARGETS_TO_BUILD=$LLVM_TARGETS -DLLVM_ENABLE_DUMP=ON -DCMAKE_INSTALL_PREFIX=$JIYU_DIR/llvm -DLLVM_BUILD_TOOLS=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF -DLLVM_INCLUDE_TESTS=OFF -DLLVM_ENABLE_WARNINGS=OFF -DLLVM_ENABLE_PROJECTS=clang
+cmake --build . --target install -j 4
 
 cd $JIYU_DIR

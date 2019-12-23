@@ -10,4 +10,7 @@ bool file_exists(String path);
 
 bool is_debugger_present();
 
+struct Compiler;
+void os_init(Compiler *compiler);
+
 #endif // OS_SUPPORT_H

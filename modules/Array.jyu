@@ -3,7 +3,7 @@
 
 let NEW_MEM_CHUNK_ELEMENT_COUNT = 16;
 
-func array_reserve<T>(array: *[..] T, _amount: int) {
+func __array_reserve<T>(array: *[..] T, _amount: int) {
     var amount = _amount;
     if amount <= 0
         amount = NEW_MEM_CHUNK_ELEMENT_COUNT;
@@ -19,21 +19,25 @@ func array_reserve<T>(array: *[..] T, _amount: int) {
     array.allocated = amount;
 }
 
-func array_resize<T>(array: *[..] T, _amount: int) {
-    array_reserve(array, _amount);
+func __array_resize<T>(array: *[..] T, _amount: int) {
+    array.reserve(_amount);
     array.count = _amount;
 }
 
-func array_add<T>(array: *[..] T, item: T) {
-    if (array.count+1 >= array.allocated) array_reserve(array, cast(int) 
-    
-    array.allocated + NEW_MEM_CHUNK_ELEMENT_COUNT);
+func __array_add<T>(array: *[..] T, item: T) {
+    if (array.count+1 >= array.allocated) array.reserve(cast(int) array.allocated + NEW_MEM_CHUNK_ELEMENT_COUNT);
 
     array.count += 1;
     (<<array)[array.count-1] = item;
 }
 
-func array_reset<T>(array: *[..] T) {
+func __array_pop<T>(array: *[..] T) -> T {
+    var last = array.data[array.count-1];
+    array.count -= 1;
+    return last;
+}
+
+func __array_reset<T>(array: *[..] T) {
     array.count = 0;
     array.allocated = 0;
 

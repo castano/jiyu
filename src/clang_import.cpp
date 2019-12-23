@@ -57,7 +57,7 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
 
         case CXType_Char16: return compiler->type_uint16;
         case CXType_Char32: return compiler->type_uint32;
-        
+
         case CXType_Char_U:
         case CXType_UChar:
         case CXType_UShort:
@@ -137,7 +137,7 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
             }
             return compiler->make_pointer_type(get_jiyu_type(data, pointee));
         }
-        
+
         // CXType_BlockPointer = 102,
         // CXType_LValueReference = 103,
         // CXType_RValueReference = 104,
@@ -152,7 +152,7 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
             assert(result);
             return result;
         }
-        
+
         // @Incomplete enums arent supported in jiyu yet
         case CXType_Enum: {
             CXCursor type_decl = clang_getTypeDeclaration(type);
@@ -164,7 +164,7 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
             assert(result);
             return result;
         }
-        
+
 
         case CXType_Typedef: {
             CXCursor type_decl = clang_getTypeDeclaration(type);
@@ -187,20 +187,20 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
             info->size      = compiler->type_ptr_void->size;
             info->stride    = compiler->type_ptr_void->stride;
             info->alignment = compiler->type_ptr_void->stride;
-            
+
             info->is_c_function = true;
             info->is_c_varargs  = (clang_isFunctionTypeVariadic(type) != 0);
-            
+
             auto arg_count = clang_getNumArgTypes(type);
             for (int i = 0; i < arg_count; ++i) {
                 auto arg_info = get_jiyu_type(data, clang_getArgType(type, i));
-                
+
                 info->arguments.add(arg_info);
             }
-            
-            
+
+
             info->return_type = get_jiyu_type(data, clang_getResultType(type));
-            
+
             compiler->add_to_type_table(info);
             return info;
         }
@@ -231,7 +231,9 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
     }
 
     CXString kind_string = clang_getTypeKindSpelling(type.kind);
-    compiler->report_error((Ast *)nullptr, "Unhandled CXTypeKind in get_jiyu_type: %s. This is a message for maintainers.\n", clang_getCString(kind_string));
+    if (compiler->build_options.verbose_diagnostics) {
+        compiler->report_error((Ast *)nullptr, "Unhandled CXTypeKind in get_jiyu_type: %s. This is a message for maintainers.\n", clang_getCString(kind_string));
+    }
     clang_disposeString(kind_string);
 
     assert(false);
@@ -345,7 +347,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
 
             auto info = get_jiyu_type(visitor_data, underlying_type);
             assert(info);
-            alias->type_value = compiler->make_type_alias(info);
+            alias->type_value = compiler->make_type_alias_type(info);
             alias->type_value->alias_decl = alias;
 
             current_scope->statements.add(alias);
@@ -373,7 +375,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
 
             auto info = get_jiyu_type(visitor_data, underlying_type);
             assert(info);
-            alias->type_value = compiler->make_type_alias(info);
+            alias->type_value = compiler->make_type_alias_type(info);
             alias->type_value->alias_decl = alias;
 
             current_scope->statements.add(alias);
@@ -491,7 +493,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
             defer { clang_disposeString(cxstring); };
 
             String name = to_string(clang_getCString(cxstring));
-            printf("Unahndled CXCursor in cursor_visitor. kind: %s, name: %.*s. This is a message for maintainers.\n", clang_getCString(kind_string), PRINT_ARG(name));
+            if (compiler->build_options.verbose_diagnostics) printf("Unahndled CXCursor in cursor_visitor. kind: %s, name: %.*s. This is a message for maintainers.\n", clang_getCString(kind_string), PRINT_ARG(name));
             break;
         }
     }
@@ -531,7 +533,7 @@ bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *targe
     for (unsigned i = 0; i < clang_getNumDiagnostics(translation_unit); ++i) {
         CXDiagnostic diag = clang_getDiagnostic(translation_unit, i);
         CXString diag_string = clang_formatDiagnostic(diag, CXDiagnostic_DisplaySourceLocation | CXDiagnostic_DisplayColumn);
-        
+
         // @Incomplete what we really want is to use Jiyu's error reporting system.
         printf("%s\n", clang_getCString(diag_string));
         clang_disposeString(diag_string);
@@ -558,7 +560,7 @@ bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *targe
         alias->type_info = compiler->type_info_type;
 
         auto info = compiler->type_ptr_void;
-        alias->type_value = compiler->make_type_alias(info);
+        alias->type_value = compiler->make_type_alias_type(info);
         alias->type_value->alias_decl = alias;
 
         target_scope->statements.add(alias);

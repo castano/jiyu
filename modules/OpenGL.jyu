@@ -11,7 +11,7 @@
     framework "OpenGL";
 }
 
-typealias ptrdiff_t  = int64; // @FixMe this doesnt belong here and Idk if it is correct.
+typealias ptrdiff_t  = __builtin_array_count_type; // @FixMe @Hack
 
 typealias GLintptr   = ptrdiff_t;
 typealias GLsizeiptr = ptrdiff_t;
