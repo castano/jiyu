@@ -1473,7 +1473,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         lit->float_value = static_cast<double>((u64)lit->integer_value);
                     }
                 } else {
-                    lit->type_info = compiler->type_int32;
+                    // This does not take into account if the literal is negative... but the lexer currently does not
+                    // lex negative numbers so maybe we shouldnt worry about that here.. @TODO -josh 22 December 2019
+                    if (static_cast<u32>(lit->integer_value) == lit->integer_value)
+                        lit->type_info = compiler->type_int32;
+                    else
+                        lit->type_info = compiler->type_int64;
                 }
             }
 
