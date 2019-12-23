@@ -360,6 +360,16 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
     }
 }
 
+// @@ Should this be an atribute of the literal that is propagated? Is 1+1 mutable?
+static bool is_mutable_literal(Ast_Literal * literal) {
+    if (literal->type_info->type == Ast_Type_Info::INTEGER || literal->type_info->type == Ast_Type_Info::FLOAT) {
+        return true;
+    }
+    if (literal->type_info->type == Ast_Type_Info::POINTER) {
+        return literal->literal_type == Ast_Literal::NULLPTR;
+    }
+    return false;
+}
 
 // @Returns viability contribution
 u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_type) {
@@ -423,11 +433,27 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
 
     u64  viability_score  = 0;
 
-    if (auto lit = folds_to_literal(expression)) {
+    /*if (auto lit = folds_to_literal(expression)) {
         auto score = maybe_mutate_literal_to_type(lit, target_type_info);
         expression = lit;
         viability_score += score;
+    }*/
+
+    auto lit = folds_to_literal(expression);
+    if (lit) {
+        if (is_mutable_literal(lit)) {
+            auto score = maybe_mutate_literal_to_type(lit, target_type_info);
+            expression = lit;
+            //expression->substitution = lit;
+            viability_score += score;
+        }
+        else {
+            // We fold expressions even if they cannot be mutated.
+            expression = lit;
+            //expression->substitution = lit;
+        }
     }
+
 
     auto rtype = get_final_type(get_type_info(expression));
     auto ltype = get_final_type(target_type_info);
@@ -509,7 +535,6 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
                     // We don't penalize the viability for this. You get this as a courtesy.
                     right = cast;
                 }
-
             }
         }
     }
@@ -667,6 +692,9 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     assert(literal->type == AST_LITERAL);
                     literal = static_cast<Ast_Literal *>(compiler->copier->copy(literal)); // Make a copy in case the user code wants to mutate the literal itself.
                     assert(literal);
+                    // Why are we changing the type of the declaration? This is producing incorrect results when
+                    // the declaration is an enum that's initialized with an integer expression.
+                    // @@ Is that really what's happening?
                     literal->type_info = get_type_info(decl->initializer_expression);
                 }
                 return literal;
@@ -752,17 +780,6 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
     }
 }
 
-// @@ Should this be an atribute of the literal that is propagated? Is 1+1 mutable?
-static bool mutable_literal(Ast_Literal * literal) {
-    if (literal->type_info->type == Ast_Type_Info::INTEGER || literal->type_info->type == Ast_Type_Info::FLOAT) {
-        return true;
-    }
-    if (literal->type_info->type == Ast_Type_Info::POINTER) {
-        return literal->literal_type == Ast_Literal::NULLPTR;
-    }
-    return false;
-}
-
 // @Cleanup if we introduce expression substitution, then we can remove the resut parameters and just set (left/right)->substitution
 // Actually, if we do that, then we can't really use this for checking function calls.
 // Actually, this is being deprecated for things other than binary operators and for-loop ranges... since function calls now use typecheck_and_implicit_cast_single_expression, declarations need only do one-way casting, returns are one-way.
@@ -783,12 +800,12 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
     //     right->substitution = lit_right;
     // }
 
-    if (lit_left && mutable_literal(lit_left)) {
+    if (lit_left && is_mutable_literal(lit_left)) {
         maybe_mutate_literal_to_type(lit_left, get_type_info(right));
         left = lit_left;
         //left->substitution = lit_left;
     }
-    else if (lit_right && mutable_literal(lit_right)) {
+    else if (lit_right && is_mutable_literal(lit_right)) {
         maybe_mutate_literal_to_type(lit_right, get_type_info(left));
         right = lit_right;
         //right->substitution = lit_right;

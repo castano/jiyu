@@ -17,10 +17,10 @@ func main () {
     assert(typeof(f) == float);
     assert(typeof(i) == int);
     assert(typeof(s) == MyStruct);
-    //assert(typeof(x) == string);
-    //assert(typeof(b) == bool);
-    //assert(typeof(typeof(x) == string) == bool);
-    //assert(typeof(x == "") == bool);
+    assert(typeof(x) == string);
+    assert(typeof(b) == bool);
+    assert(typeof(typeof(x) == string) == bool);
+    assert(typeof(x == "") == bool);
 
     printf("typeof(f) = %d\n", typeof(f));
     printf("typeof(i) = %d\n", typeof(i));
