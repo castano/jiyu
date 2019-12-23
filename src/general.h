@@ -397,10 +397,10 @@ struct Span {
 
     void get_surrounding_lines(String text, int num_surrounding_lines, string_length_type *new_start, string_length_type *new_end, string_length_type *return_num_lines) {
         // Get the current line(s) that this span occupies
-        string_length_type line_start;
-        string_length_type char_start;
-        string_length_type line_end;
-        string_length_type char_end;
+        string_length_type line_start = -1;
+        string_length_type char_start = -1;
+        string_length_type line_end   = -1;
+        string_length_type char_end   = -1;
 
         map_to_text_coordinates(text, &line_start, &char_start, &line_end, &char_end);
 
