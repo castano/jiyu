@@ -986,11 +986,14 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                             return irb->CreateLShr(left, right);
                         }
                     }
-                    default: assert(false);
+                    default:
+                        assert(false && "Unhandled binary expression in emit_expression.");
+                        break;
                 }
             }
 
             assert(false);
+            break;
         }
 
         case AST_LITERAL: {
@@ -1046,7 +1049,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 auto const_int = ConstantInt::get(type_intptr, type_value->type_table_index, true);
                 return ConstantExpr::getIntToPtr(const_int, type_i8->getPointerTo());
             } else {
-                assert(false);
+                assert(false && "Unhandled identifier type in emit_expression.");
+                return nullptr;
             }
         }
 
@@ -1187,7 +1191,6 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto src = get_final_type(get_type_info(cast->expression));
             auto dst = get_final_type(cast->type_info);
 
-            auto src_type = get_type(src);
             auto dst_type = get_type(dst);
             if (is_int_type(src) && is_int_type(dst)) {
                 if (src->size > dst->size) {
@@ -1200,7 +1203,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     }
                 }
 
-                assert(src_type == dst_type);
+                assert(get_type(src) == dst_type);
                 return value;
             } else if (is_float_type(src) && is_float_type(dst)) {
                 if (src->size < dst->size) {
@@ -1209,7 +1212,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     return irb->CreateFPTrunc(value, dst_type);
                 }
 
-                assert(src_type == dst_type);
+                assert(get_type(src) == dst_type);
                 return value;
             } else if (is_float_type(src) && is_int_type(dst)) {
                 if (dst->is_signed) {
@@ -1563,7 +1566,7 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
         auto di_type = get_debug_type(get_type_info(it));
         auto di_local_var = dib->createAutoVariable(di_current_scope, string_ref(name),
                                 get_debug_file(llvm_context, it), get_line_number(it), di_type, always_preserve);
-        auto declare = dib->insertDeclare(alloca, di_local_var, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(it), 0, di_current_scope),
+        dib->insertDeclare(alloca, di_local_var, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(it), 0, di_current_scope),
                             current_block);
     }
 
@@ -1610,8 +1613,8 @@ DISubroutineType *LLVM_Generator::get_debug_subroutine_type(Ast_Type_Info *type)
 
     arguments.add(return_type);
 
-    bool is_c_function = type->is_c_function;
-    bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
+//     bool is_c_function = type->is_c_function;
+//     bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
 
     for (auto arg_type : type->arguments) {
         if (arg_type == compiler->type_void) continue;
@@ -1715,7 +1718,7 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
         auto param = dib->createParameterVariable(di_subprogram, string_ref(name), i+1,
                             get_debug_file(llvm_context, decl), get_line_number(decl),
                             di_type, always_preserve);
-        auto declare = dib->insertDeclare(storage, param, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(decl), 0, di_subprogram),
+        dib->insertDeclare(storage, param, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(decl), 0, di_subprogram),
                             starting_block);
 
         arg_it++;
@@ -1766,15 +1769,8 @@ void LLVM_Generator::emit_global_variable(Ast_Declaration *decl) {
     }
 
     auto GV = new GlobalVariable(*llvm_module, type, is_constant, GlobalVariable::InternalLinkage, const_init, string_ref(name));
-
-    // printf("EMIT GV: '%.*s'\n", name.length, name.data);
+    UNUSED(GV, "LLVM internally manages this, just marking unused to silence warning.");
 }
-
-#ifdef WIN32
-#define PATH_SEPARATOR "\\"
-#else
-#define PATH_SEPARATOR "/"
-#endif
 
 #include <stdio.h>
 
@@ -1816,11 +1812,9 @@ void LLVM_Jitter::init() {
         } else {
             auto fullpath = mprintf("/System/Library/Frameworks" PATH_SEPARATOR "%s.framework" PATH_SEPARATOR "%s", c_str, c_str);
             auto fullpath_c_string = to_c_string(fullpath);
-            // printf("PATH: %s\n", fullpath_c_string);
-            bool not_valid = llvm::sys::DynamicLibrary::LoadLibraryPermanently(fullpath_c_string);
+            llvm::sys::DynamicLibrary::LoadLibraryPermanently(fullpath_c_string);
             free(fullpath.data);
             free(fullpath_c_string);
-            // if (!not_valid) break;
         }
 
         free(c_str);

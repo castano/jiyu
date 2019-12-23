@@ -669,4 +669,7 @@ class ExitScopeHelp {
 #define debug_break() __builtin_debugtrap()
 #endif
 
+// unused variable helpers
+#define UNUSED(x, reason) ((void)x)
+
 #endif // GENERAL_H
