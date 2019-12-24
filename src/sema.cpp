@@ -2372,6 +2372,15 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
 
             lit->bool_value = (ident_string == to_string(os_name.str().c_str()));
+            // printf("%s, os(%.*s): %d\n", os_name.str().c_str(), PRINT_ARG(ident_string), lit->bool_value);
+
+            if (ident_string == to_string("macosx") && os_type == llvm::Triple::Darwin) {
+                // Give the programmer a helping hand here since apple-darwin and apple-macosx seem to be the same thing.
+                // apple-darwin is more common. It seems iOS, tvOS, watchOS all contain their OS-names in their triple.
+                // @TODO we may want to do something similar if the programmer specifies os(Darwin)... we want it to be
+                // true for all these Darwin-derived OS's. -josh 24 December 2019
+                lit->bool_value = true;
+            }
 
             free(ident_string.data);
 
