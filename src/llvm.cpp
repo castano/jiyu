@@ -853,7 +853,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                         if (is_pointer_type(left_type) &&
                             is_int_type(right_type)) {
-                            return irb->CreateGEP(left, {right});
+                            return irb->CreateGEP(left, right);
                         } else if (is_pointer_type(left_type) && is_pointer_type(right_type)) {
                             Value *left_int  = irb->CreatePtrToInt(left,  type_intptr);
                             Value *right_int = irb->CreatePtrToInt(right, type_intptr);
@@ -1456,7 +1456,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 return element;
             } else if (type->type == Ast_Type_Info::POINTER) {
                 auto ptr = irb->CreateLoad(array);
-                auto element = irb->CreateGEP(ptr, {index});
+                auto element = irb->CreateGEP(ptr, index);
 
                 if (!is_lvalue) return irb->CreateLoad(element);
                 return element;
