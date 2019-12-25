@@ -383,24 +383,54 @@ static bool is_mutable_literal(Ast_Literal * literal) {
 }
 
 // @Returns viability contribution
-u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_type) {
-    want_numeric_type = get_final_type(want_numeric_type);
+u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
+    target_type = get_final_type(target_type);
+    assert(target_type != nullptr);
 
     u64 viability_score = 0;
     if (lit->literal_type == Ast_Literal::INTEGER) {
-        if (want_numeric_type && (want_numeric_type->type == Ast_Type_Info::INTEGER || want_numeric_type->type == Ast_Type_Info::ENUM || want_numeric_type->type == Ast_Type_Info::FLOAT)) {
-            if (!types_match(get_type_info(lit), want_numeric_type)) {
+        if (target_type->type == Ast_Type_Info::INTEGER || target_type->type == Ast_Type_Info::ENUM || target_type->type == Ast_Type_Info::FLOAT) {
+            if (!types_match(get_type_info(lit), target_type)) {
                 viability_score += 1;
             }
             auto old_type = lit->type_info;
-            // @Incomplete check that number can fit in target type
-            // @Incomplete cast to float if we have an int literal
-            lit->type_info = want_numeric_type;
 
+            if (target_type->type == Ast_Type_Info::INTEGER || target_type->type == Ast_Type_Info::ENUM) {
+                auto target = target_type;
+                if (target_type->type == Ast_Type_Info::ENUM) target = target_type->enum_base_type;
+
+                // Check that number can fit in target type
+                if (target->is_signed) {
+                    s64 min, max;
+                    if (target->size == 1) { min = INT8_MIN; max = INT8_MAX; }
+                    else if (target->size == 2) { min = INT16_MIN; max = INT16_MAX; }
+                    else if (target->size == 4) { min = INT32_MIN; max = INT32_MAX; }
+                    else { assert(target->size == 8); min = INT64_MIN; max = INT64_MAX; }
+
+                    s64 x = lit->integer_value;
+                    if (x > max || x < min) return viability_score; // @@ Doest it matter what we return in this case?
+                }
+                else {
+                    u64 max;
+                    if (target->size == 1) { max = UINT8_MAX; }
+                    else if (target->size == 2) { max = UINT16_MAX; }
+                    else if (target->size == 4) { max = UINT32_MAX; }
+                    else { assert(target->size == 8); max = UINT64_MAX; }
+
+                    u64 x = (u64)lit->integer_value;
+                    if (x > max) return viability_score; // @@ Doest it matter what we return in this case?
+                }
+            }
+            else if (target_type->type == Ast_Type_Info::FLOAT) {
+                // @@ Check that integer can be represented exactly with a float.
+            }
+            
+            // @Incomplete cast to float if we have an int literal
+            lit->type_info = target_type;
 
             // @Cleanup I'm mutating the literal for now, but this would be a good place to use substitution, I think
             // Or since literal ints are considered completely typeless up until this point, maybe this is the right thing to do
-            if (want_numeric_type->type == Ast_Type_Info::FLOAT) {
+            if (target_type->type == Ast_Type_Info::FLOAT) {
                 lit->literal_type = Ast_Literal::FLOAT;
 
                 if (old_type->is_signed) {
@@ -414,18 +444,16 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_t
             // lit->type_info = compiler->type_int32;
         }
     }
-
-    if (lit->literal_type == Ast_Literal::FLOAT) {
-        if (want_numeric_type && want_numeric_type->type == Ast_Type_Info::FLOAT) {
-            if (!types_match(get_type_info(lit), want_numeric_type)) viability_score += 1;
-            lit->type_info = want_numeric_type;
+    else if (lit->literal_type == Ast_Literal::FLOAT) {
+        if (target_type && target_type->type == Ast_Type_Info::FLOAT) {
+            if (!types_match(get_type_info(lit), target_type)) viability_score += 1;
+            lit->type_info = target_type;
         }
         //else lit->type_info = compiler->type_float64; // @TODO we should probably have a check that verifies if the literal can fit in a 32-bit float and then default to that.
     }
-
-    if (lit->literal_type == Ast_Literal::NULLPTR) {
-        if (want_numeric_type->type == Ast_Type_Info::POINTER) {
-            lit->type_info = want_numeric_type;
+    else if (lit->literal_type == Ast_Literal::NULLPTR) {
+        if (target_type->type == Ast_Type_Info::POINTER) {
+            lit->type_info = target_type;
         }
     }
 
@@ -773,6 +801,8 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             if (literal) {
                 assert(literal->type == AST_LITERAL);
 
+                // @@ Should we fold this with mutate_literal_to_type()
+
                 if (target_type->type == Ast_Type_Info::INTEGER) {
                     if (literal->type_info->type == Ast_Type_Info::INTEGER) {
                         return make_integer_literal(compiler, literal->integer_value, target_type);
@@ -804,7 +834,6 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                         return make_bool_literal(compiler, literal->integer_value != 0);
                     }
                     else if (literal->type_info->type == Ast_Type_Info::FLOAT) {
-                        // @@ Should we avoid doing anything in this case?
                         return make_bool_literal(compiler, literal->float_value != 0.0);
                     }
                     else if (literal->type_info->type == Ast_Type_Info::BOOL) {
