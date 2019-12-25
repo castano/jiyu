@@ -10,6 +10,8 @@
 
 typealias GLFWwindow = void; // opaque
 
+typealias GLFWerrorfun = @c_function (error: int32, desc: *uint8) -> void;
+
 func @c_function glfwInit() -> int32;
 func @c_function glfwCreateWindow(width: int32, height: int32, title: *uint8, monitor: *void, share: *void) -> *void;
 func @c_function glfwTerminate();
@@ -19,7 +21,8 @@ func @c_function glfwSwapBuffers(window: *void);
 func @c_function glfwPollEvents();
 func @c_function glfwGetProcAddress(procname: *uint8) -> *void;
 func @c_function glfwWindowHint(hint: int32, value: int32) -> void;
-func @c_function glfwSetWindowTitle(window: *GLFWwindow,title: *uint8) -> void;
+func @c_function glfwSetWindowTitle(window: *GLFWwindow, title: *uint8) -> void;
+func @c_function glfwSetErrorCallback(fun: GLFWerrorfun) -> void;
 
 let GLFW_CONTEXT_VERSION_MAJOR = 0x00022002;
 let GLFW_CONTEXT_VERSION_MINOR = 0x00022003;
@@ -30,3 +33,5 @@ let GLFW_OPENGL_CORE_PROFILE   = 0x00032001;
 
 let GLFW_CLIENT_API            = 0x00022001;
 let GLFW_OPENGL_ES_API         = 0x00030002;
+let GLFW_CONTEXT_CREATION_API  = 0x0002200B;
+let GLFW_EGL_CONTEXT_API       = 0x00036002;
