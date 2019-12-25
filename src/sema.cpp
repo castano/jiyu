@@ -601,7 +601,7 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                 return nullptr;
             }
 
-            if (left_type->type == Ast_Type_Info::INTEGER || left_type->type == Ast_Type_Info::ENUM || left_type->type == Ast_Type_Info::TYPE) {
+            if (left_type->type == Ast_Type_Info::INTEGER || left_type->type == Ast_Type_Info::ENUM) {
                 s64 left_int  = left->integer_value;
                 s64 right_int = right->integer_value;
                 switch (bin->operator_type) {
@@ -648,6 +648,34 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                         assert(false && "Unhandled binary operator in folds_to_literal.");
                         return nullptr;
                 }
+            } else if (left_type->type == Ast_Type_Info::TYPE) {
+                #if 0 
+                    // This relies on the table index for type comparison, which is the same we currently do at runtime.
+                    s64 left_int  = left->integer_value;
+                    s64 right_int = right->integer_value;
+                    switch (bin->operator_type) {
+                        case Token::EQ_OP: return make_bool_literal(compiler, left_int == right_int, bin);
+                        case Token::NE_OP: return make_bool_literal(compiler, left_int != right_int, bin);
+                        default:
+                            assert(false && "Unexpected binary operator in folds_to_literal.");
+                            return nullptr;
+                    }
+                #else
+                    // Instead of the type index, use the type value at that index. Note, that at runtime we are still
+                    // comparing the indices directly.
+
+                    auto left_type = compiler->type_table[left->integer_value];
+                    auto right_type = compiler->type_table[right->integer_value];
+
+                    bool match = types_match(left_type, right_type);
+                    switch (bin->operator_type) {
+                        case Token::EQ_OP: return make_bool_literal(compiler, match, bin);
+                        case Token::NE_OP: return make_bool_literal(compiler, !match, bin);
+                        default:
+                            assert(false && "Unexpected binary operator in folds_to_literal.");
+                            return nullptr;
+                    }
+                #endif
             } else {
                 return nullptr;
             }
@@ -2605,7 +2633,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             auto expr_type = get_type_info(typeof->expression);
 
-            Ast_Type_Instantiation *type_inst = new (compiler->get_memory(sizeof(Ast_Type_Instantiation))) Ast_Type_Instantiation();
+            Ast_Type_Instantiation *type_inst = SEMA_NEW(Ast_Type_Instantiation);
             copy_location_info(type_inst, typeof);
             type_inst->type_value = expr_type;
             type_inst->type_info = compiler->type_info_type;
