@@ -1,0 +1,292 @@
+%YAML 1.2
+---
+# This file goes in:
+# Windows: ~/AppData/Roaming/Sublime Text 3/Packages/User/
+# OSX: ~/Library/Application Support/Sublime Text 3/Packages/User/
+
+# To have that copy up to date I usually create a link from that location to the source code repository (with mklink /H or ln -s)
+
+# For reference see:
+# http://www.sublimetext.com/docs/3/syntax.html
+
+name: Jiyu
+file_extensions: [jyu]
+scope: source.jyu
+
+variables:
+
+  # integers
+  hex_numeral: '0[xX][0-9a-fA-F]+'
+  decimal_numeral: '[0-9]+'
+
+  # floating point numbers
+  exponent: '[eE][+\-]?[0-9]+'
+  floating_point: '([0-9]+(?:\.[0-9]+)?(?:{{exponent}})?)'
+
+  basic_types: 'bool|uint8|int8|uint16|int16|uint32|int32|uint64|int64|float64|float|int|uint|string|void'
+
+contexts:
+  # The prototype context is prepended to all contexts but those setting
+  # meta_include_prototype: false.
+  prototype:
+    - include: comments
+
+  # The main context is the initial starting point of our syntax.
+  # Include other contexts from here (or specify them directly).
+  main:
+###################################################### DIRECTIVES
+    # - match: ^\s*(#)\w*(.*)\b
+    #   captures:
+    #    1: punctuation.definition.preprocessor
+    #    2: meta.preprocessor.jyu
+###################################################### ENUMS
+    - match: "(?:[^\\?\\!\\)\\\"\\w]|^)(\\.[a-zA-Z]\\w*)(?=\\()"
+      captures:
+       1: constant.language.enum
+      push: enum
+    - match: "(?:[^\\?\\!\\)\\\"\\w]|^)(\\.[a-zA-Z]\\w*)"
+      captures:
+       1: constant.language.enum
+###################################################### CONSTANTS
+    - match: \btrue\b
+      scope: constant.language.true
+    - match: \bfalse\b
+      scope: constant.language.false
+    - match: \bnull\b
+      scope: constant.language.null
+###################################################### NUMERICS
+    - match: \b0[XOB]
+      scope: invalid illegal.invalid
+    - match: '0x([[:xdigit:]][[:xdigit:]_]*)((\.\g<1>)?[pP][-+]?\d[\d_]*)?'
+      scope: constant.numeric.hex
+    - match: 0o[0-7][0-7_]*
+      scope: constant.numeric.octal
+    - match: 0b[01][01_]*
+      scope: constant.numeric.binary
+    - match: '(\d[\d_]*)(\.\g<1>)([eE][-+]?\g<1>)?'
+      scope: constant.numeric.float
+    - match: '(\d[\d_]*)([eE][-+]?\g<1>)'
+      scope: constant.numeric.float
+    - match: '(\d[\d_]*)'
+      scope: constant.numeric.decimal
+###################################################### TYPES
+    # class func
+    - match: \b(struct)\s+(?=func)
+      scope: meta.function storage.type.function
+    - match: \b(enum|struct)\s+((\w+)\s*(:)\s+(\w+))
+      scope: entity.name.type
+      captures:
+        1: keyword.entity
+        2: entity.name.type
+        3: support.class
+        4: keyword.operator
+        5: support.class
+    - match: \b(enum|struct)\s+(\w+)
+      scope: entity.name.type
+      captures:
+        1: keyword.entity
+        2: entity.name.type support.class
+###################################################### KEYWORDS
+    - match: \b_\b
+      scope: constant.language.other
+    - match: \b(import)\b
+      scope: keyword.other.import
+###################################################### CONTROL
+    - match: \b(if|where|else|for|in|is|as|while|switch|do|defer|repeat)\b
+      scope: keyword.control
+    - match: \b(break|fallthrough|guard|try|catch|throws?|rethrows|return|case|continue|default|didSet|willSet|get|set)\b
+      scope: keyword.control
+    - match: '#(available)\b'
+      scope: keyword.control
+###################################################### VARIABLES
+    - match: \b(var|let|typealias)\b
+      captures:
+        1: keyword.variable
+###################################################### STRING
+    - match: '"""'
+      push: string_multiline
+    - match: '#"'
+      push: string_raw_1
+    - match: '##"'
+      push: string_raw_2
+    - match: '###"'
+      push: string_raw_3
+    - match: '"'
+      push: string_double
+###################################################### MODIFIERS
+    - match: \b(weak|lazy|mutating|convenience|associatedtype|public|internal|private|fileprivate|final|static|override|required|prefix|postfix|infix|indirect|inout|open)\b
+      scope: storage.modifier
+    - match: '@\w+'
+      scope: storage.type.decorator
+###################################################### SUPPORT
+    # "system" classes:
+    - match: \b([A-Z]{2})\w+
+      scope: support.class
+    - match: \b(String|Array|Int\d*|Float|Double)\w+
+      scope: support.class
+    # user classes:
+    - match: \b([A-Z])\w*
+      scope: support.class
+###################################################### FUNCTIONS
+    - match: '\b(func|operator)\s+(\w+)\s*\('
+      captures:
+        1: storage.type.function
+        2: entity.name.function variable.function
+      push: function_params
+    - match: '\b(deinit|init)\s*\('
+      captures:
+        1: storage.type.function
+        2: entity.name.function variable.function
+      push: function_params
+    - match: \b(func)\s+(\w+)
+      captures:
+        1: storage.type.function
+        2: entity.name.function variable.function
+    - match: \b(func|deinit|init)\b
+      scope: entity.name.type storage.type.function
+###################################################### VARIABLES
+    - match: '(\w+):'
+      captures:
+        1: variable.parameter
+    - match: '\b\w+'
+      scope: ''
+    - match: '[-+=<>^$#@!~*\\|&?\/%.]*'
+      scope: keyword.operator
+    - match: '\('
+      push: paren_expr
+######################################################
+  function_params:
+    - include: main
+    - meta_scope: meta.function meta.toc-list
+    - match: '\)'
+      pop: true
+  string_multiline:
+    - meta_scope: string.quoted.double string.quoted.multiline
+    - match: \\\(
+      scope: punctuation.section.embedded
+      set: embedded
+    - match: \\[ntr0\\"']
+      scope: constant.character.escape.c
+    - match: \\u{[[:xdigit:]]{1,8}}
+      scope: constant.character.escape.c
+    - match: \\\n
+      scope: constant.character.escape.c
+    - match: \\
+      scope: invalid.illegal
+    - match: '"""'
+      pop: true
+  string_raw_1:
+    - meta_scope: string.quoted.double string.quoted.raw
+    - match: \\\(
+      scope: punctuation.section.embedded
+      set: embedded
+    - match: \\[ntr0\\"']
+      scope: constant.character.escape.c
+    - match: \\u{[[:xdigit:]]{1,8}}
+      scope: constant.character.escape.c
+    - match: \\\n
+      scope: constant.character.escape.c
+    - match: \\
+      scope: invalid.illegal
+    - match: '"#'
+      pop: true
+  string_raw_2:
+    - meta_scope: string.quoted.double string.quoted.raw
+    - match: \\\(
+      scope: punctuation.section.embedded
+      set: embedded
+    - match: \\[ntr0\\"']
+      scope: constant.character.escape.c
+    - match: \\u{[[:xdigit:]]{1,8}}
+      scope: constant.character.escape.c
+    - match: \\\n
+      scope: constant.character.escape.c
+    - match: \\
+      scope: invalid.illegal
+    - match: '"##'
+      pop: true
+  string_raw_3:
+    - meta_scope: string.quoted.double string.quoted.raw
+    - match: \\\(
+      scope: punctuation.section.embedded
+      set: embedded
+    - match: \\[ntr0\\"']
+      scope: constant.character.escape.c
+    - match: \\u{[[:xdigit:]]{1,8}}
+      scope: constant.character.escape.c
+    - match: \\\n
+      scope: constant.character.escape.c
+    - match: \\
+      scope: invalid.illegal
+    - match: '"###'
+      pop: true
+  string_double:
+    - meta_scope: string.quoted.double
+    - match: \\\(
+      scope: punctuation.section.embedded
+      set: embedded
+    - match: \\[ntr0\\"']
+      scope: constant.character.escape.c
+    - match: \\u{[[:xdigit:]]{1,8}}
+      # Unicode scalar escape
+      # feels like this needs a different scope
+      scope: constant.character.escape.c
+    - match: \\
+      scope: invalid.illegal
+    - match: '"'
+      pop: true
+  embedded:
+    - include: main
+    - match: \(
+      push: nested
+    - match: \)
+      scope: punctuation.section.embedded
+      set: string_double
+  nested:
+    - include: main
+    - match: \(
+      push: nested
+    - match: \)
+      pop: true
+  paren_expr:
+    - include: main
+    - match: '\)'
+      pop: true
+  enum:
+    - include: main
+    - match: '\)'
+      pop: true
+###################################################### MISC
+  # Highlight missing semi-colon:
+  statement-terminator:
+    - match: '\s*;' # @@ Allow semi-colon on next line?
+      pop: true
+    - match: '\n'
+      scope: invalid.illegal.missing-semi-colon.jyu
+      pop: true
+###################################################### COMMENTS
+  comments:
+    - match: \*/(?!\*)
+      scope: invalid.illegal.stray-comment-end.jyu
+    # Comments begin with a '//' and finish at the end of the line.
+    - match: //
+      scope: punctuation.definition.comment.jyu
+      push:
+        - meta_scope: comment.line.double-slash.jyu
+        - match: '(\\)$\n'
+          captures:
+            1: punctuation.separator.continuation.jyu
+        - match: \n
+          pop: true
+    # Comments begin with a '//' and finish at the end of the line.
+    - match: /\*
+      scope: punctuation.definition.comment.jyu
+      push: comment_block
+  comment_block:
+    - meta_scope: comment.block.jyu
+    - match: /\*
+      push: comment_block
+    - match: \*/
+      scope: punctuation.definition.comment.jyu
+      pop: true
+###################################################### END
