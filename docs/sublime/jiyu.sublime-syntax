@@ -14,6 +14,7 @@ file_extensions: [jyu]
 scope: source.jyu
 
 variables:
+  identifier: '\b[[:alpha:]_]*\b'
 
   # integers
   hex_numeral: '0[xX][0-9a-fA-F]+'
@@ -39,14 +40,6 @@ contexts:
     #   captures:
     #    1: punctuation.definition.preprocessor
     #    2: meta.preprocessor.jyu
-###################################################### ENUMS
-    - match: "(?:[^\\?\\!\\)\\\"\\w]|^)(\\.[a-zA-Z]\\w*)(?=\\()"
-      captures:
-       1: constant.language.enum
-      push: enum
-    - match: "(?:[^\\?\\!\\)\\\"\\w]|^)(\\.[a-zA-Z]\\w*)"
-      captures:
-       1: constant.language.enum
 ###################################################### CONSTANTS
     - match: \btrue\b
       scope: constant.language.true
@@ -70,82 +63,59 @@ contexts:
     - match: '(\d[\d_]*)'
       scope: constant.numeric.decimal
 ###################################################### TYPES
-    # class func
-    - match: \b(struct)\s+(?=func)
-      scope: meta.function storage.type.function
-    - match: \b(enum|struct)\s+((\w+)\s*(:)\s+(\w+))
-      scope: entity.name.type
+    - match: \b({{basic_types}})\b
+      scope: storage.type.jyu
+    - match: \b(enum)\s+({{identifier}})\s*(:)\s*({{basic_types}})
       captures:
         1: keyword.entity
-        2: entity.name.type
-        3: support.class
-        4: keyword.operator
-        5: support.class
-    - match: \b(enum|struct)\s+(\w+)
-      scope: entity.name.type
+        2: entity.name.jyu
+        3: keyword.operator
+        4: storage.type.jyu
+    - match: \b(enum|struct)\s+({{identifier}})
       captures:
         1: keyword.entity
-        2: entity.name.type support.class
+        2: entity.name.jyu
 ###################################################### KEYWORDS
-    - match: \b_\b
-      scope: constant.language.other
-    - match: \b(import)\b
-      scope: keyword.other.import
-###################################################### CONTROL
     - match: \b(if|where|else|for|in|is|as|while|switch|do|defer|repeat)\b
       scope: keyword.control
-    - match: \b(break|fallthrough|guard|try|catch|throws?|rethrows|return|case|continue|default|didSet|willSet|get|set)\b
+    - match: \b(break|fallthrough|return|case|continue|default)\b
       scope: keyword.control
-    - match: '#(available)\b'
-      scope: keyword.control
+    - match: \b(#import)\b
+      scope: keyword.other.import
+    - match: 'library\b'
+      scope: keyword.other.import
 ###################################################### VARIABLES
-    - match: \b(var|let|typealias)\b
+    - match: \b(var|let|typealias)\s+({{identifier}})\s*([=:])?
       captures:
         1: keyword.variable
+        2: entity.name.jyu
+        3: keyword.operator
 ###################################################### STRING
     - match: '"""'
       push: string_multiline
-    - match: '#"'
-      push: string_raw_1
-    - match: '##"'
-      push: string_raw_2
-    - match: '###"'
-      push: string_raw_3
     - match: '"'
       push: string_double
-###################################################### MODIFIERS
-    - match: \b(weak|lazy|mutating|convenience|associatedtype|public|internal|private|fileprivate|final|static|override|required|prefix|postfix|infix|indirect|inout|open)\b
-      scope: storage.modifier
+# ###################################################### MODIFIERS
     - match: '@\w+'
       scope: storage.type.decorator
-###################################################### SUPPORT
-    # "system" classes:
-    - match: \b([A-Z]{2})\w+
-      scope: support.class
-    - match: \b(String|Array|Int\d*|Float|Double)\w+
-      scope: support.class
-    # user classes:
-    - match: \b([A-Z])\w*
-      scope: support.class
 ###################################################### FUNCTIONS
-    - match: '\b(func|operator)\s+(\w+)\s*\('
+    # @@ Add better support for template arguments.
+    - match: '\b(func)\s+(@\w+)\s+({{identifier}})\s*\('
       captures:
         1: storage.type.function
-        2: entity.name.function variable.function
+        2: storage.type.decorator.jyu
+        3: entity.name.jyu
       push: function_params
-    - match: '\b(deinit|init)\s*\('
+    - match: '\b(func|operator)\s+(\w+)\s*(<.*>)?\s*\('
       captures:
         1: storage.type.function
-        2: entity.name.function variable.function
+        2: entity.name.jyu
+        3: keyword.operator
       push: function_params
-    - match: \b(func)\s+(\w+)
-      captures:
-        1: storage.type.function
-        2: entity.name.function variable.function
-    - match: \b(func|deinit|init)\b
-      scope: entity.name.type storage.type.function
+
 ###################################################### VARIABLES
-    - match: '(\w+):'
+    # @@ Allow this only in function_params scope
+    - match: '(\w+)\s*:'
       captures:
         1: variable.parameter
     - match: '\b\w+'
@@ -249,10 +219,6 @@ contexts:
     - match: \)
       pop: true
   paren_expr:
-    - include: main
-    - match: '\)'
-      pop: true
-  enum:
     - include: main
     - match: '\)'
       pop: true
