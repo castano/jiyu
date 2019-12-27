@@ -1,8 +1,19 @@
 #include "clang_import.h"
 #include "compiler.h"
+#include "llvm.h"
 
 #include <new> // for placement new
 #include <clang-c/Index.h>
+
+#ifdef WIN32
+#pragma warning(push, 0)
+#endif
+
+#include "llvm/Target/TargetMachine.h"
+
+#ifdef WIN32
+#pragma warning(pop)
+#endif
 
 #define IMPORT_NEW(type) (new (compiler->get_memory(sizeof(type))) type())
 
@@ -318,6 +329,13 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
                 defer { clang_disposeString(cxstring); };
 
                 String name = to_string(clang_getCString(cxstring));
+                // On Darwin targets (MacOSX, iOS, etc..), getMangling returns the full symbol name
+                // of the symbol as it appears in the binary (malloc would be mangled to _malloc), but
+                // LLVM expects the symbol name without the beginning underscore that MacOSX tools insert
+                // at link time, so skip it.
+                if (compiler->llvm_gen->TargetMachine->getTargetTriple().isOSDarwin()) {
+                    advance(&name, 1);
+                }
                 function->linkage_name = compiler->copy_string(name);
             }
 
@@ -385,8 +403,14 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
             current_scope->statements.add(alias);
             current_scope->declarations.add(alias);
 
+            Visitor_Data data;
+            data.compiler = compiler;
+            data.target_scope = visitor_data->target_scope; // @TODO
+            data.usr_map = usr_map;
 
-            return CXChildVisit_Recurse; // @TODO This should just be a break and we can call cursor_visitor with the proper scope information to build the proper enum type.
+            clang_visitChildren(cursor, cursor_visitor, &data);
+
+            break;
         }
 
         case CXCursor_EnumConstantDecl: {
@@ -419,48 +443,56 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
 
         case CXCursor_UnionDecl:
         case CXCursor_StructDecl: {
-            cursor = clang_getCursorDefinition(cursor);
-            if (find_ast(usr_map, my_usr_string)) {
+            if (find_ast(usr_map, my_usr_string) && !clang_isCursorDefinition(cursor)) {
                 break; // Skip, we've already filled the type.
             }
 
-            Ast_Struct *_struct = IMPORT_NEW(Ast_Struct);
-            _struct->is_union = (cursor.kind == CXCursor_UnionDecl);
-            _struct->type_value = make_struct_type(compiler, _struct);
-            add_usr_mapping(usr_map, my_usr_string, _struct);
-
-            {
-                auto cursor_type = clang_getCursorType(cursor);
-                auto type_value = _struct->type_value;
-                type_value->size = clang_Type_getSizeOf(cursor_type);
-                type_value->stride = type_value->size;
-                type_value->alignment = clang_Type_getAlignOf(cursor_type);
+            Ast_Struct *_struct = nullptr;
+            if (auto ast = find_ast(usr_map, my_usr_string)) {
+                _struct = static_cast<Ast_Struct *>(ast);
+            } else {
+                _struct = IMPORT_NEW(Ast_Struct);
+                _struct->is_union = (cursor.kind == CXCursor_UnionDecl);
+                _struct->type_value = make_struct_type(compiler, _struct);
+                add_usr_mapping(usr_map, my_usr_string, _struct);
             }
 
-            _struct->member_scope.parent = current_scope;
+            assert(_struct->type == AST_STRUCT);
 
-            CXString cxstring = clang_getCursorSpelling(cursor);
-            defer { clang_disposeString(cxstring); };
+            if (clang_isCursorDefinition(cursor) || clang_Cursor_isNull(clang_getCursorDefinition(cursor))) {
+                {
+                    auto cursor_type = clang_getCursorType(cursor);
+                    auto type_value = _struct->type_value;
+                    type_value->size = clang_Type_getSizeOf(cursor_type);
+                    type_value->stride = type_value->size;
+                    type_value->alignment = clang_Type_getAlignOf(cursor_type);
+                }
 
-            String name = to_string(clang_getCString(cxstring));
-            // printf("Struct name: %.*s\n", PRINT_ARG(name));
+                _struct->member_scope.parent = current_scope;
 
-            if (name != String()) {
-                Atom *name_atom = compiler->make_atom(name);
-                _struct->identifier = make_identifier(compiler, name_atom);
-                _struct->identifier->enclosing_scope = current_scope;
+                CXString cxstring = clang_getCursorSpelling(cursor);
+                defer { clang_disposeString(cxstring); };
+
+                String name = to_string(clang_getCString(cxstring));
+                // printf("Struct name: %.*s\n", PRINT_ARG(name));
+
+                if (name != String()) {
+                    Atom *name_atom = compiler->make_atom(name);
+                    _struct->identifier = make_identifier(compiler, name_atom);
+                    _struct->identifier->enclosing_scope = current_scope;
+                }
+
+                Visitor_Data data;
+                data.compiler = compiler;
+                data.target_scope = &_struct->member_scope;
+                data.usr_map = usr_map;
+
+                clang_visitChildren(cursor, cursor_visitor, &data);
+
+                // @Incomplete add to type-map
+                current_scope->statements.add(_struct);
+                current_scope->declarations.add(_struct);
             }
-
-            Visitor_Data data;
-            data.compiler = compiler;
-            data.target_scope = &_struct->member_scope;
-            data.usr_map = usr_map;
-
-            clang_visitChildren(cursor, cursor_visitor, &data);
-
-            // @Incomplete add to type-map
-            current_scope->statements.add(_struct);
-            current_scope->declarations.add(_struct);
             break;
         }
 
