@@ -1,0 +1,39 @@
+
+#import "Basic";
+#import "LibC";
+
+let singleLineString = "These are the same.";
+
+
+let multilineString = """
+These are the same.
+""";
+
+let multilineString2 = """These are the same.""";
+
+
+let multilineString3 = """
+    These are the same.
+    """;
+
+
+
+func main() {
+    // Multi-line string equivalency.
+    printf("%.*s\n", singleLineString.length, singleLineString.data);
+    printf("%.*s\n", multilineString.length, multilineString.data);
+    printf("%.*s\n", multilineString2.length, multilineString2.data);
+    printf("%.*s\n", multilineString3.length, multilineString3.data);
+    assert(singleLineString == multilineString);
+    assert(singleLineString == multilineString2);
+    assert(singleLineString == multilineString3);
+
+    let indentation = """
+        This text has indentation.
+        And that is fine.
+        """;
+
+    printf("%.*s\n", indentation.length, indentation.data);
+
+}
+
