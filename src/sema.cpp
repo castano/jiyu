@@ -117,7 +117,7 @@ String get_mangled_name(Compiler *compiler, Ast_Function *function) {
     builder.append("_H");
 
     assert(function->scope);
-    maybe_add_parent_scope_name(&builder, function->scope);
+    maybe_add_parent_scope_name(&builder, function->scope->parent);
 
     String name = function->identifier->name->name;
     builder.print("%d%.*s", name.length, name.length, name.data);
