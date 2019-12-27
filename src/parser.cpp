@@ -1428,6 +1428,8 @@ Ast_Function *Parser::parse_function() {
             function->is_marked_metaprogram = true;
             next_token();
         } else if (token->type == Token::TAG_EXPORT) {
+            function->is_exported = true;
+
             next_token();
             if (!expect_and_eat(Token::LEFT_PAREN)) return nullptr;
 

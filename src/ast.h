@@ -313,6 +313,7 @@ struct Ast_Function : Ast_Expression {
     bool is_c_function = false;
     bool is_c_varargs = false;
     bool is_template_function = false;
+    bool is_exported = false;
 
     String linkage_name;       // @NoCopy
     bool body_checked = false; // @NoCopy
