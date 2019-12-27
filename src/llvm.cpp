@@ -697,7 +697,7 @@ Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
                 assert(dyn_cast<Constant>(expr));
 
                 init = static_cast<Constant *>(expr);
-            } else if (is_struct_type(member_info)) {
+            } else if (is_struct_type(member_info) && !get_final_type(member_info)->is_union) {
                 init = get_constant_struct_initializer(member_info);
             } else {
                 init = Constant::getNullValue(get_type(member_info));
@@ -740,8 +740,11 @@ void LLVM_Generator::default_init_struct(Value *decl_value, Ast_Type_Info *info)
             } else {
                 auto mem_info = get_type_info(decl);
                 if (is_struct_type(mem_info)) {
-                    auto gep = dereference(decl_value, element_path_index, true);
-                    default_init_struct(gep, mem_info);
+                    auto final_type = get_final_type(mem_info);
+                    if (!final_type->is_union) {
+                        auto gep = dereference(decl_value, element_path_index, true);
+                        default_init_struct(gep, mem_info);
+                    }
                 }
             }
 
