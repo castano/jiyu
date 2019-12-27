@@ -44,6 +44,8 @@
 
 #include "llvm/Transforms/Utils/Cloning.h"
 
+#include "llvm/Transforms/Utils.h"
+
 #ifdef WIN32
 #pragma warning(pop)
 #endif
@@ -253,6 +255,16 @@ void LLVM_Generator::finalize() {
 
     legacy::PassManager pass;
     auto FileType = TargetMachine::CGFT_ObjectFile;
+
+    /*
+    auto fpm = make_unique<legacy::FunctionPassManager>(llvm_module);
+    fpm->add(createPromoteMemoryToRegisterPass());
+    fpm->doInitialization();
+
+    for (auto &func : llvm_module->functions()) {
+        fpm->run(func);
+    }
+    */
 
     // llvm_module->dump();
     if (compiler->build_options.emit_llvm_ir) {
@@ -674,6 +686,10 @@ Value *LLVM_Generator::dereference(Value *value, s64 element_path_index, bool is
 // use a constant-expression, but on the stack, it should generally be better to write to
 // the individual fields because the optimizers can better reason about splitting aggregates
 // into registers, or something...
+
+// Actually, I've just decided to use get_constant_struct_initializer for default_struct_init
+// because the previous method was generating a large amount of store instructions for zero-initialized
+// fields (and slowing down compilation by quite a lot). -josh 27 December 2019
 Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
     info = get_final_type(info);
 
@@ -720,37 +736,37 @@ void LLVM_Generator::default_init_struct(Value *decl_value, Ast_Type_Info *info)
 
     auto _struct = info->struct_decl;
 
-    auto null_value = Constant::getNullValue(get_type(info));
-    assert(null_value->getType() == decl_value->getType()->getPointerElementType());
-    irb->CreateStore(null_value, decl_value);
+    auto initial_value = get_constant_struct_initializer(info);
+    assert(initial_value->getType() == decl_value->getType()->getPointerElementType());
+    irb->CreateStore(initial_value, decl_value);
 
-    s32 element_path_index = 0;
-    for (auto member: _struct->member_scope.declarations) {
-        if (member->type == AST_DECLARATION) {
-            auto decl = static_cast<Ast_Declaration *>(member);
+    // s32 element_path_index = 0;
+    // for (auto member: _struct->member_scope.declarations) {
+    //     if (member->type == AST_DECLARATION) {
+    //         auto decl = static_cast<Ast_Declaration *>(member);
 
-            if (decl->is_let) continue;
-            assert(decl->is_struct_member);
+    //         if (decl->is_let) continue;
+    //         assert(decl->is_struct_member);
 
-            if (decl->initializer_expression) {
-                auto expr = emit_expression(decl->initializer_expression);
+    //         if (decl->initializer_expression) {
+    //             auto expr = emit_expression(decl->initializer_expression);
 
-                auto gep = dereference(decl_value, element_path_index, true);
-                irb->CreateStore(expr, gep);
-            } else {
-                auto mem_info = get_type_info(decl);
-                if (is_struct_type(mem_info)) {
-                    auto final_type = get_final_type(mem_info);
-                    if (!final_type->is_union) {
-                        auto gep = dereference(decl_value, element_path_index, true);
-                        default_init_struct(gep, mem_info);
-                    }
-                }
-            }
+    //             auto gep = dereference(decl_value, element_path_index, true);
+    //             irb->CreateStore(expr, gep);
+    //         } else {
+    //             auto mem_info = get_type_info(decl);
+    //             if (is_struct_type(mem_info)) {
+    //                 auto final_type = get_final_type(mem_info);
+    //                 if (!final_type->is_union) {
+    //                     auto gep = dereference(decl_value, element_path_index, true);
+    //                     default_init_struct(gep, mem_info);
+    //                 }
+    //             }
+    //         }
 
-            element_path_index++;
-        }
-    }
+    //         element_path_index++;
+    //     }
+    // }
 }
 
 Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalue) {
@@ -1069,15 +1085,16 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
         case AST_DECLARATION: {
             auto decl = static_cast<Ast_Declaration *>(expression);
-            auto decl_value = get_value_for_decl(decl);
+            if (decl->is_let && !decl->is_readonly_variable) return nullptr;
 
+            auto decl_value = get_value_for_decl(decl);
             if (decl->initializer_expression) {
                 auto value = emit_expression(decl->initializer_expression);
                 irb->CreateStore(value, decl_value);
             } else {
                 // if a declaration does not have an initializer, initialize to 0
                 auto type_info = get_type_info(decl);
-                if (type_info->type == Ast_Type_Info::STRUCT) {
+                if (is_struct_type(type_info) && !get_final_type(type_info)->is_union) {
                     default_init_struct(decl_value, type_info);
                 } else {
                     auto type = decl_value->getType()->getPointerElementType();
@@ -1528,7 +1545,12 @@ Function *LLVM_Generator::get_or_create_function(Ast_Function *function) {
 
     if (!func) {
         FunctionType *function_type = create_function_type(function);
-        func = Function::Create(function_type, GlobalValue::LinkageTypes::ExternalLinkage, string_ref(linkage_name), llvm_module);
+        auto linkage = GlobalValue::LinkageTypes::ExternalLinkage;
+        if (!function->is_c_function && !function->is_exported) {
+            linkage = GlobalValue::LinkageTypes::InternalLinkage;
+        }
+
+        func = Function::Create(function_type, linkage, string_ref(linkage_name), llvm_module);
 
         array_count_type i = 0;
         for (auto &a : func->args()) {
@@ -1556,7 +1578,9 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
         while (it->substitution) it = it->substitution;
 
         if (it->type != AST_DECLARATION) continue;
+
         auto decl = static_cast<Ast_Declaration *>(it);
+        if (decl->is_let && !decl->is_readonly_variable) continue;
 
         auto alloca = create_alloca_in_entry(irb, get_type(get_type_info(it)));
 
@@ -1589,6 +1613,7 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
 
         if (it->type != AST_DECLARATION) continue;
         auto decl = static_cast<Ast_Declaration *>(it);
+        if (decl->is_let && !decl->is_readonly_variable) continue;
 
         auto alloca = create_alloca_in_entry(irb, get_type(get_type_info(it)));
 
@@ -1657,6 +1682,7 @@ DISubroutineType *LLVM_Generator::get_debug_subroutine_type(Ast_Type_Info *type)
 
 void LLVM_Generator::emit_function(Ast_Function *function) {
     assert(function->identifier && function->identifier->name);
+    if (!function->scope) return;
 
     Function *func = get_or_create_function(function);
 
