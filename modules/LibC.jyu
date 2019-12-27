@@ -36,6 +36,7 @@ func @c_function fseek(file: *FILE, offset: int32 /*long int*/, origin: int32);
 typealias size_t = uint32; // @FixMe I dont know if this is right
 
 func @c_function malloc(size: size_t) -> *void;
+func @c_function calloc(num: size_t, size: size_t) -> *void;
 func @c_function free(ptr: *void);
 func @c_function memcpy(dest: *void, src: *void, count: size_t);
 
@@ -55,3 +56,5 @@ func @c_function sin(a: double) -> double;
 func @c_function sinf(a: float) -> float;
 
 func @c_function exit(exit_code: int32) -> void;
+
+func @c_function system(command: *uint8) -> int32;
