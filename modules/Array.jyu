@@ -41,7 +41,7 @@ func __array_reset<T>(array: *[..] T) {
     array.count = 0;
     array.allocated = 0;
 
-    if array.data free(array.data);
+    if array.data free(cast(*void) array.data);
     array.data = null;
 }
 

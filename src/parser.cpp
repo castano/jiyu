@@ -1520,10 +1520,26 @@ Ast_Function *Parser::parse_function() {
 
     Token *token = peek_token();
 
+    // @Incomplete disallow @export when @c_function is used, and vice versa.
     while (is_tag_token(token)) {
         if (token->type == Token::TAG_C_FUNCTION) {
             function->is_c_function = true;
             next_token();
+
+            token = peek_token();
+            if (token->type == Token::LEFT_PAREN) {
+                next_token();
+
+                // We expect a string here instead of an identifier because the user may need punctuation in the symbol name.
+                // func @c_function("linkage_name") my_function();
+                if (!expect(Token::STRING)) return nullptr;
+
+                token = peek_token();
+                function->linkage_name = token->string;
+                next_token();
+
+                if (!expect_and_eat(Token::RIGHT_PAREN)) return nullptr;
+            }
         } else if (token->type == Token::TAG_META) {
             function->is_marked_metaprogram = true;
             next_token();
@@ -1531,9 +1547,9 @@ Ast_Function *Parser::parse_function() {
             next_token();
             if (!expect_and_eat(Token::LEFT_PAREN)) return nullptr;
 
-            // We expect an identifier here but don't call parse_identifier since we only care about the value typed in.
-            // func @export(linkage_name) my_function() {}
-            if (!expect(Token::IDENTIFIER)) return nullptr;
+            // We expect a string here instead of an identifier because the user may need punctuation in the symbol name.
+            // func @export("linkage_name") my_function() {}
+            if (!expect(Token::STRING)) return nullptr;
 
             token = peek_token();
             function->linkage_name = token->string;

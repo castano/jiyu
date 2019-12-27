@@ -241,7 +241,7 @@ void LLVM_Generator::finalize() {
     }
 
     String exec_name = compiler->build_options.executable_name;
-    String obj_name = mprintf("%.*s.o", exec_name.length, exec_name.data);
+    String obj_name = mprintf("%.*s.o", PRINT_ARG(exec_name));
 
     std::error_code EC;
     raw_fd_ostream dest(string_ref(obj_name), EC, sys::fs::F_None);
@@ -255,6 +255,16 @@ void LLVM_Generator::finalize() {
     auto FileType = TargetMachine::CGFT_ObjectFile;
 
     // llvm_module->dump();
+    if (compiler->build_options.emit_llvm_ir) {
+        String ll_name = mprintf("%.*s.ll", PRINT_ARG(exec_name));
+        raw_fd_ostream ir_stream(string_ref(ll_name), EC, sys::fs::F_None);
+        if (EC) {
+            compiler->report_error((Ast *)nullptr, "Could not open file: %s\n", EC.message().c_str());
+            return;
+        }
+        llvm_module->print(ir_stream, nullptr);
+        free(ll_name.data);
+    }
 
     pass.add(createVerifierPass(false));
     if (TargetMachine->addPassesToEmitFile(pass, dest, nullptr, FileType)) {
@@ -729,7 +739,7 @@ Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
                 assert(dyn_cast<Constant>(expr));
 
                 init = static_cast<Constant *>(expr);
-            } else if (is_struct_type(member_info)) {
+            } else if (is_struct_type(member_info) && !get_final_type(member_info)->is_union) {
                 init = get_constant_struct_initializer(member_info);
             } else {
                 init = Constant::getNullValue(get_type(member_info));
@@ -772,8 +782,11 @@ void LLVM_Generator::default_init_struct(Value *decl_value, Ast_Type_Info *info)
             } else {
                 auto mem_info = get_type_info(decl);
                 if (is_struct_type(mem_info)) {
-                    auto gep = dereference(decl_value, element_path_index, true);
-                    default_init_struct(gep, mem_info);
+                    auto final_type = get_final_type(mem_info);
+                    if (!final_type->is_union) {
+                        auto gep = dereference(decl_value, element_path_index, true);
+                        default_init_struct(gep, mem_info);
+                    }
                 }
             }
 
@@ -885,7 +898,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                         if (is_pointer_type(left_type) &&
                             is_int_type(right_type)) {
-                            return irb->CreateGEP(left, {right});
+                            return irb->CreateGEP(left, right);
                         } else if (is_pointer_type(left_type) && is_pointer_type(right_type)) {
                             Value *left_int  = irb->CreatePtrToInt(left,  type_intptr);
                             Value *right_int = irb->CreatePtrToInt(right, type_intptr);
@@ -1495,7 +1508,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 return element;
             } else if (type->type == Ast_Type_Info::POINTER) {
                 auto ptr = irb->CreateLoad(array);
-                auto element = irb->CreateGEP(ptr, {index});
+                auto element = irb->CreateGEP(ptr, index);
 
                 if (!is_lvalue) return irb->CreateLoad(element);
                 return element;

@@ -71,6 +71,43 @@ void Lexer::eat_whitespace() {
     }
 }
 
+static bool translate_escape_sequence(char c, String & output_string) {
+    if (c == '0') {
+        output_string.length++;
+        output_string.data[output_string.length-1] = '\0';
+    }
+    else if (c == 'n') {
+        output_string.length++;
+        output_string.data[output_string.length-1] = '\n';
+    }
+    else if (c == 'r') {
+        output_string.length++;
+        output_string.data[output_string.length-1] = '\r';
+    }
+    else if (c == 't') {
+        output_string.length++;
+        output_string.data[output_string.length-1] = '\t';
+    }
+    else if (c == '\\') {
+        output_string.length++;
+        output_string.data[output_string.length-1] = '\\';
+    }
+    else if (c == '\"') {
+        output_string.length++;
+        output_string.data[output_string.length-1] = '\"';
+    }
+    else if (c == '\'') {
+        output_string.length++;
+        output_string.data[output_string.length-1] = '\'';
+    }
+    else {
+        return false;
+    }
+    // @Incomplete Add support for unicode scalar values \u{###}
+
+    return true;
+}
+
 Token Lexer::lex_string(char delim) {
     assert(text[current_char] == delim);
 
@@ -110,28 +147,14 @@ Token Lexer::lex_string(char delim) {
         for (string_length_type i = 0; i < input.length; ++i) {
             if (input[i] == '\\') {
                 if (i + 1 < input.length) {
-                    if (input[i + 1] == 'n') {
-                        output_string.length++;
-                        output_string.data[output_string.length-1] = '\n';
-
+                    if (translate_escape_sequence(input[i + 1], output_string)) {
                         ++i;
                         continue;
                     }
-
-                    if (input[i + 1] == '\\') {
-                        output_string.length++;
-                        output_string.data[output_string.length-1] = '\\';
-
-                        ++i;
-                        continue;
-                    }
-
-                    if (input[i + 1] == '\"') {
-                        output_string.length++;
-                        output_string.data[output_string.length-1] = '\"';
-
-                        ++i;
-                        continue;
+                    else {
+                        Token t = make_string_token(Token::STRING, Span(i, i+1), text.substring(i, i+1));
+                        compiler->report_error(&t, "Unrecognized escape sequence.");
+                        return t;
                     }
                 }
             }
@@ -156,6 +179,112 @@ Token Lexer::lex_string(char delim) {
         return t;
     }
 }
+
+Token Lexer::lex_multiline_string() {
+    assert(strncmp(text.data+current_char, "\"\"\"", 3) == 0);
+
+    auto start = current_char;
+    current_char += 4;
+
+    // Find end of the string.
+    while (current_char < text.length && (text[current_char] != '\"' || text[current_char - 1] != '\"' || text[current_char - 2] != '\"')) {
+        current_char++;
+    }
+
+    if (current_char >= text.length) {
+        // create a faux token for reporting
+        Token t = make_string_token(Token::STRING, Span(start, current_char - start), text.substring(start, current_char - start));
+        compiler->report_error(&t, "End-of-file found while lexing multi-line string constant!");
+
+        // return the token so we dont report other errors related to lexing this string
+        return t;
+    }
+
+    current_char++;
+    auto length = current_char - start;
+
+    // Skip spaces at the beginning of the string.
+    auto begin = start + 3;
+    while (text[begin] == ' ' || text[begin] == '\t' || text[begin] == '\r') {
+        begin += 1;
+    }
+    if (text[begin] != '\n') {
+        // If not an empty line, then do not skip.
+        begin = start + 3;
+    }
+    else {
+        begin += 1;
+    }
+
+    // Skip whitespace at the end of the string.
+    auto end = current_char - 3 - 1;
+    while (text[end] == ' ' || text[end] == '\t' || text[end] == '\r') {
+        end -= 1;
+    }
+    if (text[end] != '\n') {
+        // If not an empty line, then do not skip.
+        end = current_char - 3 - 1;
+    }
+    else {
+        end -= 1;
+    }
+
+    String input = text.substring(begin, end-begin+1);
+    String output_string = copy_string(input);  // This is just to allocate the string, we don't need the copy.
+    output_string.length = 0;
+
+    if (input.length == 0) {
+        return make_string_token(Token::STRING, Span(start, length), output_string);
+    }
+
+    // We remove indentation from the beginning of the string, but we don't allow mixing tabs and spaces.
+    int indent_spaces = 0;
+    int indent_tabs = 0;
+    if (input[0] == ' ') {
+        while (indent_spaces < input.length && input[indent_spaces] == ' ') indent_spaces += 1;    
+    }
+    else if (input[0] == '\t') {
+        while (indent_tabs < input.length && input[indent_tabs] == '\t') indent_tabs += 1;    
+    }
+
+    for (string_length_type i = indent_spaces + indent_tabs; i < input.length; ++i) {
+        if (input[i] == '\\') {
+            if (i + 1 < input.length) {
+                if (translate_escape_sequence(input[i + 1], output_string)) {
+                    ++i;
+                    continue;
+                }
+                else {
+                    Token t = make_string_token(Token::STRING, Span(i, i+1), text.substring(i, i+1));
+                    compiler->report_error(&t, "Unrecognized escape sequence.");
+                    return t;
+                }
+            }
+            else {
+                assert(false); // @@ Can this happen?
+            }
+        } else {
+            output_string.length++;
+            output_string.data[output_string.length-1] = input[i];
+
+            // Try to remove indentation.
+            if (input[i] == '\n') {
+                while (indent_spaces && i+1 < input.length && input[i+1] == ' ') {
+                    indent_spaces -= 1; i += 1;
+                }
+                while (indent_tabs && i+1 < input.length && input[i+1] == '\t') {
+                    indent_tabs -= 1; i += 1;
+                }
+                if (indent_tabs || indent_spaces) {
+                    // @@ Warn if indentation not removed?
+                }
+            }
+        }
+    }
+
+    return make_string_token(Token::STRING, Span(start, length), output_string);
+}
+
 
 Token Lexer::lex_token() {
     eat_whitespace();
@@ -274,8 +403,14 @@ Token Lexer::lex_token() {
             return make_integer_token(value, Span(start, current_char - start));
         }
     } else if (text[current_char] == '\"') {
-        Token value = lex_string('\"');
-        return value;
+        if (current_char+2 < text.length && text[current_char+1] == '\"' && text[current_char+2] == '\"') {
+            Token value = lex_multiline_string();
+            return value;
+        }
+        else {
+            Token value = lex_string('\"');
+            return value;
+        }
     } else if (text[current_char] == '\'') {
         Token value = lex_string('\'');
         if (compiler->errors_reported) return value;

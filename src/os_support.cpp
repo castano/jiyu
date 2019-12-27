@@ -87,7 +87,7 @@ bool is_debugger_present() {
 #ifdef LINUX
 #include <unistd.h>
 #include <glob.h>
-
+#include <errno.h>
 String get_executable_path() {
     const u32 BUFFER_SIZE = 512;    // @@ Fixed buffers.
     char buf[BUFFER_SIZE];
@@ -95,6 +95,9 @@ String get_executable_path() {
     u32 bufsize = BUFFER_SIZE;
     auto result = readlink("/proc/self/exe", buf, bufsize);
     if (result < 0) return String();
+
+    assert((u32)result < bufsize);
+    buf[result] = 0;
 
     char * real_path = realpath(buf, nullptr);
     return to_string(real_path);

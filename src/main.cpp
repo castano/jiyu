@@ -190,6 +190,7 @@ extern "C" {
         }
         compiler->build_options.only_want_obj_file  = options->only_want_obj_file;
         compiler->build_options.verbose_diagnostics = options->verbose_diagnostics;
+        compiler->build_options.emit_llvm_ir        = options->emit_llvm_ir;
 
         compiler->llvm_gen = new LLVM_Generator(compiler);
         compiler->llvm_gen->preinit();
@@ -528,6 +529,7 @@ int main(int argc, char **argv) {
     bool verbose = false;
     String target_triple;
     char *import_c_file = nullptr;
+    bool emit_llvm_ir = false;
 
     int metaprogram_arg_start = -1;
 
@@ -538,6 +540,8 @@ int main(int argc, char **argv) {
             verbose = true;
         } else if (to_string("-c") == to_string(argv[i])) {
             only_want_obj_file = true;
+        } else if (to_string("-emit-llvm") == to_string(argv[i])) {
+            emit_llvm_ir = true;
         } else if (to_string("-o") == to_string(argv[i])) {
             if (i+1 < argc) {
                 output_name = to_string(argv[i+1]);
@@ -590,6 +594,7 @@ int main(int argc, char **argv) {
     options.target_triple       = target_triple;
     options.only_want_obj_file  = only_want_obj_file;
     options.verbose_diagnostics = verbose;
+    options.emit_llvm_ir        = emit_llvm_ir;
 
     auto compiler = create_compiler_instance(&options);
     compiler->is_metaprogram = is_metaprogram;

@@ -147,6 +147,7 @@ struct Lexer {
     Token make_float_token(double value, Span span);
     
     Token lex_string(char delim);
+    Token lex_multiline_string();
     
     void eat_whitespace();
     Token lex_token();
