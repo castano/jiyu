@@ -14,7 +14,7 @@ file_extensions: [jyu]
 scope: source.jyu
 
 variables:
-  identifier: '\b[[:alpha:]_]*\b'
+  identifier: '\b[[:alpha:]_][[:alnum:]_]*\b'
 
   # integers
   hex_numeral: '0[xX][0-9a-fA-F]+'
@@ -26,6 +26,8 @@ variables:
 
   basic_types: 'bool|uint8|int8|uint16|int16|uint32|int32|uint64|int64|float64|float|int|uint|string|void'
 
+  constants: 'true|false|null'
+
 contexts:
   # The prototype context is prepended to all contexts but those setting
   # meta_include_prototype: false.
@@ -35,60 +37,101 @@ contexts:
   # The main context is the initial starting point of our syntax.
   # Include other contexts from here (or specify them directly).
   main:
-###################################################### DIRECTIVES
-    # - match: ^\s*(#)\w*(.*)\b
-    #   captures:
-    #    1: punctuation.definition.preprocessor
-    #    2: meta.preprocessor.jyu
+    - include: global
+
+  global:
+    # Global variables.    
+    - match: \b(var|let|typealias)\s+({{identifier}})\s*([=:])?
+      captures:
+        1: keyword.variable
+        2: entity.name.jiyu
+        3: keyword.operator
+    - include: everything
+
+  everything:
 ###################################################### CONSTANTS
-    - match: \btrue\b
-      scope: constant.language.true
-    - match: \bfalse\b
-      scope: constant.language.false
-    - match: \bnull\b
-      scope: constant.language.null
+    - match: \b({{constants}})\b
+      scope: constant.language.jiyu
 ###################################################### NUMERICS
     - match: \b0[XOB]
       scope: invalid illegal.invalid
-    - match: '0x([[:xdigit:]][[:xdigit:]_]*)((\.\g<1>)?[pP][-+]?\d[\d_]*)?'
+    - match: '0x([[:xdigit:]][[:xdigit:]_]*)((\.\g<1>)?[pP][-+]?\d[\d_]*)?\b'
       scope: constant.numeric.hex
-    - match: 0o[0-7][0-7_]*
+    - match: 0o[0-7][0-7_]*\b
       scope: constant.numeric.octal
-    - match: 0b[01][01_]*
+    - match: 0b[01][01_]*\b
       scope: constant.numeric.binary
-    - match: '(\d[\d_]*)(\.\g<1>)([eE][-+]?\g<1>)?'
+    - match: '([\d_]+)(\.\g<1>)([eE][-+]?\g<1>)?\b`'
       scope: constant.numeric.float
-    - match: '(\d[\d_]*)([eE][-+]?\g<1>)'
+    - match: '([\d_]+)([eE][-+]?\g<1>)\b'
       scope: constant.numeric.float
-    - match: '(\d[\d_]*)'
+    - match: '([\d_]+)\b'
       scope: constant.numeric.decimal
+
+###################################################### BLOCKS
+    - match: '\{'
+      scope: punctuation.section.block.begin.jiyu
+      push:
+        - meta_scope: meta.block.jiyu
+        - match: '\}'
+          scope: punctuation.section.block.end.jiyu
+          pop: true
+        - include: everything # statements
+    - match: \(
+      scope: punctuation.section.group.begin.jiyu
+      push:
+        - meta_scope: meta.group.jiyu
+        - match: \)
+          scope: punctuation.section.group.end.jiyu
+          pop: true
+        - include: everything # expressions
+    - match: \[
+      scope: punctuation.section.brackets.begin.jiyu
+      push:
+        - meta_scope: meta.brackets.jiyu
+        - match: \]
+          scope: punctuation.section.brackets.end.jiyu
+          pop: true
+        - include: everything # expressions
+    - match: '\)|\}|\]'
+      scope: invalid.illegal.stray-bracket-end.jiyu
 ###################################################### TYPES
     - match: \b({{basic_types}})\b
-      scope: storage.type.jyu
+      scope: storage.type.jiyu
     - match: \b(enum)\s+({{identifier}})\s*(:)\s*({{basic_types}})
       captures:
         1: keyword.entity
-        2: entity.name.jyu
+        2: entity.name.jiyu
         3: keyword.operator
-        4: storage.type.jyu
-    - match: \b(enum|struct)\s+({{identifier}})
+        4: storage.type.jiyu
+    - match: \b(enum|struct|union)\s+({{identifier}})
       captures:
         1: keyword.entity
-        2: entity.name.jyu
+        2: entity.name.jiyu
 ###################################################### KEYWORDS
-    - match: \b(if|where|else|for|in|is|as|while|switch|do|defer|repeat)\b
+    - match: \b(if|else|for|while)\b
       scope: keyword.control
-    - match: \b(break|fallthrough|return|case|continue|default)\b
+    - match: \b(break|return|continue)\b
       scope: keyword.control
-    - match: \b(#import)\b
+    - match: '\b(sizeof|typeof|cast|assert)\b\s*(\()'
+      captures:
+        1: keyword.operator.word.jiyu
+        2: meta.group.jiyu punctuation.section.group.begin.jiyu
+      push:
+        - meta_content_scope: meta.group.jiyu
+        - match: '\)'
+          scope: meta.group.jiyu punctuation.section.group.end.jiyu
+          pop: true
+        - include: everything # Include expression only.
+    - match: (\#import)\b
       scope: keyword.other.import
-    - match: 'library\b'
+    - match: '(library|framework)\b'
       scope: keyword.other.import
 ###################################################### VARIABLES
     - match: \b(var|let|typealias)\s+({{identifier}})\s*([=:])?
       captures:
         1: keyword.variable
-        2: entity.name.jyu
+        2: variable.jiyu
         3: keyword.operator
 ###################################################### STRING
     - match: '"""'
@@ -103,13 +146,13 @@ contexts:
     - match: '\b(func)\s+(@\w+)\s+({{identifier}})\s*\('
       captures:
         1: storage.type.function
-        2: storage.type.decorator.jyu
-        3: entity.name.jyu
+        2: storage.type.decorator.jiyu
+        3: entity.name.jiyu
       push: function_params
     - match: '\b(func|operator)\s+(\w+)\s*(<.*>)?\s*\('
       captures:
         1: storage.type.function
-        2: entity.name.jyu
+        2: entity.name.jiyu
         3: keyword.operator
       push: function_params
 
@@ -126,11 +169,13 @@ contexts:
       push: paren_expr
 ######################################################
   function_params:
-    - include: main
     - meta_scope: meta.function meta.toc-list
     - match: '\)'
       pop: true
+    - include: main
+###################################################### STRINGS
   string_multiline:
+    - meta_include_prototype: false
     - meta_scope: string.quoted.double string.quoted.multiline
     - match: \\\(
       scope: punctuation.section.embedded
@@ -145,52 +190,8 @@ contexts:
       scope: invalid.illegal
     - match: '"""'
       pop: true
-  string_raw_1:
-    - meta_scope: string.quoted.double string.quoted.raw
-    - match: \\\(
-      scope: punctuation.section.embedded
-      set: embedded
-    - match: \\[ntr0\\"']
-      scope: constant.character.escape.c
-    - match: \\u{[[:xdigit:]]{1,8}}
-      scope: constant.character.escape.c
-    - match: \\\n
-      scope: constant.character.escape.c
-    - match: \\
-      scope: invalid.illegal
-    - match: '"#'
-      pop: true
-  string_raw_2:
-    - meta_scope: string.quoted.double string.quoted.raw
-    - match: \\\(
-      scope: punctuation.section.embedded
-      set: embedded
-    - match: \\[ntr0\\"']
-      scope: constant.character.escape.c
-    - match: \\u{[[:xdigit:]]{1,8}}
-      scope: constant.character.escape.c
-    - match: \\\n
-      scope: constant.character.escape.c
-    - match: \\
-      scope: invalid.illegal
-    - match: '"##'
-      pop: true
-  string_raw_3:
-    - meta_scope: string.quoted.double string.quoted.raw
-    - match: \\\(
-      scope: punctuation.section.embedded
-      set: embedded
-    - match: \\[ntr0\\"']
-      scope: constant.character.escape.c
-    - match: \\u{[[:xdigit:]]{1,8}}
-      scope: constant.character.escape.c
-    - match: \\\n
-      scope: constant.character.escape.c
-    - match: \\
-      scope: invalid.illegal
-    - match: '"###'
-      pop: true
   string_double:
+    - meta_include_prototype: false
     - meta_scope: string.quoted.double
     - match: \\\(
       scope: punctuation.section.embedded
@@ -198,14 +199,12 @@ contexts:
     - match: \\[ntr0\\"']
       scope: constant.character.escape.c
     - match: \\u{[[:xdigit:]]{1,8}}
-      # Unicode scalar escape
-      # feels like this needs a different scope
       scope: constant.character.escape.c
     - match: \\
       scope: invalid.illegal
     - match: '"'
       pop: true
-  embedded:
+  embedded: # For string interpolation.
     - include: main
     - match: \(
       push: nested
@@ -228,31 +227,31 @@ contexts:
     - match: '\s*;' # @@ Allow semi-colon on next line?
       pop: true
     - match: '\n'
-      scope: invalid.illegal.missing-semi-colon.jyu
+      scope: invalid.illegal.missing-semi-colon.jiyu
       pop: true
 ###################################################### COMMENTS
   comments:
     - match: \*/(?!\*)
-      scope: invalid.illegal.stray-comment-end.jyu
+      scope: invalid.illegal.stray-comment-end.jiyu
     # Comments begin with a '//' and finish at the end of the line.
     - match: //
-      scope: punctuation.definition.comment.jyu
+      scope: punctuation.definition.comment.jiyu
       push:
-        - meta_scope: comment.line.double-slash.jyu
+        - meta_scope: comment.line.double-slash.jiyu
         - match: '(\\)$\n'
           captures:
-            1: punctuation.separator.continuation.jyu
+            1: punctuation.separator.continuation.jiyu
         - match: \n
           pop: true
     # Comments begin with a '//' and finish at the end of the line.
     - match: /\*
-      scope: punctuation.definition.comment.jyu
+      scope: punctuation.definition.comment.jiyu
       push: comment_block
   comment_block:
-    - meta_scope: comment.block.jyu
+    - meta_scope: comment.block.jiyu
     - match: /\*
       push: comment_block
     - match: \*/
-      scope: punctuation.definition.comment.jyu
+      scope: punctuation.definition.comment.jiyu
       pop: true
 ###################################################### END
