@@ -274,6 +274,39 @@ let GL_POINT_SPRITE                   : GLenum = 0x8861;
 let GL_COORD_REPLACE                  : GLenum = 0x8862;
 let GL_MAX_TEXTURE_COORDS             : GLenum = 0x8871;
 
+let GL_TEXTURE_1D                     = 0x0DE0;
+let GL_TEXTURE_2D                     = 0x0DE1;
+
+let GL_NEAREST                        = 0x2600;
+let GL_LINEAR                         = 0x2601;
+let GL_NEAREST_MIPMAP_NEAREST         = 0x2700;
+let GL_LINEAR_MIPMAP_NEAREST          = 0x2701;
+let GL_NEAREST_MIPMAP_LINEAR          = 0x2702;
+let GL_LINEAR_MIPMAP_LINEAR           = 0x2703;
+let GL_TEXTURE_MAG_FILTER             = 0x2800;
+let GL_TEXTURE_MIN_FILTER             = 0x2801;
+let GL_TEXTURE_WRAP_S                 = 0x2802;
+let GL_TEXTURE_WRAP_T                 = 0x2803;
+let GL_REPEAT                         = 0x2901;
+
+let GL_COLOR                          = 0x1800;
+let GL_DEPTH                          = 0x1801;
+let GL_STENCIL                        = 0x1802;
+let GL_STENCIL_INDEX                  = 0x1901;
+let GL_RED                            = 0x1903;
+let GL_GREEN                          = 0x1904;
+let GL_BLUE                           = 0x1905;
+let GL_ALPHA                          = 0x1906;
+let GL_RGB                            = 0x1907;
+let GL_RGBA                           = 0x1908;
+let GL_POINT                          = 0x1B00;
+let GL_LINE                           = 0x1B01;
+let GL_FILL                           = 0x1B02;
+let GL_KEEP                           = 0x1E00;
+let GL_REPLACE                        = 0x1E01;
+let GL_INCR                           = 0x1E02;
+let GL_DECR                           = 0x1E03;
+
 func @c_function glEnable(cap: GLenum);
 
 func @c_function glBegin(mode: GLenum);
@@ -292,7 +325,14 @@ func @c_function glFrustum(left: GLdouble, right: GLdouble, bottom: GLdouble, to
 func @c_function glTranslatef(x: GLfloat, y: GLfloat, z: GLfloat);
 func @c_function glRotatef(angle: GLfloat, x: GLfloat, y: GLfloat, z: GLfloat);
 
+func @c_function glGenTextures(n: GLsizei, textures: *GLuint);
+func @c_function glBindTexture(target: GLenum, texture: GLuint);
+func @c_function glTexParameteri(target: GLenum, pname: GLenum, param: GLint);
 
+func @c_function glTexImage1D(target: GLenum, level: GLint, internalformat: GLint, width: GLsizei, border: GLint, format: GLenum, type: GLenum, pixels: *void);
+func @c_function glTexImage2D(target: GLenum, level: GLint, internalformat: GLint, width: GLsizei, height: GLsizei, border: GLint, format: GLenum, type: GLenum, pixels: *void);
+
+func @c_function glDeleteTextures(n: GLsizei, textures: *GLuint);
 
 var glBindVertexArray: @c_function (array: GLuint) -> void;
 var glGenVertexArrays: @c_function (n: GLsizei, arrays: *GLuint) -> void;
