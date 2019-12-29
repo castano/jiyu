@@ -1107,11 +1107,18 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 String name = ident->name->name;
                 compiler->report_error(ident, "Undeclared identifier '%.*s'\n", PRINT_ARG(name));
             } else {
-                if (decl->type == AST_FUNCTION) {
+                if (overload_set_allowed) {
                     assert(ident->overload_set.count == 0);
                     collect_function_overloads_for_atom(ident->name, ident->enclosing_scope, &ident->overload_set);
 
-                    if (!overload_set_allowed && ident->overload_set.count > 1) {
+                    // resolved_declaration and type_info will be resolved by the Ast_Function_Call code.
+                    // Set to void for now, Ast_Function_Call code will either error or fix this up.
+                    ident->type_info = compiler->type_void;
+                } else if (decl->type == AST_FUNCTION) {
+                    assert(ident->overload_set.count == 0);
+                    collect_function_overloads_for_atom(ident->name, ident->enclosing_scope, &ident->overload_set);
+
+                    if (ident->overload_set.count > 1) {
                         String name = ident->name->name;
                         compiler->report_error(ident, "Ambiguous use of overloaded function '%.*s' (%d overloads).\n", name.length, name.data, ident->overload_set.count);
 
@@ -1121,7 +1128,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         }
 
                         return;
-                    } else if (!overload_set_allowed) {
+                    } else {
                         assert(ident->overload_set.count == 1);
 
                         typecheck_expression(decl);
@@ -1133,7 +1140,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     // resolved_declaration and type_info will be resolved by the Ast_Function_Call code.
                     // Set to void for now, Ast_Function_Call code will either error or fix this up.
                     ident->type_info = compiler->type_void;
-                } else {
+                    return;
+                }
+
+                {
                     typecheck_expression(decl);
                     ident->resolved_declaration = decl;
                     ident->type_info = get_type_info(decl);
