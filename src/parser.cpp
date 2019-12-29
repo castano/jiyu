@@ -1053,6 +1053,8 @@ static Ast_Expression * find_declaration(Array<Ast_Expression *> * array, Atom *
     return nullptr;
 }
 
+// @FixMe this should not be here, we do not know if something is actually redefined until after
+// directives are resolved. This should be checked in sema. -josh 29 December 2019
 bool Parser::add_declaration(Array<Ast_Expression *> * declarations, Ast_Expression * decl) {
     auto id = declaration_identifier(decl);
 
