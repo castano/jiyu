@@ -1134,32 +1134,17 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             }
 
             for (auto &it : call->argument_list) {
-                bool is_aggregate_value = is_aggregate_type(get_type_info(it));
-                auto value = emit_expression(it, is_aggregate_value);
+                auto info = get_final_type(get_type_info(it));
+                assert(info->size >= 0);
 
-                auto info = get_type_info(it);
+                bool is_pass_by_pointer_aggregate = is_aggregate_type(info);
 
-                if (is_c_function && is_win32 && is_aggregate_type(info)) {
-                    assert(info->size >= 0);
+                const int _8BYTES = 8;
+                if (is_pass_by_pointer_aggregate && is_c_function && is_win32 && info->size <= _8BYTES) is_pass_by_pointer_aggregate = false;
 
-                    const int _8BYTES = 8;
-                    if (info->size > _8BYTES) {
-                        auto alloca = create_alloca_in_entry(irb, get_type(info));
-
-                        auto loaded_value = irb->CreateLoad(value);
-                        irb->CreateStore(loaded_value, alloca);
-                        args.add(alloca);
-                        continue;
-                    }
-                } else if (is_aggregate_type(info)) {
-                    args.add(value);
-                    continue;
-                }
-
+                auto value = emit_expression(it, is_pass_by_pointer_aggregate);
                 args.add(value);
             }
-
-            // @TODO isnt this incorrect? since we pass in all argument_list items in above?
 
             // promote C vararg arguments if they are not the required sizes
             // for ints, this typically means promoting i8 and i16 to i32.
@@ -1914,8 +1899,16 @@ void LLVM_Jitter::init() {
 
     ES.getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(*DL)));
 
+    llvm->dib->finalize();
+
     llvm->llvm_module->setDataLayout(*DL);
     // llvm->llvm_module->dump();
+
+#ifdef DEBUG
+    legacy::PassManager pass;
+    pass.add(createVerifierPass(false));
+    pass.run(*llvm->llvm_module);
+#endif
 
     if (!llvm->llvm_module->getFunction("main")) {
         compiler->report_error((Token *)nullptr, "No main function defined for meta program. Aborting.\n");
