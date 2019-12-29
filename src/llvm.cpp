@@ -411,6 +411,20 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         bool is_c_function = type->is_c_function;
         bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
 
+        Type *return_type = make_llvm_type(get_final_type(type->return_type));
+        if (type->return_type->type == Ast_Type_Info::VOID) {
+            return_type = type_void;
+        }
+
+        // C functions typically return aggregates through a pointer as their first argument.
+        // This may not be true depending on the size of the aggregate and the ABI @Incomplete.
+        // @Volatile should match functionality in Ast_Function_Call generation.
+        bool c_return_is_by_pointer_argument = is_c_function && is_aggregate_type(type->return_type);
+        if (c_return_is_by_pointer_argument) {
+            arguments.add(return_type->getPointerTo());
+            return_type = type_void;
+        }
+
         for (auto arg_type : type->arguments) {
             arg_type = get_final_type(arg_type);
             if (arg_type == compiler->type_void) continue;
@@ -432,11 +446,6 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
             }
 
             arguments.add(type);
-        }
-
-        Type *return_type = make_llvm_type(get_final_type(type->return_type));
-        if (type->return_type->type == Ast_Type_Info::VOID) {
-            return_type = type_void;
         }
 
         return FunctionType::get(return_type, ArrayRef<Type *>(arguments.data, arguments.count), type->is_c_varargs)->getPointerTo();
@@ -1107,8 +1116,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         case AST_FUNCTION_CALL: {
             auto call = static_cast<Ast_Function_Call *>(expression);
 
-            // @TODO we should get this naturally from an emit_expression, not from an identifier lookup here.
-            auto type_info = get_type_info(call->function_or_function_ptr);
+            auto type_info = get_final_type(get_type_info(call->function_or_function_ptr));
             assert(type_info->type == Ast_Type_Info::FUNCTION);
 
             auto function_target = emit_expression(call->function_or_function_ptr);
@@ -1117,7 +1125,14 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             bool is_c_function = type_info->is_c_function;
             bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
 
+            bool c_return_is_by_pointer_argument = is_c_function && is_aggregate_type(type_info->return_type);
+
             Array<Value *> args;
+            if (c_return_is_by_pointer_argument) {
+                auto alloca = create_alloca_in_entry(irb, get_type(type_info->return_type)); // Reserve storage for the return value.
+                args.add(alloca);
+            }
+
             for (auto &it : call->argument_list) {
                 bool is_aggregate_value = is_aggregate_type(get_type_info(it));
                 auto value = emit_expression(it, is_aggregate_value);
@@ -1170,6 +1185,12 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             }
 
             Value *result = irb->CreateCall(function_target, ArrayRef<Value *>(args.data, args.count));
+
+            if (c_return_is_by_pointer_argument) {
+                result = args[0];
+                if (is_lvalue) return result;
+                return irb->CreateLoad(result);
+            }
 
             if (is_lvalue) {
                 auto alloca = create_alloca_in_entry(irb, result->getType());
