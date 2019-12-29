@@ -241,10 +241,10 @@ Token Lexer::lex_multiline_string() {
     int indent_spaces = 0;
     int indent_tabs = 0;
     if (input[0] == ' ') {
-        while (indent_spaces < input.length && input[indent_spaces] == ' ') indent_spaces += 1;    
+        while (indent_spaces < input.length && input[indent_spaces] == ' ') indent_spaces += 1;
     }
     else if (input[0] == '\t') {
-        while (indent_tabs < input.length && input[indent_tabs] == '\t') indent_tabs += 1;    
+        while (indent_tabs < input.length && input[indent_tabs] == '\t') indent_tabs += 1;
     }
 
     for (string_length_type i = indent_spaces + indent_tabs; i < input.length; ++i) {
@@ -341,8 +341,10 @@ Token Lexer::lex_token() {
 
         else if (result.string == to_string("return")) result.type = Token::KEYWORD_RETURN;
 
-        else if (result.string == to_string("cast"))   result.type = Token::KEYWORD_CAST;
-        else if (result.string == to_string("sizeof")) result.type = Token::KEYWORD_SIZEOF;
+        else if (result.string == to_string("cast"))     result.type = Token::KEYWORD_CAST;
+        else if (result.string == to_string("sizeof"))   result.type = Token::KEYWORD_SIZEOF;
+        else if (result.string == to_string("strideof")) result.type = Token::KEYWORD_STRIDEOF;
+        else if (result.string == to_string("alignof"))  result.type = Token::KEYWORD_ALIGNOF;
 
         // @Cleanup we should probably have a "tag" token
         else if (result.string == to_string("@c_function"))  result.type = Token::TAG_C_FUNCTION;

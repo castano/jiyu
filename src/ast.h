@@ -325,8 +325,11 @@ struct Ast_Cast : Ast_Expression {
     Ast_Expression *expression = nullptr;
 };
 
+// @TODO rename this to somethine like "Ast_Type_Metric" or something since it handles
+// strideof() and alignof() now.
 struct Ast_Sizeof : Ast_Expression {
     Ast_Sizeof() { type = AST_SIZEOF; }
+    Token::Type operator_type;
     Ast_Type_Instantiation *target_type_inst = nullptr;
 };
 

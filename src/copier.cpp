@@ -247,6 +247,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto old  = static_cast<Ast_Sizeof *>(expression);
             auto _new = COPIER_NEW(Ast_Sizeof);
 
+            COPY_P(operator_type);
             COPY(target_type_inst);
 
             return _new;

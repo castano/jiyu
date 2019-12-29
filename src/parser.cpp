@@ -229,8 +229,9 @@ Ast_Expression *Parser::parse_primary_expression() {
         return expr;
     }
 
-    if (token->type == Token::KEYWORD_SIZEOF) {
+    if (token->type == Token::KEYWORD_SIZEOF || token->type == Token::KEYWORD_STRIDEOF || token->type == Token::KEYWORD_ALIGNOF) {
         Ast_Sizeof *size = PARSER_NEW(Ast_Sizeof);
+        size->operator_type = token->type;
         next_token();
 
         if (!expect_and_eat(Token::LEFT_PAREN)) return size;

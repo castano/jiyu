@@ -2346,10 +2346,19 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
 
             auto type = resolve_type_inst(size->target_type_inst);
+            auto final_type = get_final_type(type);
 
-            auto lit = make_integer_literal(compiler, get_final_type(type)->size, compiler->type_int32);
+            Ast_Literal *lit = nullptr;
+            if (size->operator_type == Token::KEYWORD_SIZEOF) {
+                lit = make_integer_literal(compiler, final_type->size, compiler->type_int32);
+            } else if (size->operator_type == Token::KEYWORD_STRIDEOF) {
+                lit = make_integer_literal(compiler, final_type->stride, compiler->type_int32);
+            } else if (size->operator_type == Token::KEYWORD_ALIGNOF) {
+                lit = make_integer_literal(compiler, final_type->alignment, compiler->type_int32);
+            }
+            assert(lit);
+
             copy_location_info(lit, size);
-
             size->type_info = lit->type_info;
             size->substitution = lit;
             return;
