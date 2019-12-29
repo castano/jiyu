@@ -286,6 +286,11 @@ void print_type_to_builder(String_Builder *builder, Ast_Type_Info *info) {
         return;
     }
 
+    if (info->type == Ast_Type_Info::TYPE) {
+        builder->append("Type");
+        return;
+    }
+
     assert(false);
 }
 
