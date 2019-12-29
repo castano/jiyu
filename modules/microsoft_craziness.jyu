@@ -5,6 +5,7 @@ struct Find_Result {
     var windows_sdk_version: int32;   // Zero if no Windows SDK found.
 
     var windows_sdk_root             : *wchar_t;
+    var windows_sdk_include          : *wchar_t;
     var windows_sdk_um_library_path  : *wchar_t;
     var windows_sdk_ucrt_library_path: *wchar_t;
 

@@ -161,7 +161,7 @@ func __strings_match(a: string, b: string) -> bool {
 
     if (a.data == null) return false;
     if (b.data == null) return false;
-    
+
 
     for 0..<a.length {
         if (a[it] != b[it]) return false;
@@ -233,7 +233,8 @@ extern "C" {
         if (compiler->build_options.executable_name == to_string("")) return false;
 
 #if WIN32
-        auto win32_sdk = find_visual_studio_and_windows_sdk();
+        Find_Result win32_sdk;
+        find_visual_studio_and_windows_sdk(&win32_sdk);
 
         if (win32_sdk.vs_exe_path) {
             const int LINE_SIZE = 4096;
