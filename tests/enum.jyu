@@ -120,7 +120,10 @@ func main() {
         if day == .Wednesday {
             day = .Sunday;
         }
-        // test(1 + .Tuesday); // This produces an error, as expected.        
+        if .Wednesday > day {
+            // test(1 + .Tuesday); // This produces an error, as expected.        
+        }
+        
     }
     
 }

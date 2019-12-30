@@ -855,7 +855,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 auto value = emit_expression(un->expression);
                 auto type = get_type_info(un->expression);
 
-                if (is_int_type(type)) {
+                if (is_int_or_enum_type(type)) {
                     return irb->CreateNeg(value);
                 } else if (is_float_type(type)) {
                     return irb->CreateFNeg(value);
@@ -883,7 +883,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 switch (bin->operator_type) {
                     case Token::STAR: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             return irb->CreateMul(left, right);
                         } else {
                             assert(is_float_type(info));
@@ -892,7 +892,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     }
                     case Token::PERCENT: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateSRem(left, right);
                             } else {
@@ -905,7 +905,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     }
                     case Token::SLASH: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateSDiv(left, right);
                             } else {
@@ -922,7 +922,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                         auto right_type = get_type_info(bin->right);
 
                         if (is_pointer_type(left_type) &&
-                            is_int_type(right_type)) {
+                            is_int_or_enum_type(right_type)) {
                             return irb->CreateGEP(left, right);
                         } else if (is_pointer_type(left_type) && is_pointer_type(right_type)) {
                             Value *left_int  = irb->CreatePtrToInt(left,  type_intptr);
@@ -974,7 +974,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     }
                     case Token::LE_OP: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateICmpSLE(left, right);
                             } else {
@@ -987,7 +987,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     }
                     case Token::GE_OP: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateICmpSGE(left, right);
                             } else {
@@ -1001,7 +1001,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                     case Token::LEFT_ANGLE: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateICmpSLT(left, right);
                             } else {
@@ -1015,7 +1015,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                     case Token::RIGHT_ANGLE: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateICmpSGT(left, right);
                             } else {
@@ -1281,7 +1281,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             if (dst->type == Ast_Type_Info::ENUM) dst = dst->enum_base_type;
 
             auto dst_type = get_type(dst);
-            if (is_int_type(src) && is_int_type(dst)) {
+            if (is_int_or_enum_type(src) && is_int_or_enum_type(dst)) {
                 if (src->size > dst->size) {
                     return irb->CreateTrunc(value, dst_type);
                 } else if (src->size < dst->size) {

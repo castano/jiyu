@@ -183,6 +183,12 @@ bool is_int_type(Ast_Type_Info *info) {
 }
 
 inline
+bool is_int_or_enum_type(Ast_Type_Info *info) {
+    info = get_final_type(info);
+    return info->type == Ast_Type_Info::INTEGER || info->type == Ast_Type_Info::ENUM;
+}
+
+inline
 bool is_float_type(Ast_Type_Info *info) {
     info = get_final_type(info);
     return info->type == Ast_Type_Info::FLOAT;
