@@ -45,3 +45,14 @@ func __array_reset<T>(array: *[..] T) {
     array.data = null;
 }
 
+func __array_contains<T>(array: *[..] T, item: T) -> bool {
+    for <<array {
+        if it == item return true;
+    }
+    return false;
+}
+
+func __array_add_if_unique<T>(array: *[..] T, item: T) {
+    if array.contains(item) == false array.add(item);
+    // if !array.contains(item) array.add(item); // @@ This doesn't work!
+}
