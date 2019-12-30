@@ -376,6 +376,14 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
     }
 }
 
+static bool expression_needs_enum_type_inference(Ast_Expression * expr) {
+    if (expr->type == AST_DEREFERENCE) {
+        auto deref = static_cast<Ast_Dereference*>(expr);
+        return deref->left == nullptr;
+    }
+    return false;
+}
+
 // @@ Should this be an atribute of the literal that is propagated? Is 1+1 mutable?
 static bool is_mutable_literal(Ast_Literal * literal) {
     if (literal->type_info->type == Ast_Type_Info::INTEGER || literal->type_info->type == Ast_Type_Info::FLOAT) {
@@ -1525,16 +1533,24 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 bin->right = tuple.item2;
             } else {
-                // Special case for enum type comparision with inference. If lhs is enum, supply enum type to rhs.
-                // @@ Ideally this should work in both directions!
-                if (bin->operator_type == Token::EQ_OP || 
-                    bin->operator_type == Token::NE_OP ||
-                    bin->operator_type == Token::LE_OP ||
-                    bin->operator_type == Token::GE_OP) 
+                // Special case for enum type comparision with inference.
+                if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP ||
+                    bin->operator_type == Token::LE_OP || bin->operator_type == Token::GE_OP ||
+                    bin->operator_type == '<' || bin->operator_type == '>') 
                 {
-                    typecheck_expression(bin->left);
-                    if (bin->left->type_info != nullptr && bin->left->type_info->type == Ast_Type_Info::ENUM) {
-                        typecheck_expression(bin->right, bin->left->type_info);
+                    if (expression_needs_enum_type_inference(bin->right)) {
+                        // If lhs is enum, supply enum type to rhs.
+                        typecheck_expression(bin->left);
+                        if (bin->left->type_info != nullptr && bin->left->type_info->type == Ast_Type_Info::ENUM) {
+                            typecheck_expression(bin->right, bin->left->type_info);
+                        }
+                    }
+                    else if (expression_needs_enum_type_inference(bin->left)) {
+                        // If rhs is enum, supply enum type to lhs.
+                        typecheck_expression(bin->right);
+                        if (bin->right->type_info != nullptr && bin->right->type_info->type == Ast_Type_Info::ENUM) {
+                            typecheck_expression(bin->left, bin->right->type_info);
+                        }
                     }
                 }
 
