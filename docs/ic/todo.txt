@@ -13,6 +13,8 @@
             B;
         }
 
+- Add support for unary ! and ~ operators.
+
 - operator functions.
 
 - multiple declarations in a single line:
