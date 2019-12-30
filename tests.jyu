@@ -48,6 +48,7 @@ func @metaprogram main() {
     compile_single_test_file("tests/operators.jyu", as_metaprogram);
     compile_single_test_file("tests/structs.jyu", as_metaprogram);
     compile_single_test_file("tests/array_functions.jyu", as_metaprogram);
+    compile_single_test_file("tests/strings.jyu", as_metaprogram);
     compile_single_test_file("tests/enum.jyu", as_metaprogram);
     compile_single_test_file("tests/typeof.jyu", as_metaprogram);
 

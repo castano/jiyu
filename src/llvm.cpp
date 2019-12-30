@@ -44,6 +44,8 @@
 
 #include "llvm/Transforms/Utils/Cloning.h"
 
+#include "llvm/Transforms/Utils.h"
+
 #ifdef WIN32
 #pragma warning(pop)
 #endif
@@ -254,6 +256,16 @@ void LLVM_Generator::finalize() {
     legacy::PassManager pass;
     auto FileType = TargetMachine::CGFT_ObjectFile;
 
+    /*
+    auto fpm = make_unique<legacy::FunctionPassManager>(llvm_module);
+    fpm->add(createPromoteMemoryToRegisterPass());
+    fpm->doInitialization();
+
+    for (auto &func : llvm_module->functions()) {
+        fpm->run(func);
+    }
+    */
+
     // llvm_module->dump();
     if (compiler->build_options.emit_llvm_ir) {
         String ll_name = mprintf("%.*s.ll", PRINT_ARG(exec_name));
@@ -418,6 +430,20 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         bool is_c_function = type->is_c_function;
         bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
 
+        Type *return_type = make_llvm_type(get_final_type(type->return_type));
+        if (type->return_type->type == Ast_Type_Info::VOID) {
+            return_type = type_void;
+        }
+
+        // C functions typically return aggregates through a pointer as their first argument.
+        // This may not be true depending on the size of the aggregate and the ABI @Incomplete.
+        // @Volatile should match functionality in Ast_Function_Call generation.
+        bool c_return_is_by_pointer_argument = is_c_function && is_aggregate_type(type->return_type);
+        if (c_return_is_by_pointer_argument) {
+            arguments.add(return_type->getPointerTo());
+            return_type = type_void;
+        }
+
         for (auto arg_type : type->arguments) {
             arg_type = get_final_type(arg_type);
             if (arg_type == compiler->type_void) continue;
@@ -439,11 +465,6 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
             }
 
             arguments.add(type);
-        }
-
-        Type *return_type = make_llvm_type(get_final_type(type->return_type));
-        if (type->return_type->type == Ast_Type_Info::VOID) {
-            return_type = type_void;
         }
 
         return FunctionType::get(return_type, ArrayRef<Type *>(arguments.data, arguments.count), type->is_c_varargs)->getPointerTo();
@@ -716,6 +737,10 @@ Value *LLVM_Generator::dereference(Value *value, s64 element_path_index, bool is
 // use a constant-expression, but on the stack, it should generally be better to write to
 // the individual fields because the optimizers can better reason about splitting aggregates
 // into registers, or something...
+
+// Actually, I've just decided to use get_constant_struct_initializer for default_struct_init
+// because the previous method was generating a large amount of store instructions for zero-initialized
+// fields (and slowing down compilation by quite a lot). -josh 27 December 2019
 Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
     info = get_final_type(info);
 
@@ -762,37 +787,37 @@ void LLVM_Generator::default_init_struct(Value *decl_value, Ast_Type_Info *info)
 
     auto _struct = info->struct_decl;
 
-    auto null_value = Constant::getNullValue(get_type(info));
-    assert(null_value->getType() == decl_value->getType()->getPointerElementType());
-    irb->CreateStore(null_value, decl_value);
+    auto initial_value = get_constant_struct_initializer(info);
+    assert(initial_value->getType() == decl_value->getType()->getPointerElementType());
+    irb->CreateStore(initial_value, decl_value);
 
-    s32 element_path_index = 0;
-    for (auto member: _struct->member_scope.declarations) {
-        if (member->type == AST_DECLARATION) {
-            auto decl = static_cast<Ast_Declaration *>(member);
+    // s32 element_path_index = 0;
+    // for (auto member: _struct->member_scope.declarations) {
+    //     if (member->type == AST_DECLARATION) {
+    //         auto decl = static_cast<Ast_Declaration *>(member);
 
-            if (decl->is_let) continue;
-            assert(decl->is_struct_member);
+    //         if (decl->is_let) continue;
+    //         assert(decl->is_struct_member);
 
-            if (decl->initializer_expression) {
-                auto expr = emit_expression(decl->initializer_expression);
+    //         if (decl->initializer_expression) {
+    //             auto expr = emit_expression(decl->initializer_expression);
 
-                auto gep = dereference(decl_value, element_path_index, true);
-                irb->CreateStore(expr, gep);
-            } else {
-                auto mem_info = get_type_info(decl);
-                if (is_struct_type(mem_info)) {
-                    auto final_type = get_final_type(mem_info);
-                    if (!final_type->is_union) {
-                        auto gep = dereference(decl_value, element_path_index, true);
-                        default_init_struct(gep, mem_info);
-                    }
-                }
-            }
+    //             auto gep = dereference(decl_value, element_path_index, true);
+    //             irb->CreateStore(expr, gep);
+    //         } else {
+    //             auto mem_info = get_type_info(decl);
+    //             if (is_struct_type(mem_info)) {
+    //                 auto final_type = get_final_type(mem_info);
+    //                 if (!final_type->is_union) {
+    //                     auto gep = dereference(decl_value, element_path_index, true);
+    //                     default_init_struct(gep, mem_info);
+    //                 }
+    //             }
+    //         }
 
-            element_path_index++;
-        }
-    }
+    //         element_path_index++;
+    //     }
+    // }
 }
 
 Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalue) {
@@ -1113,15 +1138,16 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
         case AST_DECLARATION: {
             auto decl = static_cast<Ast_Declaration *>(expression);
-            auto decl_value = get_value_for_decl(decl);
+            if (decl->is_let && !decl->is_readonly_variable) return nullptr;
 
+            auto decl_value = get_value_for_decl(decl);
             if (decl->initializer_expression) {
                 auto value = emit_expression(decl->initializer_expression);
                 irb->CreateStore(value, decl_value);
             } else {
                 // if a declaration does not have an initializer, initialize to 0
                 auto type_info = get_type_info(decl);
-                if (type_info->type == Ast_Type_Info::STRUCT) {
+                if (is_struct_type(type_info) && !get_final_type(type_info)->is_union) {
                     default_init_struct(decl_value, type_info);
                 } else {
                     auto type = decl_value->getType()->getPointerElementType();
@@ -1134,8 +1160,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         case AST_FUNCTION_CALL: {
             auto call = static_cast<Ast_Function_Call *>(expression);
 
-            // @TODO we should get this naturally from an emit_expression, not from an identifier lookup here.
-            auto type_info = get_type_info(call->function_or_function_ptr);
+            auto type_info = get_final_type(get_type_info(call->function_or_function_ptr));
             assert(type_info->type == Ast_Type_Info::FUNCTION);
 
             auto function_target = emit_expression(call->function_or_function_ptr);
@@ -1144,34 +1169,26 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             bool is_c_function = type_info->is_c_function;
             bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
 
+            bool c_return_is_by_pointer_argument = is_c_function && is_aggregate_type(type_info->return_type);
+
             Array<Value *> args;
-            for (auto it : call->argument_list) {
-                bool is_aggregate_value = is_aggregate_type(get_type_info(it));
-                auto value = emit_expression(it, is_aggregate_value);
-
-                auto info = get_type_info(it);
-
-                if (is_c_function && is_win32 && is_aggregate_type(info)) {
-                    assert(info->size >= 0);
-
-                    const int _8BYTES = 8;
-                    if (info->size > _8BYTES) {
-                        auto alloca = create_alloca_in_entry(irb, get_type(info));
-
-                        auto loaded_value = irb->CreateLoad(value);
-                        irb->CreateStore(loaded_value, alloca);
-                        args.add(alloca);
-                        continue;
-                    }
-                } else if (is_aggregate_type(info)) {
-                    args.add(value);
-                    continue;
-                }
-
-                args.add(value);
+            if (c_return_is_by_pointer_argument) {
+                auto alloca = create_alloca_in_entry(irb, get_type(type_info->return_type)); // Reserve storage for the return value.
+                args.add(alloca);
             }
 
-            // @TODO isnt this incorrect? since we pass in all argument_list items in above?
+            for (auto &it : call->argument_list) {
+                auto info = get_final_type(get_type_info(it));
+                assert(info->size >= 0);
+
+                bool is_pass_by_pointer_aggregate = is_aggregate_type(info);
+
+                const int _8BYTES = 8;
+                if (is_pass_by_pointer_aggregate && is_c_function && is_win32 && info->size <= _8BYTES) is_pass_by_pointer_aggregate = false;
+
+                auto value = emit_expression(it, is_pass_by_pointer_aggregate);
+                args.add(value);
+            }
 
             // promote C vararg arguments if they are not the required sizes
             // for ints, this typically means promoting i8 and i16 to i32.
@@ -1181,7 +1198,6 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     auto arg   = call->argument_list[i];
 
                     auto type = value->getType();
-                    //auto bitSize = type->getPrimitiveSizeInBits();
                     if (type->isIntegerTy() && type->getPrimitiveSizeInBits() < type_i32->getPrimitiveSizeInBits()) {
                         auto arg_type = get_final_type(get_type_info(arg));
                         assert(arg_type->type == Ast_Type_Info::INTEGER || arg_type->type == Ast_Type_Info::BOOL);
@@ -1198,6 +1214,12 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             }
 
             Value *result = irb->CreateCall(function_target, ArrayRef<Value *>(args.data, args.count));
+
+            if (c_return_is_by_pointer_argument) {
+                result = args[0];
+                if (is_lvalue) return result;
+                return irb->CreateLoad(result);
+            }
 
             if (is_lvalue) {
                 auto alloca = create_alloca_in_entry(irb, result->getType());
@@ -1581,7 +1603,12 @@ Function *LLVM_Generator::get_or_create_function(Ast_Function *function) {
 
     if (!func) {
         FunctionType *function_type = create_function_type(function);
-        func = Function::Create(function_type, GlobalValue::LinkageTypes::ExternalLinkage, string_ref(linkage_name), llvm_module);
+        auto linkage = GlobalValue::LinkageTypes::ExternalLinkage;
+        if (!function->is_c_function && !function->is_exported) {
+            linkage = GlobalValue::LinkageTypes::InternalLinkage;
+        }
+
+        func = Function::Create(function_type, linkage, string_ref(linkage_name), llvm_module);
 
         array_count_type i = 0;
         for (auto &a : func->args()) {
@@ -1609,7 +1636,9 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
         while (it->substitution) it = it->substitution;
 
         if (it->type != AST_DECLARATION) continue;
+
         auto decl = static_cast<Ast_Declaration *>(it);
+        if (decl->is_let && !decl->is_readonly_variable) continue;
 
         auto alloca = create_alloca_in_entry(irb, get_type(get_type_info(it)));
 
@@ -1642,6 +1671,7 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
 
         if (it->type != AST_DECLARATION) continue;
         auto decl = static_cast<Ast_Declaration *>(it);
+        if (decl->is_let && !decl->is_readonly_variable) continue;
 
         auto alloca = create_alloca_in_entry(irb, get_type(get_type_info(it)));
 
@@ -1710,6 +1740,7 @@ DISubroutineType *LLVM_Generator::get_debug_subroutine_type(Ast_Type_Info *type)
 
 void LLVM_Generator::emit_function(Ast_Function *function) {
     assert(function->identifier && function->identifier->name);
+    if (!function->scope) return;
 
     Function *func = get_or_create_function(function);
 
@@ -1920,8 +1951,16 @@ void LLVM_Jitter::init() {
 
     ES.getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(*DL)));
 
+    llvm->dib->finalize();
+
     llvm->llvm_module->setDataLayout(*DL);
     // llvm->llvm_module->dump();
+
+#ifdef DEBUG
+    legacy::PassManager pass;
+    pass.add(createVerifierPass(false));
+    pass.run(*llvm->llvm_module);
+#endif
 
     if (!llvm->llvm_module->getFunction("main")) {
         compiler->report_error((Token *)nullptr, "No main function defined for meta program. Aborting.\n");

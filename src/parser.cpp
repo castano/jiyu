@@ -237,8 +237,9 @@ Ast_Expression *Parser::parse_primary_expression() {
         return expr;
     }
 
-    if (token->type == Token::KEYWORD_SIZEOF) {
+    if (token->type == Token::KEYWORD_SIZEOF || token->type == Token::KEYWORD_STRIDEOF || token->type == Token::KEYWORD_ALIGNOF) {
         Ast_Sizeof *size = PARSER_NEW(Ast_Sizeof);
+        size->operator_type = token->type;
         next_token();
 
         if (!expect_and_eat(Token::LEFT_PAREN)) return size;
@@ -1135,6 +1136,8 @@ static Ast_Expression * find_declaration(Array<Ast_Expression *> * array, Atom *
     return nullptr;
 }
 
+// @FixMe this should not be here, we do not know if something is actually redefined until after
+// directives are resolved. This should be checked in sema. -josh 29 December 2019
 bool Parser::add_declaration(Array<Ast_Expression *> * declarations, Ast_Expression * decl) {
     auto id = declaration_identifier(decl);
 
@@ -1556,6 +1559,8 @@ Ast_Function *Parser::parse_function() {
             function->is_marked_metaprogram = true;
             next_token();
         } else if (token->type == Token::TAG_EXPORT) {
+            function->is_exported = true;
+
             next_token();
             if (!expect_and_eat(Token::LEFT_PAREN)) return nullptr;
 

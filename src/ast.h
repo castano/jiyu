@@ -341,6 +341,7 @@ struct Ast_Function : Ast_Expression {
     bool is_c_function = false;
     bool is_c_varargs = false;
     bool is_template_function = false;
+    bool is_exported = false;
 
     String linkage_name;       // @NoCopy
     bool body_checked = false; // @NoCopy
@@ -352,8 +353,11 @@ struct Ast_Cast : Ast_Expression {
     Ast_Expression *expression = nullptr;
 };
 
+// @TODO rename this to somethine like "Ast_Type_Metric" or something since it handles
+// strideof() and alignof() now.
 struct Ast_Sizeof : Ast_Expression {
     Ast_Sizeof() { type = AST_SIZEOF; }
+    Token::Type operator_type;
     Ast_Type_Instantiation *target_type_inst = nullptr;
 };
 

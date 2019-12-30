@@ -54,6 +54,7 @@ struct Find_Result {
     int windows_sdk_version;   // Zero if no Windows SDK found.
 
     wchar_t *windows_sdk_root              = NULL;
+    wchar_t *windows_sdk_include           = NULL;
     wchar_t *windows_sdk_um_library_path   = NULL;
     wchar_t *windows_sdk_ucrt_library_path = NULL;
 
@@ -61,16 +62,18 @@ struct Find_Result {
     wchar_t *vs_library_path = NULL;
 };
 
-Find_Result find_visual_studio_and_windows_sdk();
+extern "C" {
+    void __declspec(dllexport) find_visual_studio_and_windows_sdk(Find_Result *result);
 
-void free_resources(Find_Result *result) {
-    free(result->windows_sdk_root);
-    free(result->windows_sdk_um_library_path);
-    free(result->windows_sdk_ucrt_library_path);
-    free(result->vs_exe_path);
-    free(result->vs_library_path);
+    void __declspec(dllexport) free_resources(Find_Result *result) {
+        free(result->windows_sdk_root);
+        free(result->windows_sdk_include);
+        free(result->windows_sdk_um_library_path);
+        free(result->windows_sdk_ucrt_library_path);
+        free(result->vs_exe_path);
+        free(result->vs_library_path);
+    }
 }
-
 //
 // Call find_visual_studio_and_windows_sdk, look at the resulting
 // paths, then call free_resources on the result.
@@ -119,6 +122,7 @@ void free_resources(Find_Result *result) {
 //
 
 // Defer macro/thing.
+
 /*
 #define CONCAT_INTERNAL(x,y) x##y
 #define CONCAT(x,y) CONCAT_INTERNAL(x,y)
@@ -366,12 +370,20 @@ void find_windows_kit_root(Find_Result *result) {
         defer { free(windows10_root); };
         Version_Data data = {0};
         auto windows10_lib = concat(windows10_root, L"Lib");
+        auto windows10_inc = concat(windows10_root, L"Include");
         defer { free(windows10_lib); };
+        defer { free(windows10_inc); };
 
         visit_files_w(windows10_lib, &data, win10_best);
         if (data.best_name) {
             result->windows_sdk_version = 10;
             result->windows_sdk_root = data.best_name;
+
+            data = {0};
+            visit_files_w(windows10_inc, &data, win10_best);
+            if (data.best_name) {
+                result->windows_sdk_include = data.best_name;
+            }
             return;
         }
     }
@@ -383,13 +395,21 @@ void find_windows_kit_root(Find_Result *result) {
         defer { free(windows8_root); };
 
         auto windows8_lib = concat(windows8_root, L"Lib");
+        auto windows8_inc = concat(windows8_root, L"Include");
         defer { free(windows8_lib); };
+        defer { free(windows8_inc); };
 
         Version_Data data = {0};
         visit_files_w(windows8_lib, &data, win8_best);
         if (data.best_name) {
             result->windows_sdk_version = 8;
             result->windows_sdk_root = data.best_name;
+
+            data = {0};
+            visit_files_w(windows8_inc, &data, win8_best);
+            if (data.best_name) {
+                result->windows_sdk_include = data.best_name;
+            }
             return;
         }
     }
@@ -533,18 +553,13 @@ void find_visual_studio_by_fighting_through_microsoft_craziness(Find_Result *res
 }
 
 
-Find_Result find_visual_studio_and_windows_sdk() {
-    Find_Result result;
+void find_visual_studio_and_windows_sdk(Find_Result *result) {
+    find_windows_kit_root(result);
 
-    find_windows_kit_root(&result);
-
-    if (result.windows_sdk_root) {
-        result.windows_sdk_um_library_path   = concat(result.windows_sdk_root, L"\\um\\x64");
-        result.windows_sdk_ucrt_library_path = concat(result.windows_sdk_root, L"\\ucrt\\x64");
+    if (result->windows_sdk_root) {
+        result->windows_sdk_um_library_path   = concat(result->windows_sdk_root, L"\\um\\x64");
+        result->windows_sdk_ucrt_library_path = concat(result->windows_sdk_root, L"\\ucrt\\x64");
     }
 
-    find_visual_studio_by_fighting_through_microsoft_craziness(&result);
-
-    return result;
+    find_visual_studio_by_fighting_through_microsoft_craziness(result);
 }
-

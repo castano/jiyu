@@ -431,6 +431,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
             CXType type = clang_getCursorType(cursor);
             Ast_Type_Info *info = get_jiyu_type(visitor_data, type);
 
+            decl->initializer_expression = make_integer_literal(compiler, clang_getEnumConstantDeclValue(cursor), info);
             decl->is_let = true;
             decl->is_readonly_variable = false;
             // decl->is_struct_member = true; // This will be set via typechecking anyways..

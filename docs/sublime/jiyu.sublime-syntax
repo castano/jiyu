@@ -1,0 +1,257 @@
+%YAML 1.2
+---
+# This file goes in:
+# Windows: ~/AppData/Roaming/Sublime Text 3/Packages/User/
+# OSX: ~/Library/Application Support/Sublime Text 3/Packages/User/
+
+# To have that copy up to date I usually create a link from that location to the source code repository (with mklink /H or ln -s)
+
+# For reference see:
+# http://www.sublimetext.com/docs/3/syntax.html
+
+name: Jiyu
+file_extensions: [jyu]
+scope: source.jyu
+
+variables:
+  identifier: '\b[[:alpha:]_][[:alnum:]_]*\b'
+
+  # integers
+  hex_numeral: '0[xX][0-9a-fA-F]+'
+  decimal_numeral: '[0-9]+'
+
+  # floating point numbers
+  exponent: '[eE][+\-]?[0-9]+'
+  floating_point: '([0-9]+(?:\.[0-9]+)?(?:{{exponent}})?)'
+
+  basic_types: 'bool|uint8|int8|uint16|int16|uint32|int32|uint64|int64|float64|float|int|uint|string|void'
+
+  constants: 'true|false|null'
+
+contexts:
+  # The prototype context is prepended to all contexts but those setting
+  # meta_include_prototype: false.
+  prototype:
+    - include: comments
+
+  # The main context is the initial starting point of our syntax.
+  # Include other contexts from here (or specify them directly).
+  main:
+    - include: global
+
+  global:
+    # Global variables.    
+    - match: \b(var|let|typealias)\s+({{identifier}})\s*([=:])?
+      captures:
+        1: keyword.variable
+        2: entity.name.jiyu
+        3: keyword.operator
+    - include: everything
+
+  everything:
+###################################################### CONSTANTS
+    - match: \b({{constants}})\b
+      scope: constant.language.jiyu
+###################################################### NUMERICS
+    - match: \b0[XOB]
+      scope: invalid illegal.invalid
+    - match: '0x([[:xdigit:]][[:xdigit:]_]*)((\.\g<1>)?[pP][-+]?\d[\d_]*)?\b'
+      scope: constant.numeric.hex
+    - match: 0o[0-7][0-7_]*\b
+      scope: constant.numeric.octal
+    - match: 0b[01][01_]*\b
+      scope: constant.numeric.binary
+    - match: '([\d_]+)(\.\g<1>)([eE][-+]?\g<1>)?\b`'
+      scope: constant.numeric.float
+    - match: '([\d_]+)([eE][-+]?\g<1>)\b'
+      scope: constant.numeric.float
+    - match: '([\d_]+)\b'
+      scope: constant.numeric.decimal
+
+###################################################### BLOCKS
+    - match: '\{'
+      scope: punctuation.section.block.begin.jiyu
+      push:
+        - meta_scope: meta.block.jiyu
+        - match: '\}'
+          scope: punctuation.section.block.end.jiyu
+          pop: true
+        - include: everything # statements
+    - match: \(
+      scope: punctuation.section.group.begin.jiyu
+      push:
+        - meta_scope: meta.group.jiyu
+        - match: \)
+          scope: punctuation.section.group.end.jiyu
+          pop: true
+        - include: everything # expressions
+    - match: \[
+      scope: punctuation.section.brackets.begin.jiyu
+      push:
+        - meta_scope: meta.brackets.jiyu
+        - match: \]
+          scope: punctuation.section.brackets.end.jiyu
+          pop: true
+        - include: everything # expressions
+    - match: '\)|\}|\]'
+      scope: invalid.illegal.stray-bracket-end.jiyu
+###################################################### TYPES
+    - match: \b({{basic_types}})\b
+      scope: storage.type.jiyu
+    - match: \b(enum)\s+({{identifier}})\s*(:)\s*({{basic_types}})
+      captures:
+        1: keyword.entity
+        2: entity.name.jiyu
+        3: keyword.operator
+        4: storage.type.jiyu
+    - match: \b(enum|struct|union)\s+({{identifier}})
+      captures:
+        1: keyword.entity
+        2: entity.name.jiyu
+###################################################### KEYWORDS
+    - match: \b(if|else|for|while)\b
+      scope: keyword.control
+    - match: \b(break|return|continue)\b
+      scope: keyword.control
+    - match: '\b(sizeof|typeof|cast|assert)\b\s*(\()'
+      captures:
+        1: keyword.operator.word.jiyu
+        2: meta.group.jiyu punctuation.section.group.begin.jiyu
+      push:
+        - meta_content_scope: meta.group.jiyu
+        - match: '\)'
+          scope: meta.group.jiyu punctuation.section.group.end.jiyu
+          pop: true
+        - include: everything # Include expression only.
+    - match: (\#import)\b
+      scope: keyword.other.import
+    - match: '(library|framework)\b'
+      scope: keyword.other.import
+###################################################### VARIABLES
+    - match: \b(var|let|typealias)\s+({{identifier}})\s*([=:])?
+      captures:
+        1: keyword.variable
+        2: variable.jiyu
+        3: keyword.operator
+###################################################### STRING
+    - match: '"""'
+      push: string_multiline
+    - match: '"'
+      push: string_double
+# ###################################################### MODIFIERS
+    - match: '@\w+'
+      scope: storage.type.decorator
+###################################################### FUNCTIONS
+    # @@ Add better support for template arguments.
+    - match: '\b(func)\s+(@\w+)\s+({{identifier}})\s*\('
+      captures:
+        1: storage.type.function
+        2: storage.type.decorator.jiyu
+        3: entity.name.jiyu
+      push: function_params
+    - match: '\b(func|operator)\s+(\w+)\s*(<.*>)?\s*\('
+      captures:
+        1: storage.type.function
+        2: entity.name.jiyu
+        3: keyword.operator
+      push: function_params
+
+###################################################### VARIABLES
+    # @@ Allow this only in function_params scope
+    - match: '(\w+)\s*:'
+      captures:
+        1: variable.parameter
+    - match: '\b\w+'
+      scope: ''
+    - match: '[-+=<>^$#@!~*\\|&?\/%.]*'
+      scope: keyword.operator
+    - match: '\('
+      push: paren_expr
+######################################################
+  function_params:
+    - meta_scope: meta.function meta.toc-list
+    - match: '\)'
+      pop: true
+    - include: main
+###################################################### STRINGS
+  string_multiline:
+    - meta_include_prototype: false
+    - meta_scope: string.quoted.double string.quoted.multiline
+    - match: \\\(
+      scope: punctuation.section.embedded
+      set: embedded
+    - match: \\[ntr0\\"']
+      scope: constant.character.escape.c
+    - match: \\u{[[:xdigit:]]{1,8}}
+      scope: constant.character.escape.c
+    - match: \\\n
+      scope: constant.character.escape.c
+    - match: \\
+      scope: invalid.illegal
+    - match: '"""'
+      pop: true
+  string_double:
+    - meta_include_prototype: false
+    - meta_scope: string.quoted.double
+    - match: \\\(
+      scope: punctuation.section.embedded
+      set: embedded
+    - match: \\[ntr0\\"']
+      scope: constant.character.escape.c
+    - match: \\u{[[:xdigit:]]{1,8}}
+      scope: constant.character.escape.c
+    - match: \\
+      scope: invalid.illegal
+    - match: '"'
+      pop: true
+  embedded: # For string interpolation.
+    - include: main
+    - match: \(
+      push: nested
+    - match: \)
+      scope: punctuation.section.embedded
+      set: string_double
+  nested:
+    - include: main
+    - match: \(
+      push: nested
+    - match: \)
+      pop: true
+  paren_expr:
+    - include: main
+    - match: '\)'
+      pop: true
+###################################################### MISC
+  # Highlight missing semi-colon:
+  statement-terminator:
+    - match: '\s*;' # @@ Allow semi-colon on next line?
+      pop: true
+    - match: '\n'
+      scope: invalid.illegal.missing-semi-colon.jiyu
+      pop: true
+###################################################### COMMENTS
+  comments:
+    - match: \*/(?!\*)
+      scope: invalid.illegal.stray-comment-end.jiyu
+    # Comments begin with a '//' and finish at the end of the line.
+    - match: //
+      scope: punctuation.definition.comment.jiyu
+      push:
+        - meta_scope: comment.line.double-slash.jiyu
+        - match: '(\\)$\n'
+          captures:
+            1: punctuation.separator.continuation.jiyu
+        - match: \n
+          pop: true
+    # Comments begin with a '//' and finish at the end of the line.
+    - match: /\*
+      scope: punctuation.definition.comment.jiyu
+      push: comment_block
+  comment_block:
+    - meta_scope: comment.block.jiyu
+    - match: /\*
+      push: comment_block
+    - match: \*/
+      scope: punctuation.definition.comment.jiyu
+      pop: true
+###################################################### END

@@ -157,11 +157,13 @@ const char *preload_text = R"C01N(
 
 func __strings_match(a: string, b: string) -> bool {
     if (a.length != b.length) return false;
-    if (a.data == null && b.data != null) return false;
-    if (b.data == null && a.data != null) return false;
     if (a.data == null && b.data == null) return true;
 
-    for 0..a.length-1 {
+    if (a.data == null) return false;
+    if (b.data == null) return false;
+
+
+    for 0..<a.length {
         if (a[it] != b[it]) return false;
     }
 
@@ -231,7 +233,8 @@ extern "C" {
         if (compiler->build_options.executable_name == to_string("")) return false;
 
 #if WIN32
-        auto win32_sdk = find_visual_studio_and_windows_sdk();
+        Find_Result win32_sdk;
+        find_visual_studio_and_windows_sdk(&win32_sdk);
 
         if (win32_sdk.vs_exe_path) {
             const int LINE_SIZE = 4096;
@@ -460,6 +463,7 @@ extern "C" {
 
             Ast_Function *function = static_cast<Ast_Function *>(expr);
             if (function->is_marked_metaprogram) compiler->is_metaprogram = true;
+            function->is_exported = true; // main() must be exported by default
         }
 
         return compiler->errors_reported == 0;
@@ -606,7 +610,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (filename == to_string("")) {
+    if (filename == String()) {
         compiler->report_error((Token *)nullptr, "No input files specified.\n");
         return -1;
     }

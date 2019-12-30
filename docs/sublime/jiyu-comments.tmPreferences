@@ -1,0 +1,43 @@
+<!-- 
+   This file goes in: 
+   Windows: ~/AppData/Roaming/Sublime Text 3/Packages/User/
+   OSX: ~/Library/Application Support/Sublime Text 3/Packages/User/
+
+   To have that copy up to date I usually create a link from that location to the source code repository (with mklink /H or ln -s)
+
+   For reference see:
+   http://docs.sublimetext.info/en/latest/reference/comments.html
+-->
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+   <dict>
+      <key>scope</key>
+      <string>source.jyu</string>
+
+      <key>settings</key>
+      <dict> 
+         <key>shellVariables</key>
+         <array>
+            <dict>
+               <key>name</key>
+               <string>TM_COMMENT_START</string>
+               <key>value</key>
+               <string>// </string>
+            </dict>
+            <dict>
+               <key>name</key>
+               <string>TM_COMMENT_START_2</string>
+               <key>value</key>
+               <string>/*</string>
+            </dict>
+            <dict>
+               <key>name</key>
+               <string>TM_COMMENT_END_2</string>
+               <key>value</key>
+               <string>*/</string>
+            </dict>
+         </array>
+      </dict>
+   </dict>
+</plist>
