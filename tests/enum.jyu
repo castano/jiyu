@@ -117,7 +117,10 @@ func main() {
     {
         var day : Day = .Monday;
         test(.Tuesday);
-        // test(1 + .Tuesday); // This produces an error, as expected.
+        if day == .Wednesday {
+            day = .Sunday;
+        }
+        // test(1 + .Tuesday); // This produces an error, as expected.        
     }
     
 }

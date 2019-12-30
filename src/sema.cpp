@@ -878,12 +878,13 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
     if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
 
     // @@ Shouldn't we do substitution regardless of whether we mutate the type?
-    // if (lit_left) {
-    //     left->substitution = lit_left;
-    // }
-    // if (lit_right) {
-    //     right->substitution = lit_right;
-    // }
+    // I think we do, otherwise in expressions such as `day == Day.Tuesday` the right hand side is never folded.
+    if (lit_left) {
+        left->substitution = lit_left;
+    }
+    if (lit_right) {
+        right->substitution = lit_right;
+    }
 
     if (lit_left && is_mutable_literal(lit_left)) {
         maybe_mutate_literal_to_type(lit_left, get_type_info(right));
@@ -1524,6 +1525,19 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 bin->right = tuple.item2;
             } else {
+                // Special case for enum type comparision with inference. If lhs is enum, supply enum type to rhs.
+                // @@ Ideally this should work in both directions!
+                if (bin->operator_type == Token::EQ_OP || 
+                    bin->operator_type == Token::NE_OP ||
+                    bin->operator_type == Token::LE_OP ||
+                    bin->operator_type == Token::GE_OP) 
+                {
+                    typecheck_expression(bin->left);
+                    if (bin->left->type_info != nullptr && bin->left->type_info->type == Ast_Type_Info::ENUM) {
+                        typecheck_expression(bin->right, bin->left->type_info);
+                    }
+                }
+
                 // @Incomplete change typecheck_and_implicit_cast_expression_pair to use flags
                 bool allow_coerce_to_ptr_void = (allow_coerce_to_ptr_void_flag & ALLOW_COERCE_TO_PTR_VOID);
                 typecheck_and_implicit_cast_expression_pair(bin->left, bin->right, &bin->left, &bin->right, allow_coerce_to_ptr_void);

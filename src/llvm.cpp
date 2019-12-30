@@ -1138,7 +1138,12 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
         case AST_DECLARATION: {
             auto decl = static_cast<Ast_Declaration *>(expression);
-            if (decl->is_let && !decl->is_readonly_variable) return nullptr;
+
+            // Let declarations should have been handled through substitution with the corresponding literal. When invoked 
+            // from emit_scope we just skip these declarations, but when invoked from emit_expression this should be an error.
+            // Should we use an assert here and skip let declarations in emit_scope?
+            //if (decl->is_let && !decl->is_readonly_variable) return nullptr;
+            assert(!decl->is_let || decl->is_readonly_variable); 
 
             auto decl_value = get_value_for_decl(decl);
             if (decl->initializer_expression) {
@@ -1695,6 +1700,11 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
     }
 
     for (auto &it : scope->statements) {
+        if (it->type == AST_DECLARATION) {
+            auto decl = static_cast<Ast_Declaration *>(it);
+            if (decl->is_let && !decl->is_readonly_variable) continue;
+        }
+
         irb->SetCurrentDebugLocation(DebugLoc::get(get_line_number(it), 0, di_current_scope));
         emit_expression(it);
     }
