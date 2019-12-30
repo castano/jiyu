@@ -1,0 +1,38 @@
+
+- enums
+    - llvm backend: output enum types.
+
+    - enum flags?
+
+    - Ensure that the constant value for each enum member must be in the range of the underlying type for the enum.
+
+    - The associated value of an enum member may not, directly or indirectly, use the value of its own associated enum member.
+
+        enum Circular {
+            A = B;
+            B;
+        }
+
+- operator functions.
+
+- multiple declarations in a single line:
+
+    var x, y, z, w: float;
+    var x, y, z, w = 0.0;
+    let PI, pi = 3.14159;
+
+- defer statements.
+
+- print with var args or string interpolation?
+
+- passing function pointers as arguments, function typealias.
+
+- default argument values. The parser accepts default values, but implementation does not seem to be complete.
+
+- named arguments. 
+    I think jai was overcomplicated, but swift is too restrictive. My preference would be to allow optional argument labelling, but 
+    no reordering, only omission of arguments that are default-initialized.
+
+
+
+
