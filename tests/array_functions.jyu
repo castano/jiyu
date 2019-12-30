@@ -2,11 +2,13 @@
 #import "Array";
 
 // Array module defines:
-// __array_add<T>(arr: *[..] T, T)
+// __array_add<T>(arr: *[..] T, item: T)
 // __array_reset<T>(arr: *[..] T)
 // __array_reserve<T>(arr: *[..] T)
 // __array_resize<T>(array: *[..] T, _amount: int)
 // __array_pop<T>(array: *[..] T) -> T
+// __array_contains<T>(array: *[..] T, item: T) -> bool
+// __array_add_if_unique<T>(array: *[..] T, item: T) -> bool
 
 func main() {
     // When the compiler sees <array>.func(...), it will attempt to transform this sequence into
@@ -15,6 +17,8 @@ func main() {
     arr.add(1);
     arr.add(2);
     arr.add(3);
+    arr.add_if_unique(3);
+    arr.add_if_unique(4);
 
     for arr printf("Value: %lld\n", it);
 
