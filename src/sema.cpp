@@ -1939,70 +1939,83 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
         case AST_DEREFERENCE: {
             auto deref = static_cast<Ast_Dereference *>(expression);
-            typecheck_expression(deref->left);
-            if (compiler->errors_reported) return;
 
-            // Save this in case we need to check what the original thing was for struct member-function overloading.
-            // We dont want this change to propagate down to function-overloading.
-            deref->original_left = deref->left;
-            if (get_type_info(deref->left)->type == Ast_Type_Info::POINTER) {
-                // we allow you to dereference once through a pointer
-                // here we insert some desugaring that expands pointer.field into (<<pointer).field
+            Ast_Type_Info * left_type = nullptr;
 
-                auto un = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, deref->left);
-                copy_location_info(un, deref);
+            if (deref->left == nullptr) {
+                // Try to infer dereferenced type.
+                left_type = want_numeric_type;
 
-                typecheck_expression(un);
-                deref->left = un; // Dont set substitution here, otherwise we'll infinite loop
+                if (!left_type || left_type->type != Ast_Type_Info::ENUM) {
+                    compiler->report_error(deref, "Cannot infer enum type for expression.\n");
+                    return;
+                }
+
+                deref->is_type_dereference = true;
             }
+            else {
+                typecheck_expression(deref->left);
+                if (compiler->errors_reported) return;
+            
+                // Save this in case we need to check what the original thing was for struct member-function overloading.
+                // We dont want this change to propagate down to function-overloading.
+                deref->original_left = deref->left;
+                if (get_type_info(deref->left)->type == Ast_Type_Info::POINTER) {
+                    // we allow you to dereference once through a pointer
+                    // here we insert some desugaring that expands pointer.field into (<<pointer).field
 
-            auto left_type = get_type_info(deref->left);
-            assert(left_type);
+                    auto un = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, deref->left);
+                    copy_location_info(un, deref);
 
-            bool is_type_use = false;
-            auto left = deref->left;
-            if (left_type->type == Ast_Type_Info::TYPE) {
-                is_type_use = true;
-                while (left->substitution) left = left->substitution;
-
-                if (left->type == AST_IDENTIFIER) {
-                    auto identifier = static_cast<Ast_Identifier *>(left);
-
-                    left = identifier->resolved_declaration;
-                    left_type = get_type_info(left);
+                    typecheck_expression(un);
+                    deref->left = un; // Dont set substitution here, otherwise we'll infinite loop
                 }
 
-                if (left->type == AST_TYPE_ALIAS) {
-                    auto alias = static_cast<Ast_Type_Alias *>(left);
+                left_type = get_type_info(deref->left);
+                assert(left_type);
 
-                    left_type = alias->type_value;
-                    left_type = get_final_type(left_type);
+                auto left = deref->left;
+                if (left_type->type == Ast_Type_Info::TYPE) {
+                    deref->is_type_dereference = true;
+                    while (left->substitution) left = left->substitution;
 
-                    assert(left_type);
-                    assert(alias->type_value->type == Ast_Type_Info::ALIAS);
-                } else if (left->type == AST_STRUCT) {
-                    auto _struct = static_cast<Ast_Struct *>(left);
+                    if (left->type == AST_IDENTIFIER) {
+                        auto identifier = static_cast<Ast_Identifier *>(left);
 
-                    left_type = _struct->type_value;
-                    assert(left_type);
+                        left = identifier->resolved_declaration;
+                        left_type = get_type_info(left);
+                    }
+
+                    if (left->type == AST_TYPE_ALIAS) {
+                        auto alias = static_cast<Ast_Type_Alias *>(left);
+
+                        left_type = alias->type_value;
+                        left_type = get_final_type(left_type);
+
+                        assert(left_type);
+                        assert(alias->type_value->type == Ast_Type_Info::ALIAS);
+                    } else if (left->type == AST_STRUCT) {
+                        auto _struct = static_cast<Ast_Struct *>(left);
+
+                        left_type = _struct->type_value;
+                        assert(left_type);
+                    }
+                    else if (left->type == AST_ENUM) {
+                        auto _enum = static_cast<Ast_Enum *>(left);
+
+                        left_type = _enum->type_value;
+                        assert(left_type);
+                    }
                 }
-                else if (left->type == AST_ENUM) {
-                    auto _enum = static_cast<Ast_Enum *>(left);
 
-                    left_type = _enum->type_value;
-                    assert(left_type);
+                left_type = get_final_type(left_type);
+                if (left_type->type != Ast_Type_Info::STRING &&
+                    left_type->type != Ast_Type_Info::ARRAY  &&
+                    left_type->type != Ast_Type_Info::STRUCT &&
+                    left_type->type != Ast_Type_Info::ENUM) {
+                    compiler->report_error(deref, "Attempt to dereference a type that is not a string, struct, array, or enum!\n");
+                    return;
                 }
-            }
-
-            deref->is_type_dereference = is_type_use;
-
-            left_type = get_final_type(left_type);
-            if (left_type->type != Ast_Type_Info::STRING &&
-                left_type->type != Ast_Type_Info::ARRAY  &&
-                left_type->type != Ast_Type_Info::STRUCT &&
-                left_type->type != Ast_Type_Info::ENUM) {
-                compiler->report_error(deref, "Attempt to dereference a type that is not a string, struct, array, or enum!\n");
-                return;
             }
 
             // @Hack until we have field members in the type_info (data and length would be field members of string)
@@ -2104,7 +2117,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                 }
 
-                if (found && is_type_use) {
+                if (found && deref->is_type_dereference) {
                     compiler->report_error(deref, "Attempt to use struct variable member without an instance!\n");
                     return;
                 }
@@ -2116,7 +2129,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     auto decl = find_declaration_for_atom_in_scope(&_struct->member_scope, field_atom);
                     if (decl && decl->type == AST_DECLARATION) {
                         // this is not supposed to happen because regular var's should be handled by the above code.
-                        if (is_type_use) assert(static_cast<Ast_Declaration *>(decl)->is_let);
+                        if (deref->is_type_dereference) assert(static_cast<Ast_Declaration *>(decl)->is_let);
                     } else if (decl && decl->type == AST_FUNCTION) {
                         // @Hack substitute to an identifier to get the quick benefit of the overloading sytem.
 

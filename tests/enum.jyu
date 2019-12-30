@@ -13,6 +13,8 @@ enum Day : uint {
 
     Saturday;
     Sunday;
+
+    //Domingo = .Sunday;        // @@ Should this work?
 }
 
 enum WeekendDay {
@@ -112,6 +114,11 @@ func main() {
     
 
     //printf("Whatever = %d\n", Day.Whatever); // This should trigger an error.
-
+    {
+        var day : Day = .Monday;
+        test(.Tuesday);
+        // test(1 + .Tuesday); // This produces an error, as expected.
+    }
+    
 }
 

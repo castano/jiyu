@@ -379,6 +379,18 @@ Ast_Expression *Parser::parse_unary_expression() {
         }
 
         return cast;
+    } else if (token->type == Token::DOT) {
+        Ast_Dereference * deref = PARSER_NEW(Ast_Dereference);
+        next_token();
+
+        // @TODO do other languages let you use anything other than an identifier for a field selection?
+        auto right = parse_identifier();
+        if (!right) return nullptr;
+
+        deref->left = nullptr;          // When this is null, we try to infer it in semantic analysis.
+        deref->field_selector = right;
+
+        return deref;
     }
 
     return parse_postfix_expression();
