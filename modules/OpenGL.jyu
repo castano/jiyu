@@ -503,6 +503,8 @@ var glBlendEquation: @c_function (mode: GLenum) -> void;
 
 var glDrawElements: @c_function (mode: GLenum, count: GLsizei, type: GLenum, indices: *GLvoid) -> void;
 
+var glUniform1i: @c_function (location: GLint, v0: GLint) -> void;
+
 
 func init_gl_functions(get_proc: (name: string) -> *void) {
     glBindVertexArray          = cast() get_proc("glBindVertexArray");
@@ -540,5 +542,6 @@ func init_gl_functions(get_proc: (name: string) -> *void) {
     glBlendEquation            = cast() get_proc("glBlendEquation");
     glDeleteBuffers            = cast() get_proc("glDeleteBuffers");
     glDrawElements             = cast() get_proc("glDrawElements");
+    glUniform1i                = cast() get_proc("glUniform1i");
 }
 
