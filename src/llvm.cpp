@@ -831,6 +831,9 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 } else if (is_float_type(type)) {
                     return irb->CreateFNeg(value);
                 }
+            } else if (un->operator_type == Token::EXCLAMATION || un->operator_type == Token::TILDE) {
+                auto value = emit_expression(un->expression);
+                return irb->CreateNot(value);
             }
 
             assert(false);
