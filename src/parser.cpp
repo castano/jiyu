@@ -344,12 +344,13 @@ Ast_Expression *Parser::parse_postfix_expression() {
 Ast_Expression *Parser::parse_unary_expression() {
     Token *token = peek_token();
 
-    if (token->type == Token::STAR ||
+    if (token->type == Token::STAR  ||
         token->type == Token::DEREFERENCE_OR_SHIFT ||
-        token->type == Token::MINUS) {
+        token->type == Token::MINUS ||
+        token->type == Token::EXCLAMATION ||
+        token->type == Token::TILDE) {
         Ast_Unary_Expression *ref = PARSER_NEW(Ast_Unary_Expression);
         ref->operator_type = token->type;
-
 
         next_token();
 

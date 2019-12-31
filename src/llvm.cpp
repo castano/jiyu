@@ -294,6 +294,19 @@ Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
     return llvm_types[type->type_table_index];
 }
 
+static bool is_c_return_by_pointer_argument(TargetMachine *TM, Ast_Type_Info *info) {
+    info = get_final_type(info);
+    if (!is_aggregate_type(info)) return false;
+
+    bool is_win32 = TM->getTargetTriple().isOSWindows();
+
+    // @TODO this probably is incorrect on x32 windows.
+    const int _8BYTES = 8;
+    if (is_win32 && info->size <= _8BYTES) return false;
+
+    return true;
+}
+
 Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
     type = get_final_type(type);
 
@@ -438,7 +451,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         // C functions typically return aggregates through a pointer as their first argument.
         // This may not be true depending on the size of the aggregate and the ABI @Incomplete.
         // @Volatile should match functionality in Ast_Function_Call generation.
-        bool c_return_is_by_pointer_argument = is_c_function && is_aggregate_type(type->return_type);
+        bool c_return_is_by_pointer_argument = is_c_function && is_c_return_by_pointer_argument(TargetMachine, type->return_type);
         if (c_return_is_by_pointer_argument) {
             arguments.add(return_type->getPointerTo());
             return_type = type_void;
@@ -860,6 +873,9 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 } else if (is_float_type(type)) {
                     return irb->CreateFNeg(value);
                 }
+            } else if (un->operator_type == Token::EXCLAMATION || un->operator_type == Token::TILDE) {
+                auto value = emit_expression(un->expression);
+                return irb->CreateNot(value);
             }
 
             assert(false);
@@ -1174,7 +1190,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             bool is_c_function = type_info->is_c_function;
             bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
 
-            bool c_return_is_by_pointer_argument = is_c_function && is_aggregate_type(type_info->return_type);
+            bool c_return_is_by_pointer_argument = is_c_function && is_c_return_by_pointer_argument(TargetMachine, type_info->return_type);
 
             Array<Value *> args;
             if (c_return_is_by_pointer_argument) {

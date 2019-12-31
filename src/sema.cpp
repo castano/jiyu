@@ -365,6 +365,10 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
                 auto expr = expression_is_lvalue(un->expression, false);
                 if (parent_wants_lvalue) return true;
                 return expr; // I think this is correct, but I havent thought about it deeply -josh 18 April 2019
+            } else if (un->operator_type == Token::MINUS) {
+                return false;
+            } else if (un->operator_type == Token::EXCLAMATION) {
+                return false;
             } else {
                 assert(false && "Unhandled Unary Expression type in expression_is_lvalue.");
                 return false;
@@ -744,6 +748,8 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     return nullptr;
                 }
             }
+
+            // @Incomplete unary bool-not, unary bitwise-not
 
             return nullptr;
         }
@@ -1758,12 +1764,34 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 un->type_info = type->pointer_to;
             } else if (un->operator_type == Token::MINUS) {
                 auto type = get_type_info(un->expression);
-                if (is_int_type(type) && is_float_type(type)) {
+                if (!is_int_type(type) && !is_float_type(type)) {
                     compiler->report_error(un, "Unary '-' is only valid for integer for float operands.\n");
                     return;
                 }
 
                 // @Incomplete I think, should we warn about unary minus on unsiged integers?
+                un->type_info = type;
+            } else if (un->operator_type == Token::EXCLAMATION) {
+                auto result = typecheck_and_implicit_cast_single_expression(un->expression, compiler->type_bool, ALLOW_COERCE_TO_BOOL);
+                auto expr = result.item2;
+
+                if (compiler->errors_reported) return;
+
+                if (get_type_info(expr)->type != Ast_Type_Info::BOOL) {
+                    compiler->report_error(expr, "Operand of unary '!' does not coerce to bool.\n");
+                    return;
+                }
+
+                // @Cleanup use substitution if possible.
+                un->expression = expr;
+                un->type_info = compiler->type_bool;
+            } else if (un->operator_type == Token::TILDE) {
+                auto type = get_type_info(un->expression);
+                if (!is_int_type(type)) {
+                    compiler->report_error(un, "Unary '~' is only valid for integer operands.\n");
+                    return;
+                }
+
                 un->type_info = type;
             }
 

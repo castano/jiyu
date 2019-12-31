@@ -25,6 +25,9 @@ struct Token {
         LEFT_ANGLE   = '<',
         RIGHT_ANGLE  = '>',
 
+        EXCLAMATION = '!',
+        TILDE       = '~',
+
         END = 256,
         INTEGER,
         FLOAT,
