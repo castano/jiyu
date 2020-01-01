@@ -779,6 +779,12 @@ Ast_Expression *Parser::parse_statement() {
         _struct->member_scope.owning_struct = _struct;
         _struct->is_union = (token->type == Token::KEYWORD_UNION);
 
+        if (peek_token()->type == Token::COLON) {
+            next_token();
+
+            _struct->parent_struct = parse_identifier();
+        }
+
         set_location_info_from_token(&_struct->member_scope, peek_token());
         parse_scope(&_struct->member_scope, true);
         return _struct;

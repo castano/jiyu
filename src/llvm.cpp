@@ -382,6 +382,15 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         Array<Type *> member_types;
 
         if (!type->is_union) {
+            auto parent = type->parent_struct;
+            if (parent) {
+                for (auto member : parent->struct_members) {
+                    if (member.is_let) continue;
+
+                    member_types.add(make_llvm_type(member.type_info));
+                }
+            }
+
             for (auto member : type->struct_members) {
                 if (member.is_let) continue;
 
@@ -721,6 +730,37 @@ Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
     auto _struct = info->struct_decl;
 
     Array<Constant *> element_values;
+
+    if (info->parent_struct) {
+        auto _struct = info->parent_struct->struct_decl;
+
+        // @Cutnpaste from the stuff below
+        for (auto member: _struct->member_scope.declarations) {
+            if (member->type == AST_DECLARATION) {
+                auto decl = static_cast<Ast_Declaration *>(member);
+
+                if (decl->is_let) continue;
+                assert(decl->is_struct_member);
+
+                Ast_Type_Info *member_info = get_type_info(decl);
+                Constant *init = nullptr;
+                if (decl->initializer_expression) {
+                    auto expr = emit_expression(decl->initializer_expression);
+                    assert(dyn_cast<Constant>(expr));
+
+                    init = static_cast<Constant *>(expr);
+                } else if (is_struct_type(member_info) && !get_final_type(member_info)->is_union) {
+                    init = get_constant_struct_initializer(member_info);
+                } else {
+                    init = Constant::getNullValue(get_type(member_info));
+                }
+
+                assert(init);
+                element_values.add(init);
+            }
+        }
+    }
+
     for (auto member: _struct->member_scope.declarations) {
         if (member->type == AST_DECLARATION) {
             auto decl = static_cast<Ast_Declaration *>(member);

@@ -97,6 +97,7 @@ struct Ast_Type_Info {
         Ast_Type_Info *type_info = nullptr;
         bool is_let = false;
     };
+    Ast_Type_Info *parent_struct = nullptr;
     Array<Struct_Member> struct_members; // for STRUCT
     bool is_union = false;
 
@@ -179,6 +180,8 @@ struct Ast_Struct : Ast_Expression {
     Ast_Identifier *identifier = nullptr;
     Ast_Scope member_scope;
     bool is_union = false;
+
+    Ast_Identifier *parent_struct = nullptr;
 
     Ast_Type_Info *type_value = nullptr; // @NoCopy
 };

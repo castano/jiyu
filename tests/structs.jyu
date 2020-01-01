@@ -30,8 +30,38 @@ union My_Union {
     var i: int32;
 }
 
+func test_inheritance() {
+    struct Node {
+        var i = 10;
+
+        func do_a_thing() {
+            printf("Node do_a_thing()\n");
+        }
+
+        func do_a_thing2(n: *Node) {
+            printf("Node.i: %d\n", n.i);
+        }
+    }
+
+    struct Node_Child : Node {
+        var b = "test";
+
+        func do_a_thing3(n: *Node_Child) {
+            printf("Node_Child.i: %d\n", n.i);
+            printf("Node_Child.b: %.*s\n", n.b.length, n.b.data);
+        }
+    }
+
+    var child: Node_Child;
+    child.do_a_thing2();
+    child.do_a_thing3();
+
+    Node_Child.do_a_thing();
+}
 
 func main() {
+    test_inheritance();
+
     var whatever: My_Struct;
     var whatever_ptr = *whatever;
     whatever.i = 10;
