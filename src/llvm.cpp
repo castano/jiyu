@@ -1951,8 +1951,6 @@ void LLVM_Jitter::init() {
 
     CompileLayer = new IRCompileLayer(*ES, *ObjectLayer, ConcurrentIRCompiler(*JTMB));
 
-    Mangle = new MangleAndInterner(*ES, *DL);
-
     ES->getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(*DL)));
 
     llvm->dib->finalize();
@@ -1971,7 +1969,23 @@ void LLVM_Jitter::init() {
 }
 
 void *LLVM_Jitter::lookup_symbol(String name) {
-    auto sym = ES->lookup({&ES->getMainJITDylib()}, (*Mangle)(string_ref(name)));
+    auto JTMB = JITTargetMachineBuilder::detectHost();
+
+    if (!JTMB) {
+        JTMB.takeError();
+        return nullptr;
+    }
+
+    auto DL = JTMB->getDefaultDataLayoutForTarget();
+    if (!DL) {
+        DL.takeError();
+        return nullptr;
+    }
+
+    // We're contructing a new MangleAndInterner every time because it seems if you re-use one that was allocated on the heap,
+    // sometimes it just crashes...
+    MangleAndInterner Mangle(*ES, *DL);
+    auto sym = ES->lookup({&ES->getMainJITDylib()}, Mangle(string_ref(name)));
     if (!sym) {
         sym.takeError();
         return nullptr;
