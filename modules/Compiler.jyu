@@ -22,7 +22,25 @@ func @c_function compiler_load_string(compiler: *Compiler, source: string) -> bo
 func @c_function compiler_typecheck_program(compiler: *Compiler) -> bool;
 func @c_function compiler_generate_llvm_module(compiler: *Compiler) -> bool;
 func @c_function compiler_emit_object_file(compiler: *Compiler) -> bool;
-func @c_function compiler_run_metaprogram(compiler: *Compiler, argc: int32, argv: **uint8) -> bool;
+
+func @c_function compiler_jit_program(compiler: *Compiler) -> bool;
+func @c_function compiler_jit_lookup_symbol(compiler: *Compiler, symbol_name: string) -> *void;
+
+func compiler_run_metaprogram(compiler: *Compiler, argc: int32, argv: **uint8) -> bool {
+    if !compiler_jit_program(compiler) return false;
+
+    var Main = cast(@c_function (argc: int32, argv: **uint8) -> int32) compiler_jit_lookup_symbol(compiler, "main");
+    if (!Main) {
+        #import "LibC";
+
+        // @Incomplete report error using a compiler facility since we should not import LibC for printf..
+        printf("Could not find symbol 'main' in JIT program.\n");
+        return false;
+    }
+
+    Main(argc, argv);
+    return true;
+}
 
 // @FixMe on macOS/Linux string should normally be passed by-value but we're currently passing string by pointer by default.
 func @c_function compiler_add_library_search_path(compiler: *Compiler, path: string) -> void;
