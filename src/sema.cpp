@@ -400,6 +400,8 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_t
     if (lit->literal_type == Ast_Literal::NULLPTR) {
         if (want_numeric_type->type == Ast_Type_Info::POINTER) {
             lit->type_info = want_numeric_type;
+        } else if (want_numeric_type->type == Ast_Type_Info::FUNCTION) {
+            lit->type_info = want_numeric_type;
         }
     }
 
@@ -466,7 +468,7 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
 
             viability_score += 1;
         } else if (ltype->type == Ast_Type_Info::BOOL && (allow_flags & ALLOW_COERCE_TO_BOOL)) {
-            if (is_pointer_type(rtype)) {
+            if (is_pointer_type(rtype) || rtype->type == Ast_Type_Info::FUNCTION) {
                 auto null_expression = make_null_literal(compiler, rtype, /*location=*/expression);
                 auto not_equal_null = make_binary(compiler, Token::NE_OP, expression, null_expression, /*location=*/expression);
                 // @Speed we can probably just assign not_equal_null->type_info to ltype here...
@@ -1369,8 +1371,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
                 if (!is_int_type(left_type) && !is_float_type(left_type) &&
                     left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
-                    && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE) {
-                    compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, and Type operands.\n");
+                    && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE
+                    && left_type->type != Ast_Type_Info::FUNCTION) {
+                    compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, function, and Type operands.\n");
                     return;
                 }
             }
