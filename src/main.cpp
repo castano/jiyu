@@ -199,6 +199,8 @@ extern "C" {
 
         compiler->init();
 
+        compiler->jitter = new LLVM_Jitter(compiler->llvm_gen);
+
         compiler->copier = new Copier(compiler);
 
         compiler->sema = new Sema(compiler);
@@ -470,8 +472,6 @@ extern "C" {
     }
 
     EXPORT bool compiler_generate_llvm_module(Compiler *compiler) {
-        // @Incomplete global variables
-
         compiler->llvm_gen->init();
 
         for (auto decl: compiler->global_decl_emission_queue) {
@@ -493,12 +493,13 @@ extern "C" {
         return compiler->errors_reported == 0;
     }
 
-    EXPORT bool compiler_run_metaprogram(Compiler *compiler, s32 argc, char **argv) {
-        compiler->metaprogram_argc = argc;
-        compiler->metaprogram_argv = argv;
-        LLVM_Jitter *jitter = new LLVM_Jitter(compiler->llvm_gen);
-        jitter->init();
+    EXPORT bool compiler_jit_program(Compiler *compiler) {
+        compiler->jitter->init();
         return true;
+    }
+
+    EXPORT void *compiler_jit_lookup_symbol(Compiler *compiler, String *symbol_name) {
+        return compiler->jitter->lookup_symbol(*symbol_name);
     }
 
     // @FixMe on macOS/Linux string should normally be passed by-value but we're currently passing string by pointer by default.
@@ -626,7 +627,14 @@ int main(int argc, char **argv) {
     if (!compiler_generate_llvm_module(compiler)) return -1;
 
     if (compiler->is_metaprogram) {
-        compiler_run_metaprogram(compiler, static_cast<s32>(metaprogram_arguments.count),  metaprogram_arguments.data);
+        if (!compiler_jit_program(compiler)) return -1;
+
+        auto *Main = (void (*)(s32 argc, char **argv)) compiler_jit_lookup_symbol(compiler, &to_string("main"));
+        if (!Main) {
+            compiler->report_error((Ast *)nullptr, "Could lookup symbol for program entry point 'main'.\n");
+            return -1;
+        }
+        Main(metaprogram_arguments.count, metaprogram_arguments.data);
         return 0;
     }
 

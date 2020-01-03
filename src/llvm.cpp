@@ -1934,11 +1934,11 @@ void LLVM_Jitter::init() {
         return;
     }
 
-    ExecutionSession ES;
-    RTDyldObjectLinkingLayer ObjectLayer(ES, []() { return llvm::make_unique<SectionMemoryManager>(); });
+    ES = new ExecutionSession();
+    ObjectLayer = new RTDyldObjectLinkingLayer(*ES, []() { return llvm::make_unique<SectionMemoryManager>(); });
 
 #ifdef WIN32
-    ObjectLayer.setOverrideObjectFlagsWithResponsibilityFlags(true);
+    ObjectLayer->setOverrideObjectFlagsWithResponsibilityFlags(true);
 
     // Sigh, I dont know why but setting this works around an LLVM bug that trips this assert on Windows:
     // "Resolving symbol outside this responsibility set"
@@ -1946,14 +1946,14 @@ void LLVM_Jitter::init() {
     // https://stackoverflow.com/questions/57733912/llvm-asserts-resolving-symbol-outside-this-responsibility-set#comment101934807_57733912
     // For now, the jiyu-game project runs as a metaprogram with this flag set.
     // -josh 18 November 2019
-    ObjectLayer.setAutoClaimResponsibilityForObjectSymbols(true);
+    ObjectLayer->setAutoClaimResponsibilityForObjectSymbols(true);
 #endif
 
-    IRCompileLayer CompileLayer(ES, ObjectLayer, ConcurrentIRCompiler(*JTMB));
+    CompileLayer = new IRCompileLayer(*ES, *ObjectLayer, ConcurrentIRCompiler(*JTMB));
 
-    MangleAndInterner Mangle(ES, *DL);
+    Mangle = new MangleAndInterner(*ES, *DL);
 
-    ES.getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(*DL)));
+    ES->getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(*DL)));
 
     llvm->dib->finalize();
 
@@ -1966,24 +1966,15 @@ void LLVM_Jitter::init() {
     pass.run(*llvm->llvm_module);
 #endif
 
-    if (!llvm->llvm_module->getFunction("main")) {
-        compiler->report_error((Token *)nullptr, "No main function defined for meta program. Aborting.\n");
-        return;
-    }
-
-    cantFail(CompileLayer.add(ES.getMainJITDylib(),
+    cantFail(CompileLayer->add(ES->getMainJITDylib(),
                               ThreadSafeModule(std::unique_ptr<Module>(llvm->llvm_module), *llvm->thread_safe_context)));
-
-    auto sym = ES.lookup({&ES.getMainJITDylib()}, Mangle("main"));
-    if (!sym) {
-        sym.takeError();
-        return;
-    }
-
-    auto *Main = (void (*)(s32 argc, char **argv)) sym->getAddress();
-    Main(compiler->metaprogram_argc, compiler->metaprogram_argv);
 }
 
 void *LLVM_Jitter::lookup_symbol(String name) {
-    return nullptr;
+    auto sym = ES->lookup({&ES->getMainJITDylib()}, (*Mangle)(string_ref(name)));
+    if (!sym) {
+        sym.takeError();
+        return nullptr;
+    }
+    return reinterpret_cast<void *>(sym->getAddress());
 }

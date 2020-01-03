@@ -10,6 +10,7 @@
 struct Token;
 struct Span;
 struct LLVM_Generator;
+struct LLVM_Jitter;
 struct Sema;
 struct Copier;
 
@@ -72,12 +73,10 @@ struct Compiler {
 
     s64 pointer_size = -1; // @TargetInfo
 
-    s32    metaprogram_argc = 0;
-    char **metaprogram_argv = nullptr;
-
     Sema *sema;
     Copier *copier;
     LLVM_Generator *llvm_gen;
+    LLVM_Jitter    *jitter;
 
     Atom_Table *atom_table;
 
