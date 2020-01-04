@@ -629,7 +629,8 @@ int main(int argc, char **argv) {
     if (compiler->is_metaprogram) {
         if (!compiler_jit_program(compiler)) return -1;
 
-        auto *Main = (void (*)(s32 argc, char **argv)) compiler_jit_lookup_symbol(compiler, &to_string("main"));
+        String symbol = to_string("main");
+        auto *Main = (void (*)(s32 argc, char **argv)) compiler_jit_lookup_symbol(compiler, &symbol);
         if (!Main) {
             compiler->report_error((Ast *)nullptr, "Could lookup symbol for program entry point 'main'.\n");
             return -1;
