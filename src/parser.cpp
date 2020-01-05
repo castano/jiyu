@@ -960,7 +960,14 @@ Ast_Expression *Parser::parse_statement() {
             compiler->queue_directive(_if); // queue the directive early so that further directives that depend on this arent queued first.
 
             token = peek_token();
+
+            // Prevent identifier lookups outside preload/builtin scope.
+            // This is to prevent allowing order-dependent directive resolutions
+            // that depend on each other being resolved in specific orders to work.
+            // -josh 4 January 2020
+            push_scopes(compiler->preload_scope);
             _if->condition = parse_expression();
+            pop_scopes();
 
             _if->then_scope = PARSER_NEW(Ast_Scope);
             _if->then_scope->parent = get_current_canonical_scope();
