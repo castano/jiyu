@@ -471,7 +471,7 @@ void Compiler::resolve_directives() {
             sema->typecheck_expression(_if->condition);
             if (this->errors_reported) return;
 
-            auto lit = resolves_to_literal_value(_if->condition);
+            auto lit = sema->folds_to_literal(_if->condition);
 
             if (!lit) {
                 this->report_error(_if->condition, "#if condition must be a literal expression.\n");
