@@ -422,15 +422,14 @@ extern "C" {
         return true;
     }
 
-    // @FixMe on macOS/Linux string should normally be passed by-value but we're currently passing string by pointer by default.
-    EXPORT bool compiler_load_file(Compiler *compiler, String *filename) {
-        perform_load(compiler, nullptr, *filename, compiler->global_scope);
+    EXPORT bool compiler_load_file(Compiler *compiler, String filename) {
+        perform_load(compiler, nullptr, filename, compiler->global_scope);
 
         return compiler->errors_reported == 0;
     }
 
-    EXPORT bool compiler_load_string(Compiler *compiler, String *source) {
-        perform_load_from_string(compiler, *source, compiler->global_scope);
+    EXPORT bool compiler_load_string(Compiler *compiler, String source) {
+        perform_load_from_string(compiler, source, compiler->global_scope);
 
         return compiler->errors_reported == 0;
     }
@@ -498,17 +497,16 @@ extern "C" {
         return true;
     }
 
-    EXPORT void *compiler_jit_lookup_symbol(Compiler *compiler, String *symbol_name) {
-        return compiler->jitter->lookup_symbol(*symbol_name);
+    EXPORT void *compiler_jit_lookup_symbol(Compiler *compiler, String symbol_name) {
+        return compiler->jitter->lookup_symbol(symbol_name);
     }
 
-    // @FixMe on macOS/Linux string should normally be passed by-value but we're currently passing string by pointer by default.
-    EXPORT void compiler_add_library_search_path(Compiler *compiler, String *path) {
-        compiler->library_search_paths.add(copy_string(*path)); // @TODO we should check for duplication here, maybe.
+    EXPORT void compiler_add_library_search_path(Compiler *compiler, String path) {
+        compiler->library_search_paths.add(copy_string(path)); // @TODO we should check for duplication here, maybe.
     }
 
-    EXPORT void compiler_add_compiled_object_for_linking(Compiler *compiler, String *path) {
-        compiler->user_supplied_objs.add(copy_string(*path));
+    EXPORT void compiler_add_compiled_object_for_linking(Compiler *compiler, String path) {
+        compiler->user_supplied_objs.add(copy_string(path));
     }
 }
 
@@ -620,7 +618,7 @@ int main(int argc, char **argv) {
         if (!perform_clang_import(compiler, import_c_file, compiler->global_scope)) return -1;
     }
 
-    if (!compiler_load_file(compiler, &filename)) return -1;
+    if (!compiler_load_file(compiler, filename)) return -1;
 
     if (!compiler_typecheck_program(compiler)) return -1;
 
@@ -630,7 +628,7 @@ int main(int argc, char **argv) {
         if (!compiler_jit_program(compiler)) return -1;
 
         String symbol = to_string("main");
-        auto *Main = (void (*)(s32 argc, char **argv)) compiler_jit_lookup_symbol(compiler, &symbol);
+        auto *Main = (void (*)(s32 argc, char **argv)) compiler_jit_lookup_symbol(compiler, symbol);
         if (!Main) {
             compiler->report_error((Ast *)nullptr, "Could lookup symbol for program entry point 'main'.\n");
             return -1;

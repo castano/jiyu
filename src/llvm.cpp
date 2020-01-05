@@ -294,15 +294,43 @@ Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
     return llvm_types[type->type_table_index];
 }
 
+static bool is_system_v_target(TargetMachine *TM) {
+    auto triple = TM->getTargetTriple();
+    // @Incomplete there's probably a lot of others that fall into here.
+    return triple.isOSLinux() || triple.isMacOSX() || triple.isOSDarwin() || triple.isOSSolaris() || triple.isOSFreeBSD();
+}
+
 static bool is_c_return_by_pointer_argument(TargetMachine *TM, Ast_Type_Info *info) {
     info = get_final_type(info);
     if (!is_aggregate_type(info)) return false;
 
     bool is_win32 = TM->getTargetTriple().isOSWindows();
+    bool is_sysv  = is_system_v_target(TM);
 
-    // @TODO this probably is incorrect on x32 windows.
-    const int _8BYTES = 8;
+    // @TODO this probably is incorrect on x86-32 windows.
+    const int _8BYTES  = 8;
+    const int _16BYTES = 16;
     if (is_win32 && info->size <= _8BYTES) return false;
+
+    if (is_sysv && info->size <= _16BYTES) return false;
+
+    return true;
+}
+
+static bool is_c_pass_by_pointer_argument(TargetMachine *TM, Ast_Type_Info *info) {
+    info = get_final_type(info);
+    if (!is_aggregate_type(info)) return false;
+
+    bool is_win32 = TM->getTargetTriple().isOSWindows();
+    bool is_sysv  = is_system_v_target(TM);
+
+    // @TODO this probably is incorrect on x86-32 windows.
+    const int _8BYTES  = 8;
+    const int _16BYTES = 16;
+
+    if (is_win32 && info->size <= _8BYTES) return false;
+
+    if (is_sysv && info->size <= _16BYTES) return false;
 
     return true;
 }
@@ -431,7 +459,6 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         Array<Type *> arguments;
 
         bool is_c_function = type->is_c_function;
-        bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
 
         Type *return_type = make_llvm_type(get_final_type(type->return_type));
         if (type->return_type->type == Ast_Type_Info::VOID) {
@@ -453,12 +480,8 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
             Type *type = make_llvm_type(arg_type);
 
-            if (is_c_function && is_win32 && is_aggregate_type(arg_type)) {
-                assert(arg_type->size >= 0);
-
-                // @TargetInfo this is only true for x64 too
-                const int _8BYTES = 8;
-                if (arg_type->size > _8BYTES) {
+            if (is_c_function) {
+                if (is_c_pass_by_pointer_argument(TargetMachine, arg_type)) {
                     arguments.add(type->getPointerTo());
                     continue;
                 }
@@ -1179,7 +1202,6 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             assert(function_target);
 
             bool is_c_function = type_info->is_c_function;
-            bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
 
             bool c_return_is_by_pointer_argument = is_c_function && is_c_return_by_pointer_argument(TargetMachine, type_info->return_type);
 
@@ -1195,8 +1217,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                 bool is_pass_by_pointer_aggregate = is_aggregate_type(info);
 
-                const int _8BYTES = 8;
-                if (is_pass_by_pointer_aggregate && is_c_function && is_win32 && info->size <= _8BYTES) is_pass_by_pointer_aggregate = false;
+                if (is_c_function) is_pass_by_pointer_aggregate = is_c_pass_by_pointer_argument(TargetMachine, info);
 
                 auto value = emit_expression(it, is_pass_by_pointer_aggregate);
                 args.add(value);
