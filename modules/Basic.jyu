@@ -346,6 +346,15 @@ func get_command_line(strings: [] string) -> *uint8 {
     }
 }
 
+#if os(MacOSX) || os(Linux) {
+    func run_command(args: [] string) -> int32 {
+        var cmd_line = get_command_line(args);
+        // @TODO this should use execve stuff.
+        var result = system(cmd_line);
+        return result;
+    }
+}
+
 func wchar_to_mbstring(input: *wchar_t) -> string {
     var in_length = wcslen(input);
     var needed = wcstombs(null, input, in_length);
