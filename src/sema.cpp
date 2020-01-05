@@ -618,6 +618,19 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                         assert(false && "Unhandled binary operator in folds_to_literal.");
                         return nullptr;
                 }
+            } else if (left_type->type == Ast_Type_Info::BOOL) {
+                s64 left_bool  = left->bool_value;
+                s64 right_bool = right->bool_value;
+                switch (bin->operator_type) {
+                    case Token::OR_OP : FOLD_COMPARE(||, left_bool, right_bool, left_type, bin);
+                    case Token::AND_OP: FOLD_COMPARE(&&, left_bool, right_bool, left_type, bin);
+                    case Token::EQ_OP : FOLD_COMPARE(==, left_bool, right_bool, left_type, bin);
+                    case Token::NE_OP : FOLD_COMPARE(!=, left_bool, right_bool, left_type, bin);
+
+                    default:
+                        assert(false && "Unhandled binary operator in folds_to_literal.");
+                        return nullptr;
+                }
             } else {
                 return nullptr;
             }
