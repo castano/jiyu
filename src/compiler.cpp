@@ -25,6 +25,43 @@
 // sigh, c++
 #define COMPILER_NEW2(type) (new (compiler->get_memory(sizeof(type))) type())
 
+String TextSpan::get_text() {
+    String s;
+    s.data = string.data + span.start;
+    s.length = span.length;
+    return s;
+}
+
+String mprintf(char *c_fmt, ...) {
+    String_Builder builder;
+
+    va_list vl;
+    va_start(vl, c_fmt);
+    builder.print_valist(c_fmt, vl);
+    va_end(vl);
+
+    return builder.to_string();
+}
+
+static
+bool write_entire_file(String filepath, String data) {
+    char *cpath = to_c_string(filepath);
+    defer { free(cpath); };
+
+    FILE *file = fopen(cpath, "wb");
+    if (!file) {
+        return false;
+    }
+    defer { fclose(file); };
+
+    // @Incomplete handle erros and ensure entire string is written
+    auto bytes_written = fwrite(data.data, 1, data.length, file);
+    if (bytes_written != (size_t)data.length) {
+        return false;
+    }
+    return true;
+}
+
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
     left  = get_final_type(left);
     right = get_final_type(right);

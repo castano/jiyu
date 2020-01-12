@@ -21,10 +21,10 @@ endif()
 #include_directories()
 
 set (JIYU_SRCS
-    src/main.cpp
     src/parser.cpp
     src/lexer.cpp
     src/compiler.cpp
+    src/compiler_api.cpp
     src/llvm.cpp
     src/sema.cpp
     src/copier.cpp
@@ -32,6 +32,9 @@ set (JIYU_SRCS
     src/clang_import.cpp
 )
 
+set (JIYU_DRIVER_SRCS
+    src/main.cpp
+)
 
 if (UNIX AND NOT APPLE)
     set(LINUX TRUE)
@@ -55,10 +58,23 @@ if (LINUX)
     add_definitions(-DLINUX  -DUNIX)
 endif ()
 
-
 include_directories(${LLVM_INCLUDE_DIRS})
 add_definitions(${LLVM_DEFINITIONS})
 
 llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_TARGETS_TO_BUILD} asmparser asmprinter passes orcjit)
-add_executable(jiyu ${JIYU_SRCS})
-target_link_libraries(jiyu ${CMAKE_THREAD_LIBS_INIT} ${LLVM_LIBS} ${LIBCLANG})
+
+add_library(libjiyu_static OBJECT ${JIYU_SRCS})
+add_library(libjiyu SHARED $<TARGET_OBJECTS:libjiyu_static>)
+add_executable(jiyu ${JIYU_DRIVER_SRCS} $<TARGET_OBJECTS:libjiyu_static>)
+
+target_link_libraries(libjiyu ${CMAKE_THREAD_LIBS_INIT} ${LLVM_LIBS} ${LIBCLANG})
+target_link_libraries(jiyu    ${CMAKE_THREAD_LIBS_INIT} ${LLVM_LIBS} ${LIBCLANG})
+
+add_custom_command(TARGET libjiyu
+                   POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:libjiyu> ${CMAKE_SOURCE_DIR}/modules/)
+ if (WIN32)
+     add_custom_command(TARGET libjiyu
+                   POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_LINKER_FILE:libjiyu> ${CMAKE_SOURCE_DIR}/modules/)
+ endif ()
