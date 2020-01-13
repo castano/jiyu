@@ -21,7 +21,7 @@ then
         LLVM_URL="http://releases.llvm.org/$LLVM_VERSION/clang+llvm-$LLVM_VERSION-x86_64-apple-darwin.tar.xz"
         curl -L --output llvm-prebuilt.tar.xz $LLVM_URL
     fi
-    tar -xzf llvm-prebuilt.tar.xz
+    tar -xf llvm-prebuilt.tar.xz
     mv "clang+llvm-$LLVM_VERSION-x86_64-apple-darwin" llvm
 fi
 
@@ -44,6 +44,6 @@ then
         exit
     fi
 
-    tar -xzf llvm-prebuilt.tar.xz
+    tar -xf llvm-prebuilt.tar.xz
     mv "clang+llvm-$LLVM_VERSION-x86_64-linux-gnu-ubuntu-$UBUNTU_VERSION" llvm
 fi
