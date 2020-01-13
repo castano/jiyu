@@ -12,7 +12,7 @@ struct Build_Options {
     var emit_llvm_ir       : bool = false;
 }
 
-library "libjiyu";
+library "jiyu";
 
 func @c_function create_compiler_instance(options: *Build_Options) -> *Compiler;
 func @c_function compiler_run_default_link_command(compiler: *Compiler) -> bool;

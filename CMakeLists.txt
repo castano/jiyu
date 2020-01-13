@@ -65,6 +65,8 @@ llvm_map_components_to_libnames(LLVM_LIBS ${LLVM_TARGETS_TO_BUILD} asmparser asm
 
 add_library(libjiyu_static OBJECT ${JIYU_SRCS})
 add_library(libjiyu SHARED $<TARGET_OBJECTS:libjiyu_static>)
+set_target_properties(libjiyu PROPERTIES OUTPUT_NAME "jiyu")
+
 add_executable(jiyu ${JIYU_DRIVER_SRCS} $<TARGET_OBJECTS:libjiyu_static>)
 
 target_link_libraries(libjiyu ${CMAKE_THREAD_LIBS_INIT} ${LLVM_LIBS} ${LIBCLANG})
