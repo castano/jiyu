@@ -544,10 +544,31 @@ bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *targe
 
     // @Incomplete
     Array<char *> clang_command_line_args;
+    if (compiler->build_options.verbose_diagnostics) {
+        clang_command_line_args.add("-v");
+    }
+    if (compiler->build_options.target_triple != String()) {
+        clang_command_line_args.add("-target");
+        clang_command_line_args.add(compiler->get_temp_c_string(compiler->build_options.target_triple));
+    }
     for (auto lib_search_path: compiler->library_search_paths) {
         clang_command_line_args.add("-I");
         clang_command_line_args.add(to_c_string(lib_search_path)); // @Leak
     }
+
+    auto triple = compiler->llvm_gen->TargetMachine->getTargetTriple();
+
+#ifdef MACOSX
+    // One MacOSX, we have to explicitly set the sysroot with custom-built versions of clang.
+    // A more reliable solution would be to use the xcrun tool, I think:
+    // -isysroot $(xcrun --sdk iphoneos --show-sdk-path)
+    if (triple.isOSDarwin() || triple.isMacOSX()) {
+        clang_command_line_args.add("-I");
+        clang_command_line_args.add("/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include");
+        clang_command_line_args.add("-isysroot");
+        clang_command_line_args.add("/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk");
+    }
+#endif
 
     CXTranslationUnit translation_unit;
     CXErrorCode error = clang_parseTranslationUnit2(index,
@@ -582,11 +603,28 @@ bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *targe
 
     if (compiler->errors_reported) return false;
 
-    Array<USR_Pair>    usr_map;
-    Visitor_Data data;
+    Array<USR_Pair> usr_map;
+    Visitor_Data    data;
     data.compiler     = compiler;
     data.target_scope = target_scope;
-    data.usr_map = &usr_map;
+    data.usr_map      = &usr_map;
+
+    // @Cleanup these built-in C declarations should exist in a specific shared scope
+    // for all C imports, otherwise we are widening the surface area of duplication in
+    // the same scope by default.
+
+    // Add __va_list_tag; I haven't experienced needing this on Windows, I am presuming it is a legacy thing
+    // that exists in older Linux/Mac/BSD code. -josh 3 January 2020
+    if (!triple.isOSWindows()) {
+        // @Cutnpaste from the cursor_visitor
+        Ast_Struct *_struct = IMPORT_NEW(Ast_Struct);
+        _struct->is_union = false;
+        _struct->type_value = make_struct_type(compiler, _struct);
+        add_usr_mapping(&usr_map, to_string("c:@S@__va_list_tag"), _struct);
+
+        target_scope->statements.add(_struct);
+        target_scope->declarations.add(_struct);
+    }
 
     // Add __builtin_va_list definition (officially *void under GCC/Clang, idk if this is true under Windows for Clang @TODO)
     {
