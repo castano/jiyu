@@ -22,7 +22,6 @@
 #pragma warning(pop)
 #endif
 
-extern String __default_module_search_path;
 extern String __default_target_triple;
 
 static
@@ -97,8 +96,10 @@ int main(int argc, char **argv) {
         String path = get_executable_path();
         String working_dir = get_jiyu_work_directory(basepath(path));
 
-        __default_module_search_path = mprintf("%.*smodules", working_dir.length, working_dir.data);
-        // printf("Modules path: %.*s\n", __default_module_search_path.length, __default_module_search_path.data);
+        String modules_path = mprintf("%.*smodules", PRINT_ARG(working_dir));
+        compiler_system_set_default_module_search_path(modules_path);
+        free(modules_path.data);
+        // printf("Modules path: %.*s\n", PRINT_ARG(modules_path));
 
         free(path.data);
     }
@@ -116,6 +117,8 @@ int main(int argc, char **argv) {
     options.emit_llvm_ir        = emit_llvm_ir;
 
     auto compiler = create_compiler_instance(&options);
+//     defer { destroy_compiler_instance(compiler); };
+
     compiler->is_metaprogram = is_metaprogram;
 
     Array<char *> metaprogram_arguments;

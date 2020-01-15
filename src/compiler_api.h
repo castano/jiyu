@@ -23,7 +23,11 @@ struct Build_Options {
 extern "C" {
 #endif
 
+    EXPORT String compiler_system_get_default_module_search_path();
+    EXPORT void   compiler_system_set_default_module_search_path(String path);
+
     EXPORT Compiler *create_compiler_instance(Build_Options *options);
+    EXPORT void destroy_compiler_instance(Compiler *compiler);
     EXPORT bool compiler_run_default_link_command(Compiler *compiler);
     EXPORT bool compiler_load_file(Compiler *compiler, String filename);
     EXPORT bool compiler_load_string(Compiler *compiler, String source);
@@ -33,6 +37,7 @@ extern "C" {
     EXPORT bool compiler_jit_program(Compiler *compiler);
     EXPORT void *compiler_jit_lookup_symbol(Compiler *compiler, String symbol_name);
     EXPORT void compiler_add_library_search_path(Compiler *compiler, String path);
+    EXPORT void compiler_add_module_search_path(Compiler *compiler, String path);
     EXPORT void compiler_add_compiled_object_for_linking(Compiler *compiler, String path);
 
 #ifdef __cplusplus

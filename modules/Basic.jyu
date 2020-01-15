@@ -143,13 +143,17 @@ func get_lines(input: string) -> [] string {
 }
 
 func read_entire_file(path: string) -> string {
-    // @FixMe this only works if path points to a constant string
-    var file = fopen(path.data, "rb".data);
+    var c_path = to_c_string(path);
+    var file = fopen(c_path, "rb");
+    free(c_path);
+
     if file == null return "";
 
     fseek(file, 0, SEEK_END);
     var length = ftell(file);
     fseek(file, 0, SEEK_SET);
+
+    if !length return "";
 
     var mem = cast(c_string) malloc(cast(size_t) length);
     fread(mem, 1, cast(size_t) length, file);
@@ -164,15 +168,16 @@ func read_entire_file(path: string) -> string {
 }
 
 func write_entire_file(path: string, contents: string) -> bool {
-    // @FixMe this only works if path points to a constant string
-    var file = fopen(path.data, "wb".data);
+    var c_path = to_c_string(path);
+    var file = fopen(c_path, "wb");
+    free(c_path);
+
     if file == null return false;
 
     fwrite(contents.data, 1, cast(size_t) contents.length, file);
     // @TODO verify fwrite success
 
     fclose(file);
-
     return true;
 }
 

@@ -172,13 +172,6 @@ struct String {
     char *data = nullptr;
     string_length_type length = 0;
 
-    String() { data = nullptr; }
-
-    // String(char *str) {
-    //     this->data = str;
-    //     this->length = strlen(str)
-    // }
-
     char &operator[](string_length_type index) const {
         assert(index >= 0 && index < length);
 

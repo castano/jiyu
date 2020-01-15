@@ -26,8 +26,13 @@
 #endif
 
 
-String __default_module_search_path;
-s64    __compiler_instance_count = 0; // @ThreadSafety
+static String __default_module_search_path;  // @ThreadSafety
+static s64    __compiler_instance_count = 0; // @ThreadSafety
+
+// @Cleanup this gets set by the main.cpp driver, and the intention is
+// that all compiler instances created will use the same target triple,
+// but that is not useful, because the main.cpp driver and user metaprograms
+// can just set the target triple themselves. -josh 14 January 2020
 String __default_target_triple;
 
 static
@@ -138,9 +143,15 @@ func __strings_match(a: string, b: string) -> bool {
 
 )C01N";
 
-
-
 extern "C" {
+    EXPORT String compiler_system_get_default_module_search_path() {
+        return copy_string(__default_module_search_path);
+    }
+
+    EXPORT void   compiler_system_set_default_module_search_path(String path) {
+        __default_module_search_path = copy_string(path);
+    }
+
     EXPORT Compiler *create_compiler_instance(Build_Options *options) {
         auto compiler = new Compiler();
 
@@ -168,9 +179,10 @@ extern "C" {
 
         compiler->sema = new Sema(compiler);
 
-        compiler->module_search_paths.add(__default_module_search_path);
-
-        compiler->library_search_paths.add(__default_module_search_path);
+        if (__default_module_search_path != String()) {
+            compiler->module_search_paths.add(__default_module_search_path);
+            compiler->library_search_paths.add(__default_module_search_path);
+        }
 
         perform_load_from_string(compiler, to_string((char *)preload_text), compiler->preload_scope);
 
@@ -191,6 +203,15 @@ extern "C" {
 
         os_init(compiler);
         return compiler;
+    }
+
+    EXPORT void destroy_compiler_instance(Compiler *compiler) {
+        delete compiler->sema;
+        delete compiler->copier;
+        delete compiler->llvm_gen;
+        delete compiler->jitter;
+        delete compiler->atom_table;
+        delete compiler;
     }
 
     EXPORT bool compiler_run_default_link_command(Compiler *compiler) {
@@ -457,7 +478,7 @@ extern "C" {
 
     EXPORT bool compiler_jit_program(Compiler *compiler) {
         compiler->jitter->init();
-        return true;
+        return compiler->errors_reported == 0;
     }
 
     EXPORT void *compiler_jit_lookup_symbol(Compiler *compiler, String symbol_name) {
@@ -465,7 +486,11 @@ extern "C" {
     }
 
     EXPORT void compiler_add_library_search_path(Compiler *compiler, String path) {
-        compiler->library_search_paths.add(copy_string(path)); // @TODO we should check for duplication here, maybe.
+        compiler->library_search_paths.add(copy_string(path)); // @Leak @Deduplicate
+    }
+
+    EXPORT void compiler_add_module_search_path(Compiler *compiler, String path) {
+        compiler->module_search_paths.add(copy_string(path)); // @Leak @Deduplicate
     }
 
     EXPORT void compiler_add_compiled_object_for_linking(Compiler *compiler, String path) {
