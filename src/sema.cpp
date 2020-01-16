@@ -864,6 +864,12 @@ Ast_Function *Sema::get_best_overload_from_set(Ast_Function_Call *call, Array<As
             function = get_polymorph_for_function_call(function, call);
             if (compiler->errors_reported) return nullptr;
         }
+
+        auto tuple = function_call_is_viable(call, get_type_info(function), false);
+        if (compiler->errors_reported) return nullptr;
+
+        bool viable = tuple.item1;
+        if (!viable) return nullptr;
     } else {
         const u64 U64_MAX = 0xFFFFFFFFFFFFFFFF;
         u64 lowest_score = U64_MAX;
