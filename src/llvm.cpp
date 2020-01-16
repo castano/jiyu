@@ -1908,6 +1908,8 @@ void LLVM_Jitter::init() {
 
     for (auto lib: compiler->libraries) {
         String name = lib->libname;
+        if (name == to_string("jiyu")) continue; // @Hack @Temporary loading the jiyu DLL causes some issues with LLVM on Linux.
+
         auto c_str = to_c_string(name);
         if (!lib->is_framework) {
             bool not_valid = llvm::sys::DynamicLibrary::LoadLibraryPermanently(c_str);
