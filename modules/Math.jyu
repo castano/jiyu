@@ -53,6 +53,17 @@ struct Vector3 {
     }
 }
 
+operator+(a: Vector3, b: Vector3) -> Vector3 {
+    return a.add(b);
+}
+
+operator-(a: Vector3, b: Vector3) -> Vector3 {
+    return a.sub(b);
+}
+
+operator*(a: Vector3, s: float) -> Vector3 {
+    return a.multiply(s);
+}
 
 struct Matrix4 {
     var m: [4][4] float;
@@ -263,3 +274,8 @@ struct Matrix4 {
             mat.m[0][1] * mat.m[1][0] * mat.m[2][2] * mat.m[3][3] + mat.m[0][0] * mat.m[1][1] * mat.m[2][2] * mat.m[3][3];
     }
 }
+
+operator*(a: Matrix4, b: Matrix4) -> Matrix4 {
+    return Matrix4.multiply(a, b);
+}
+
