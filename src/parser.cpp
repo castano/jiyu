@@ -65,6 +65,7 @@ String token_type_to_string(Token::Type type) {
         case Token::KEYWORD_UNION:     return copy_string(to_string("union"));
         case Token::KEYWORD_LIBRARY:   return copy_string(to_string("library"));
         case Token::KEYWORD_FRAMEWORK: return copy_string(to_string("framework"));
+        case Token::KEYWORD_OPERATOR : return copy_string(to_string("operator"));
 
         case Token::KEYWORD_IF:     return copy_string(to_string("if"));
         case Token::KEYWORD_ELSE:   return copy_string(to_string("else"));
@@ -381,6 +382,10 @@ Ast_Expression *Parser::parse_multiplicative_expression() {
             bin->operator_type = token->type;
             bin->left = sub_expression;
 
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
+
             auto right = parse_unary_expression();
             if (!right) {
                 compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
@@ -414,6 +419,10 @@ Ast_Expression *Parser::parse_additive_expression() {
             bin->operator_type = token->type;
             bin->left = sub_expression;
 
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
+
             auto right = parse_multiplicative_expression();
             if (!right) {
                 compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
@@ -446,6 +455,10 @@ Ast_Expression *Parser::parse_shift_expression() {
             bin->left = sub_expression;
 
             next_token();
+
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
 
             auto right = parse_additive_expression();
             if (!right) {
@@ -482,6 +495,10 @@ Ast_Expression *Parser::parse_relational_expression() {
 
             next_token();
 
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
+
             auto right = parse_shift_expression();
             if (!right) {
                 compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
@@ -515,6 +532,10 @@ Ast_Expression *Parser::parse_equality_expression() {
             bin->operator_type = token->type;
             bin->left = sub_expression;
 
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
+
             auto right = parse_relational_expression();
             if (!right) {
                 compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
@@ -546,6 +567,10 @@ Ast_Expression *Parser::parse_and_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
+
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
 
             auto right = parse_equality_expression();
             if (!right) {
@@ -579,6 +604,10 @@ Ast_Expression *Parser::parse_exclusive_or_expression() {
             bin->operator_type = token->type;
             bin->left = sub_expression;
 
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
+
             auto right = parse_and_expression();
             if (!right) {
                 compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
@@ -610,6 +639,10 @@ Ast_Expression *Parser::parse_inclusive_or_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
+
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
 
             auto right = parse_exclusive_or_expression();
             if (!right) {
@@ -643,6 +676,10 @@ Ast_Expression *Parser::parse_logical_and_expression() {
 
             next_token();
 
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
+
             auto right = parse_inclusive_or_expression();
             if (!right) {
                 compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
@@ -674,6 +711,10 @@ Ast_Expression *Parser::parse_logical_xor_expression() {
             bin->left = sub_expression;
 
             next_token();
+
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
 
             auto right = parse_logical_and_expression();
             if (!right) {
@@ -707,6 +748,10 @@ Ast_Expression *Parser::parse_logical_or_expression() {
 
             next_token();
 
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
+
             auto right = parse_logical_xor_expression();
             if (!right) {
                 compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
@@ -732,7 +777,7 @@ Ast_Expression *Parser::parse_expression() {
 Ast_Expression *Parser::parse_statement() {
     Token *token = peek_token();
 
-    if (token->type == Token::KEYWORD_FUNC) {
+    if (token->type == Token::KEYWORD_FUNC || token->type == Token::KEYWORD_OPERATOR) {
         return parse_function();
     }
 
@@ -1409,9 +1454,13 @@ bool is_tag_token(Token *token) {
 }
 
 Ast_Function *Parser::parse_function() {
-    expect_and_eat(Token::KEYWORD_FUNC);
+    bool is_operator_function = (peek_token()->type == Token::KEYWORD_OPERATOR);
+
+    if (is_operator_function) expect_and_eat(Token::KEYWORD_OPERATOR);
+    else expect_and_eat(Token::KEYWORD_FUNC);
 
     Ast_Function *function = PARSER_NEW(Ast_Function);
+    function->is_operator_function = is_operator_function;
     function->arguments_scope.parent = get_current_scope();
 
     Ast_Function *old_function = currently_parsing_function;
@@ -1464,9 +1513,26 @@ Ast_Function *Parser::parse_function() {
         token = peek_token();
     }
 
+    if (is_operator_function) {
+        token = peek_token();
 
-    Ast_Identifier *ident = parse_identifier();
-    if (!ident) return nullptr;
+        if (!is_valid_overloadable_operator(token->type)) {
+            String op_name = token_type_to_string(token->type);
+            compiler->report_error(token, "Token '%.*s' is not a valid operator for overloading.\n", PRINT_ARG(op_name));
+            return nullptr;
+        }
+
+        Ast_Identifier *ident = PARSER_NEW(Ast_Identifier);
+        ident->enclosing_scope = get_current_scope();
+        ident->name = compiler->make_operator_atom(token->type);
+        next_token();
+
+        function->identifier = ident;
+    } else {
+        Ast_Identifier *ident = parse_identifier();
+        if (!ident) return nullptr;
+        function->identifier = ident;
+    }
 
     token = peek_token();
     if (token->type == Token::LEFT_ANGLE) {
@@ -1584,7 +1650,6 @@ Ast_Function *Parser::parse_function() {
         if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
     }
 
-    function->identifier = ident;
     currently_parsing_function = old_function;
     return function;
 }

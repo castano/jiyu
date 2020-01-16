@@ -852,6 +852,50 @@ Ast_Function *Sema::get_polymorph_for_function_call(Ast_Function *template_funct
     return polymorph;
 }
 
+Ast_Function *Sema::get_best_overload_from_set(Ast_Function_Call *call, Array<Ast_Function *> &overload_set) {
+    Ast_Function *function = nullptr;
+    // @Cleanup I'm not sure why I did this, but we can probably merge this with the general case for multiple overloads.
+    if (overload_set.count == 1) {
+        function = overload_set[0];
+        typecheck_function_header(function);
+        if (compiler->errors_reported) return nullptr;
+
+        if (function->is_template_function) {
+            function = get_polymorph_for_function_call(function, call);
+            if (compiler->errors_reported) return nullptr;
+        }
+    } else {
+        const u64 U64_MAX = 0xFFFFFFFFFFFFFFFF;
+        u64 lowest_score = U64_MAX;
+        for (auto overload : overload_set) {
+            if (overload->is_template_function) {
+                overload = get_polymorph_for_function_call(overload, call);
+                if (compiler->errors_reported) return nullptr;
+
+                if (!overload) continue; // no polymorphs that match this call, so skip it
+            }
+
+            typecheck_function_header(overload);
+            if (compiler->errors_reported) return nullptr;
+
+            auto tuple = function_call_is_viable(call, get_type_info(overload), false);
+            if (compiler->errors_reported) return nullptr;
+
+            bool viable = tuple.item1;
+            u64  score  = tuple.item2;
+
+            if (viable) {
+                if (score < lowest_score) {
+                    lowest_score = score;
+                    function = overload;
+                }
+            }
+        }
+    }
+
+    return function;
+}
+
 Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type_Info *function_type, bool perform_full_check) {
     assert(function_type);
     assert(function_type->type == Ast_Type_Info::FUNCTION);
@@ -1328,6 +1372,30 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
             }
 
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                Atom *operator_atom = compiler->make_operator_atom(bin->operator_type);
+
+                Ast_Identifier *ident = SEMA_NEW(Ast_Identifier);
+                ident->name = operator_atom;
+                collect_function_overloads_for_atom(operator_atom, bin->enclosing_scope, &ident->overload_set);
+
+                if (ident->overload_set.count) {
+                    Ast_Function_Call *call = SEMA_NEW(Ast_Function_Call);
+                    call->argument_list.add(bin->left);
+                    call->argument_list.add(bin->right);
+
+                    Ast_Function *function = get_best_overload_from_set(call, ident->overload_set);
+                    if (compiler->errors_reported) return;
+
+                    if (function) {
+                        bin->substitution = call;
+                        call->function_or_function_ptr = function;
+                        typecheck_expression(call);
+                        return;
+                    }
+                }
+            }
+
             if (bin->operator_type == Token::EQ_OP ||
                 bin->operator_type == Token::NE_OP ||
                 bin->operator_type == Token::LE_OP ||
@@ -1639,55 +1707,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 // If overload_set is empty, then it may still be a function pointer.
                 if (overload_set.count) {
-                    // assert(identifier->type_info == compiler->type_void);
-
-                    Ast_Function *function = nullptr;
-                    // @Cleanup I'm not sure why I did this, but we can probably merge this with the general case for multiple overloads.
-                    if (overload_set.count == 1) {
-                        function = overload_set[0];
-                        typecheck_function_header(function);
-                        if (compiler->errors_reported) return;
-
-                        if (function->is_template_function) {
-                            function = get_polymorph_for_function_call(function, call);
-                            if (compiler->errors_reported) return;
-                        }
-                    } else {
-                        const u64 U64_MAX = 0xFFFFFFFFFFFFFFFF;
-                        u64 lowest_score = U64_MAX;
-                        for (auto overload : overload_set) {
-                            if (overload->is_template_function) {
-                                overload = get_polymorph_for_function_call(overload, call);
-                                if (compiler->errors_reported) return;
-
-                                if (!overload) continue; // no polymorphs that match this call, so skip it
-                            }
-
-                            typecheck_function_header(overload);
-                            if (compiler->errors_reported) return;
-
-                            auto tuple = function_call_is_viable(call, get_type_info(overload), false);
-                            if (compiler->errors_reported) return;
-
-                            bool viable = tuple.item1;
-                            u64  score  = tuple.item2;
-
-                            if (viable) {
-                                if (score < lowest_score) {
-                                    lowest_score = score;
-                                    function = overload;
-                                }
-                            }
-                        }
-                    }
+                    Ast_Function *function = get_best_overload_from_set(call, overload_set);
+                    if (compiler->errors_reported) return;
 
                     if (!function) {
                         // @Incomplete print visible overload candidates
                         compiler->report_error(call, "No viable overload for function call.\n");
                         return;
                     }
-
-
 
                     function_call_is_viable(call, get_type_info(function), true);
                     if (compiler->errors_reported) return;

@@ -612,6 +612,23 @@ Atom *Compiler::make_atom(String name) {
     return atom;
 }
 
+Atom *Compiler::make_operator_atom(Token::Type op) {
+    if (is_valid_overloadable_operator(op)) {
+        String token_type_to_string(Token::Type type);
+
+        String op_name = token_type_to_string(op);
+        String atom_name = mprintf("__operator%.*s", PRINT_ARG(op_name));
+
+        Atom *atom = this->make_atom(atom_name);
+
+        free(op_name.data);
+        free(atom_name.data);
+        return atom;
+    } else {
+        return nullptr;
+    }
+}
+
 #define TTY_RED    "\033[0;31m"
 #define TTY_RESET  "\033[0m"
 

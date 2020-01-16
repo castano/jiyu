@@ -296,6 +296,7 @@ Token Lexer::lex_token() {
         else if (result.string == to_string("union"))     result.type = Token::KEYWORD_UNION;
         else if (result.string == to_string("library"))   result.type = Token::KEYWORD_LIBRARY;
         else if (result.string == to_string("framework")) result.type = Token::KEYWORD_FRAMEWORK;
+        else if (result.string == to_string("operator"))  result.type = Token::KEYWORD_OPERATOR;
 
         else if (result.string == to_string("void"))   result.type = Token::KEYWORD_VOID;
         else if (result.string == to_string("string")) result.type = Token::KEYWORD_STRING;

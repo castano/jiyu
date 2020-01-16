@@ -46,6 +46,7 @@ func @metaprogram main() {
     compile_single_test_file("tests/primitive_types.jyu", as_metaprogram);
     compile_single_test_file("tests/binary_operators.jyu", as_metaprogram);
     compile_single_test_file("tests/operators.jyu", as_metaprogram);
+    compile_single_test_file("tests/operator_overload.jyu", as_metaprogram);
     compile_single_test_file("tests/structs.jyu", as_metaprogram);
     compile_single_test_file("tests/array_functions.jyu", as_metaprogram);
     compile_single_test_file("tests/strings.jyu", as_metaprogram);

@@ -5,6 +5,7 @@
 #include "general.h"
 #include "ast.h"
 #include "compiler_api.h"
+#include "lexer.h"
 
 #include <stdarg.h>
 
@@ -144,6 +145,7 @@ struct Compiler {
 
     // _name_ is internally copied.
     Atom *make_atom(String name);
+    Atom *make_operator_atom(Token::Type operator_type);
 
     void queue_directive(Ast_Directive *directive);
     void resolve_directives();
@@ -165,6 +167,11 @@ Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct);
 
 Ast_Type_Info *get_final_type(Ast_Type_Info *info);
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right);
+
+inline
+bool is_valid_overloadable_operator(Token::Type op) {
+    return op == Token::MINUS || op == Token::PLUS || op == Token::STAR || op == Token::SLASH;
+}
 
 inline
 bool is_int_type(Ast_Type_Info *info) {

@@ -43,6 +43,7 @@ struct Token {
         KEYWORD_UNION,
         KEYWORD_LIBRARY,
         KEYWORD_FRAMEWORK,
+        KEYWORD_OPERATOR,
 
         KEYWORD_IF,
         KEYWORD_ELSE,

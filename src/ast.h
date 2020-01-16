@@ -199,6 +199,8 @@ struct Ast_Binary_Expression : Ast_Expression {
     Token::Type operator_type;
     Ast_Expression *left  = nullptr;
     Ast_Expression *right = nullptr;
+
+    Ast_Scope *enclosing_scope = nullptr; // @NoCopy should be set to the current scope being polymorphed. Set when operator_type is valid for overloading.
 };
 
 struct Ast_Identifier : Ast_Expression {
@@ -317,6 +319,7 @@ struct Ast_Function : Ast_Expression {
     bool is_c_varargs = false;
     bool is_template_function = false;
     bool is_exported = false;
+    bool is_operator_function = false;
 
     String linkage_name;       // @NoCopy
     bool body_checked = false; // @NoCopy

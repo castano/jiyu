@@ -1,0 +1,12 @@
+#import "LibC";
+
+operator+(b: float, a: string) -> float {
+    printf("whuat\n");
+    return 10;
+}
+
+func @metaprogram main() {
+    var t = 1.0 + "Hello";
+    printf("t: %f\n", t);
+}
+
