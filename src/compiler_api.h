@@ -41,7 +41,7 @@ extern "C" {
     EXPORT void compiler_add_compiled_object_for_linking(Compiler *compiler, String path);
 
 #ifdef __cplusplus
-}; // extern "C"
+} // extern "C"
 #endif
 
 #endif
