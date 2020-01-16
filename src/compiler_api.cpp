@@ -35,7 +35,6 @@ static s64    __compiler_instance_count = 0; // @ThreadSafety
 // can just set the target triple themselves. -josh 14 January 2020
 String __default_target_triple;
 
-static
 bool read_entire_file(String filepath, String *result) {
     char *cpath = to_c_string(filepath);
     defer { free(cpath); };
