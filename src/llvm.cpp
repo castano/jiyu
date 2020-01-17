@@ -307,9 +307,17 @@ static bool is_c_return_by_pointer_argument(TargetMachine *TM, Ast_Type_Info *in
     bool is_win32 = TM->getTargetTriple().isOSWindows();
     bool is_sysv  = is_system_v_target(TM);
 
-    // @TODO this probably is incorrect on x86-32 windows.
+    const int _4BYTES  = 4;
     const int _8BYTES  = 8;
     const int _16BYTES = 16;
+
+    // @TODO is this also true with Thumb?
+    if (TM->getTargetTriple().isARM()) {
+        if (info->size <= _4BYTES) return false;
+        return true;
+    }
+
+    // @TODO this probably is incorrect on x86-32 windows.
     if (is_win32 && info->size <= _8BYTES) return false;
 
     if (is_sysv && info->size <= _16BYTES) return false;
