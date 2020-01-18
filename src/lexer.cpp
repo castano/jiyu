@@ -352,6 +352,7 @@ Token Lexer::lex_token() {
         else if (result.string == to_string("@c_function"))  result.type = Token::TAG_C_FUNCTION;
         else if (result.string == to_string("@metaprogram")) result.type = Token::TAG_META;
         else if (result.string == to_string("@export")) result.type = Token::TAG_EXPORT;
+        else if (result.string == to_string("@flags")) result.type = Token::TAG_FLAGS;
 
         else if (result.string == to_string("temporary_c_vararg")) result.type = Token::TEMPORARY_KEYWORD_C_VARARGS;
 

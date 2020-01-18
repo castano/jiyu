@@ -299,6 +299,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY(identifier);
             copy_scope(&_new->member_scope, &old->member_scope);
             _new->member_scope.owning_enum = _new;
+            COPY_P(is_flags);
             
             // @@ Do we need to copy anything else?
 

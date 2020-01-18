@@ -1540,9 +1540,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 bin->right = tuple.item2;
             } else {
                 // Special case for enum type comparision with inference.
-                if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP ||
-                    bin->operator_type == Token::LE_OP || bin->operator_type == Token::GE_OP ||
-                    bin->operator_type == '<' || bin->operator_type == '>') 
+                // IC: I think this should work with all operators.
+                //if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP ||
+                //    bin->operator_type == Token::LE_OP || bin->operator_type == Token::GE_OP ||
+                //    bin->operator_type == '<' || bin->operator_type == '>' || bin->operator_type == Token::VERTICAL_BAR)
                 {
                     if (expression_needs_enum_type_inference(bin->right)) {
                         // If lhs is enum, supply enum type to rhs.
@@ -2275,6 +2276,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                         // Substitute Enum.Value by Value's declaration.
                         deref->substitution = decl;
+                        deref->type_info = decl->type_info;
                         found = true;
                         break;
                     }
@@ -2913,7 +2915,15 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                     Ast_Literal * literal = nullptr;
                     if (!decl->initializer_expression) {
-                        decl->initializer_expression = make_integer_literal(compiler, prev_value + 1, _enum->type_value, decl);
+                        if (_enum->is_flags) {
+                            int value = prev_value == -1 ? 1 : prev_value * 2;
+                            // @@ Make sure prev_value only has one bit set?
+                            // @@ Detect overflow?
+                            decl->initializer_expression = make_integer_literal(compiler, value, _enum->type_value, decl);
+                        }
+                        else {
+                            decl->initializer_expression = make_integer_literal(compiler, prev_value + 1, _enum->type_value, decl);
+                        }
                     }
                     
                     literal = folds_to_literal(decl->initializer_expression);

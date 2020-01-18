@@ -103,6 +103,7 @@ String token_type_to_string(Token::Type type) {
         case Token::TAG_C_FUNCTION: return copy_string(to_string("@c_function"));
         case Token::TAG_META:       return copy_string(to_string("@metaprogram"));
         case Token::TAG_EXPORT:     return copy_string(to_string("@export"));
+        case Token::TAG_FLAGS:      return copy_string(to_string("@flags"));
 
         case Token::TEMPORARY_KEYWORD_C_VARARGS: return copy_string(to_string("temporary_c_vararg"));
 
@@ -348,7 +349,8 @@ Ast_Expression *Parser::parse_unary_expression() {
         token->type == Token::DEREFERENCE_OR_SHIFT ||
         token->type == Token::MINUS ||
         token->type == Token::EXCLAMATION ||
-        token->type == Token::TILDE) {
+        token->type == Token::TILDE /*||
+        token->type == Token::DOT*/) {
         Ast_Unary_Expression *ref = PARSER_NEW(Ast_Unary_Expression);
         ref->operator_type = token->type;
 
@@ -835,9 +837,15 @@ Ast_Expression *Parser::parse_statement() {
         Ast_Enum *_enum = PARSER_NEW(Ast_Enum);
 
         next_token();
+        
+        Token * token = peek_token();
+        if (token->type == Token::TAG_FLAGS) {
+            _enum->is_flags = true;
+            next_token();
+        }
         _enum->identifier = parse_identifier();
 
-        Token *token = peek_token();
+        token = peek_token();
         if (token->type == Token::COLON) {
             next_token();
 
@@ -1520,7 +1528,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
 bool is_tag_token(Token *token) {
     auto type = token->type;
     return type == Token::TAG_C_FUNCTION || type == Token::TAG_META
-        || type == Token::TAG_EXPORT;
+        || type == Token::TAG_EXPORT || type == Token::TAG_FLAGS;
 }
 
 Ast_Function *Parser::parse_function() {
@@ -1574,6 +1582,9 @@ Ast_Function *Parser::parse_function() {
             next_token();
 
             if (!expect_and_eat(Token::RIGHT_PAREN)) return nullptr;
+        } else if (token->type == Token::TAG_FLAGS) {
+            compiler->report_error(token, "@flags tag is not valid for function types.");
+            next_token();
         }
 
         token = peek_token();
