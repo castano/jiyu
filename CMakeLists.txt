@@ -3,14 +3,9 @@ project(jiyu)
 find_package (Threads)
 
 set(LLVM_DIR "${PROJECT_SOURCE_DIR}/llvm/lib/cmake/llvm/")
+set(Clang_DIR "${PROJECT_SOURCE_DIR}/llvm/lib/cmake/clang")
 find_package(LLVM REQUIRED CONFIG)
-
-# sigh
-if (WIN32)
-    find_library(LIBCLANG libclang HINTS ${PROJECT_SOURCE_DIR}/llvm/lib)
-else ()
-    find_library(LIBCLANG clang HINTS ${PROJECT_SOURCE_DIR}/llvm/lib)
-endif ()
+find_package(Clang REQUIRED CONFIG)
 
 if(NOT CMAKE_SIZEOF_VOID_P EQUAL 8)
     add_definitions(-DENV32)
@@ -69,14 +64,21 @@ set_target_properties(libjiyu PROPERTIES OUTPUT_NAME "jiyu")
 
 add_executable(jiyu ${JIYU_DRIVER_SRCS} $<TARGET_OBJECTS:libjiyu_static>)
 
-target_link_libraries(libjiyu ${CMAKE_THREAD_LIBS_INIT} ${LLVM_LIBS} ${LIBCLANG})
-target_link_libraries(jiyu    ${CMAKE_THREAD_LIBS_INIT} ${LLVM_LIBS} ${LIBCLANG})
+target_link_libraries(libjiyu ${CMAKE_THREAD_LIBS_INIT} ${LLVM_LIBS} ${Clang_LIBS} libclang)
+target_link_libraries(jiyu    ${CMAKE_THREAD_LIBS_INIT} ${LLVM_LIBS} ${Clang_LIBS} libclang)
+
 
 add_custom_command(TARGET libjiyu
                    POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:libjiyu> ${CMAKE_SOURCE_DIR}/modules/)
+
  if (WIN32)
      add_custom_command(TARGET libjiyu
                    POST_BUILD
                    COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_LINKER_FILE:libjiyu> ${CMAKE_SOURCE_DIR}/modules/)
+
+    # On Windows, apparently building a static version of libclang is disabled, so copy it to the binary directory so the compiler runs without libclang.dll in PATH.
+    add_custom_command(TARGET jiyu
+                    POST_BUILD
+                   COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:libclang> ${CMAKE_CURRENT_BINARY_DIR}/$<CONFIG>/)
  endif ()
