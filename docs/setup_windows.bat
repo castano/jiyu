@@ -19,11 +19,11 @@ if not exist clang-%LLVM_VERSION%.src.zip (
 )
 
 if not exist llvm-%LLVM_VERSION% (
-    unzip  llvm-%LLVM_VERSION%.src.zip
+    unzip -q llvm-%LLVM_VERSION%.src.zip
 )
 
 if not exist llvm-%LLVM_VERSION%/tools/clang (
-    unzip clang-%LLVM_VERSION%.src.zip
+    unzip -q clang-%LLVM_VERSION%.src.zip
     mv clang-%LLVM_VERSION% llvm-%LLVM_VERSION%/tools/clang
 )
 
@@ -31,8 +31,8 @@ cd llvm-%LLVM_VERSION%
 mkdir build
 cd build
 
-cmake .. -G "Visual Studio 15 2017 Win64" -Thost=x64 -DCMAKE_BUILD_TYPE=RelWithDebInfo -DLLVM_TARGETS_TO_BUILD=%LLVM_TARGETS% -DLLVM_ENABLE_DUMP=ON -DCMAKE_INSTALL_PREFIX=%JIYU_DIR%\llvm -DLLVM_USE_CRT_RELEASE=MT -DLLVM_USE_CRT_RELWITHDEBINFO=MT -DLLVM_USE_CRT_DEBUG=MTd
-cmake --build . --config RelWithDebInfo --target install
+cmake .. -G "Visual Studio 15 2017 Win64" -Thost=x64 -DCMAKE_BUILD_TYPE=Release -DLLVM_TARGETS_TO_BUILD=%LLVM_TARGETS% -DLLVM_ENABLE_DUMP=ON -DCMAKE_INSTALL_PREFIX=%JIYU_DIR%\llvm -DLLVM_USE_CRT_RELEASE=MT -DLLVM_USE_CRT_RELWITHDEBINFO=MT -DLLVM_USE_CRT_DEBUG=MTd
+cmake --build . --config Release --target install
 
 cd %JIYU_DIR%
 
