@@ -350,8 +350,7 @@ Ast_Expression *Parser::parse_unary_expression() {
         token->type == Token::DEREFERENCE_OR_SHIFT ||
         token->type == Token::MINUS ||
         token->type == Token::EXCLAMATION ||
-        token->type == Token::TILDE /*||
-        token->type == Token::DOT*/) {
+        token->type == Token::TILDE) {
         Ast_Unary_Expression *ref = PARSER_NEW(Ast_Unary_Expression);
         ref->operator_type = token->type;
 
@@ -1271,7 +1270,6 @@ void Parser::parse_enum_scope(Ast_Scope *scope) {
 
     if (!expect_and_eat((Token::Type) '{')) return;
     
-    //Ast_Declaration * prev_item = nullptr;
     Token *token = peek_token();
     while (token->type != Token::END) {
         
@@ -1281,20 +1279,7 @@ void Parser::parse_enum_scope(Ast_Scope *scope) {
         if (!expect_and_eat(Token::SEMICOLON)) return;
         
         decl->is_let = true;
-
-        // This is wrong, the type of the enum members is the enum type, not the base type!
         decl->type_inst = scope->owning_enum->enum_type_inst;
-
-        /*if (!decl->initializer_expression) {
-            if (prev_item) {
-                //decl->initializer_expression = prev_item + 1;
-            }
-            else {
-                auto zero_expression = make_integer_literal(compiler, 0, decl->type_info, decl);
-                decl->initializer_expression = prev_item + 1;
-            }
-        }*/
-        //prev_item = decl;
 
         scope->statements.add(decl);
         scope->declarations.add(decl);

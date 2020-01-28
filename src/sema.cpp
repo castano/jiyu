@@ -1760,7 +1760,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         && left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
                         && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE
                         && left_type->type != Ast_Type_Info::FUNCTION) {
-                        
+
                         compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, function, and Type operands.\n");
                         return;
                     }
@@ -1980,19 +1980,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     call->substitution = os;
                     return;
                 }
-                /*else if (identifier->name == compiler->atom_type_of) {
-                    if (call->argument_list.count != 1) {
-                        compiler->report_error(call, "type_of() operator only accepts one argument.\n");
-                        return;
-                    }
-
-                    Ast_Typeof *type_of = SEMA_NEW(Ast_Typeof);
-                    copy_location_info(type_of, call);
-                    type_of->expression = call->argument_list[0];
-                    typecheck_expression(type_of);
-                    call->substitution = type_of;
-                    return;
-                }*/
             }
 
             typecheck_expression(subexpression, want_numeric_type, true);
@@ -2997,7 +2984,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             _enum->type_value->alignment = base_type_info->alignment;
             _enum->type_value->stride = base_type_info->stride;
             _enum->type_value->is_signed = base_type_info->is_signed;
-            // _enum->type_value->type_table_index?
 
             // flag stuct member declarations
             for (auto _decl : _enum->member_scope.declarations) {
@@ -3043,14 +3029,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     prev_value = literal->integer_value;
                     
                     assert(decl && decl->type_info);
-                    
-
-                    //Ast_Type_Info::Struct_Member member;
-                    //member.name = decl->identifier->name;
-                    //member.type_info = decl->type_info;
-                    //member.is_let = decl->is_let;
-                                        
-                    //info->enum_members.add(member);
                 }
 
                 compiler->add_to_type_table(info);

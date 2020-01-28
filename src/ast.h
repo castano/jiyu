@@ -114,12 +114,13 @@ struct Ast_Type_Info {
     Ast_Enum *enum_decl = nullptr;
     Ast_Type_Info *enum_base_type = nullptr;
 
-    // @@ Generate this info!
-    struct Enum_Member {
-        Atom *name;
-        u64 value;
-    };
-    Array<Enum_Member> enum_member;
+    // @Cleanup We probably want this information for reflection. Currently the llvm backend traverses the Ast_Enum directly, but
+    // if we generate this it may make more sense to only use the type info.
+    //struct Enum_Member {
+    //    Atom *name;
+    //    u64 value;
+    //};
+    //Array<Enum_Member> enum_member;
 
     s64 stride = -1;
     s64 alignment = -1;
