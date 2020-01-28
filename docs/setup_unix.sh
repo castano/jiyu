@@ -19,7 +19,7 @@ fi
 
 if [[ ! -f llvmorg-$LLVM_VERSION.tar.gz ]]
 then
-    wget $LLVM_URL || curl -L --output llvmorg-$LLVM_VERSION.tar.gz $LLVM_URL
+    wget $LLVM_URL -O llvmorg-$LLVM_VERSION.tar.gz || curl -L --output llvmorg-$LLVM_VERSION.tar.gz $LLVM_URL
 fi
 
 if [[ ! -d llvm-project-llvmorg-$LLVM_VERSION ]]

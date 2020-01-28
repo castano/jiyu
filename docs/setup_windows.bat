@@ -11,11 +11,11 @@ if "%LLVM_TARGETS%" == "" (
 )
 
 if not exist llvm-%LLVM_VERSION%.src.zip (
-    wget %LLVM_URL% || curl -L --output llvm-%LLVM_VERSION%.src.zip %LLVM_URL%
+    wget %LLVM_URL% -O llvm-%LLVM_VERSION%.src.zip  || curl -L --output llvm-%LLVM_VERSION%.src.zip %LLVM_URL%
 )
 
 if not exist clang-%LLVM_VERSION%.src.zip (
-    wget %CLANG_URL% || curl -L --output clang-%LLVM_VERSION%.src.zip %CLANG_URL%
+    wget %CLANG_URL% -O clang-%LLVM_VERSION%.src.zip  || curl -L --output clang-%LLVM_VERSION%.src.zip %CLANG_URL%
 )
 
 if not exist llvm-%LLVM_VERSION% (
