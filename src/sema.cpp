@@ -471,9 +471,9 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
 
     else if (lit->literal_type == Ast_Literal::NULLPTR) {
         if (target_type->type == Ast_Type_Info::POINTER) {
-            lit->type_info = want_numeric_type;
+            lit->type_info = target_type;
         } else if (target_type->type == Ast_Type_Info::FUNCTION) {
-            lit->type_info = want_numeric_type;
+            lit->type_info = target_type;
         }
     }
 
@@ -1755,13 +1755,15 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                 }
 
-            if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
-                if (!is_int_type(left_type) && !is_float_type(left_type) && !is_enum_type(left_type) &&
-                    left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
-                    && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE
-                    && left_type->type != Ast_Type_Info::FUNCTION) {
-                    compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, function, and Type operands.\n");
-                    return;
+                if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
+                    if (!is_int_type(left_type) && !is_float_type(left_type) && !is_enum_type(left_type)
+                        && left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
+                        && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE
+                        && left_type->type != Ast_Type_Info::FUNCTION) {
+                        
+                        compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, function, and Type operands.\n");
+                        return;
+                    }
                 }
 
                 if (bin->operator_type == Token::PLUS  ||
@@ -2272,7 +2274,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                 }
 
-                if (found && derf->is_type_dereference) {
+                if (found && deref->is_type_dereference) {
                     compiler->report_error(deref, "Attempt to use struct variable member without an instance!\n");
                     return;
                 }
