@@ -294,15 +294,51 @@ Type *LLVM_Generator::get_type(Ast_Type_Info *type) {
     return llvm_types[type->type_table_index];
 }
 
+static bool is_system_v_target(TargetMachine *TM) {
+    auto triple = TM->getTargetTriple();
+    // @Incomplete there's probably a lot of others that fall into here.
+    return triple.isOSLinux() || triple.isMacOSX() || triple.isOSDarwin() || triple.isOSSolaris() || triple.isOSFreeBSD();
+}
+
 static bool is_c_return_by_pointer_argument(TargetMachine *TM, Ast_Type_Info *info) {
     info = get_final_type(info);
     if (!is_aggregate_type(info)) return false;
 
     bool is_win32 = TM->getTargetTriple().isOSWindows();
+    bool is_sysv  = is_system_v_target(TM);
 
-    // @TODO this probably is incorrect on x32 windows.
-    const int _8BYTES = 8;
+    const int _4BYTES  = 4;
+    const int _8BYTES  = 8;
+    const int _16BYTES = 16;
+
+    // @TODO is this also true with Thumb?
+    if (TM->getTargetTriple().isARM()) {
+        if (info->size <= _4BYTES) return false;
+        return true;
+    }
+
+    // @TODO this probably is incorrect on x86-32 windows.
     if (is_win32 && info->size <= _8BYTES) return false;
+
+    if (is_sysv && info->size <= _16BYTES) return false;
+
+    return true;
+}
+
+static bool is_c_pass_by_pointer_argument(TargetMachine *TM, Ast_Type_Info *info) {
+    info = get_final_type(info);
+    if (!is_aggregate_type(info)) return false;
+
+    bool is_win32 = TM->getTargetTriple().isOSWindows();
+    bool is_sysv  = is_system_v_target(TM);
+
+    // @TODO this probably is incorrect on x86-32 windows.
+    const int _8BYTES  = 8;
+    const int _16BYTES = 16;
+
+    if (is_win32 && info->size <= _8BYTES) return false;
+
+    if (is_sysv && info->size <= _16BYTES) return false;
 
     return true;
 }
@@ -384,6 +420,15 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         Array<Type *> member_types;
 
         if (!type->is_union) {
+            auto parent = type->parent_struct;
+            if (parent) {
+                for (auto member : parent->struct_members) {
+                    if (member.is_let) continue;
+
+                    member_types.add(make_llvm_type(member.type_info));
+                }
+            }
+
             for (auto member : type->struct_members) {
                 if (member.is_let) continue;
 
@@ -429,7 +474,6 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         Array<Type *> arguments;
 
         bool is_c_function = type->is_c_function;
-        bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
 
         Type *return_type = make_llvm_type(get_final_type(type->return_type));
         if (type->return_type->type == Ast_Type_Info::VOID) {
@@ -451,12 +495,8 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
             Type *type = make_llvm_type(arg_type);
 
-            if (is_c_function && is_win32 && is_aggregate_type(arg_type)) {
-                assert(arg_type->size >= 0);
-
-                // @TargetInfo this is only true for x64 too
-                const int _8BYTES = 8;
-                if (arg_type->size > _8BYTES) {
+            if (is_c_function) {
+                if (is_c_pass_by_pointer_argument(TargetMachine, arg_type)) {
                     arguments.add(type->getPointerTo());
                     continue;
                 }
@@ -767,6 +807,37 @@ Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
     auto _struct = info->struct_decl;
 
     Array<Constant *> element_values;
+
+    if (info->parent_struct) {
+        auto _struct = info->parent_struct->struct_decl;
+
+        // @Cutnpaste from the stuff below
+        for (auto member: _struct->member_scope.declarations) {
+            if (member->type == AST_DECLARATION) {
+                auto decl = static_cast<Ast_Declaration *>(member);
+
+                if (decl->is_let) continue;
+                assert(decl->is_struct_member);
+
+                Ast_Type_Info *member_info = get_type_info(decl);
+                Constant *init = nullptr;
+                if (decl->initializer_expression) {
+                    auto expr = emit_expression(decl->initializer_expression);
+                    assert(dyn_cast<Constant>(expr));
+
+                    init = static_cast<Constant *>(expr);
+                } else if (is_struct_type(member_info) && !get_final_type(member_info)->is_union) {
+                    init = get_constant_struct_initializer(member_info);
+                } else {
+                    init = Constant::getNullValue(get_type(member_info));
+                }
+
+                assert(init);
+                element_values.add(init);
+            }
+        }
+    }
+
     for (auto member: _struct->member_scope.declarations) {
         if (member->type == AST_DECLARATION) {
             auto decl = static_cast<Ast_Declaration *>(member);
@@ -1192,7 +1263,6 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             assert(function_target);
 
             bool is_c_function = type_info->is_c_function;
-            bool is_win32 = TargetMachine->getTargetTriple().isOSWindows();
 
             bool c_return_is_by_pointer_argument = is_c_function && is_c_return_by_pointer_argument(TargetMachine, type_info->return_type);
 
@@ -1208,8 +1278,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                 bool is_pass_by_pointer_aggregate = is_aggregate_type(info);
 
-                const int _8BYTES = 8;
-                if (is_pass_by_pointer_aggregate && is_c_function && is_win32 && info->size <= _8BYTES) is_pass_by_pointer_aggregate = false;
+                if (is_c_function) is_pass_by_pointer_aggregate = is_c_pass_by_pointer_argument(TargetMachine, info);
 
                 auto value = emit_expression(it, is_pass_by_pointer_aggregate);
                 args.add(value);
@@ -1913,6 +1982,8 @@ void LLVM_Jitter::init() {
 
     for (auto lib: compiler->libraries) {
         String name = lib->libname;
+        if (name == to_string("jiyu")) continue; // @Hack @Temporary loading the jiyu DLL causes some issues with LLVM on Linux.
+
         auto c_str = to_c_string(name);
         if (!lib->is_framework) {
             bool not_valid = llvm::sys::DynamicLibrary::LoadLibraryPermanently(c_str);
@@ -1960,11 +2031,11 @@ void LLVM_Jitter::init() {
         return;
     }
 
-    ExecutionSession ES;
-    RTDyldObjectLinkingLayer ObjectLayer(ES, []() { return llvm::make_unique<SectionMemoryManager>(); });
+    ES = new ExecutionSession();
+    ObjectLayer = new RTDyldObjectLinkingLayer(*ES, []() { return llvm::make_unique<SectionMemoryManager>(); });
 
 #ifdef WIN32
-    ObjectLayer.setOverrideObjectFlagsWithResponsibilityFlags(true);
+    ObjectLayer->setOverrideObjectFlagsWithResponsibilityFlags(true);
 
     // Sigh, I dont know why but setting this works around an LLVM bug that trips this assert on Windows:
     // "Resolving symbol outside this responsibility set"
@@ -1972,14 +2043,12 @@ void LLVM_Jitter::init() {
     // https://stackoverflow.com/questions/57733912/llvm-asserts-resolving-symbol-outside-this-responsibility-set#comment101934807_57733912
     // For now, the jiyu-game project runs as a metaprogram with this flag set.
     // -josh 18 November 2019
-    ObjectLayer.setAutoClaimResponsibilityForObjectSymbols(true);
+    ObjectLayer->setAutoClaimResponsibilityForObjectSymbols(true);
 #endif
 
-    IRCompileLayer CompileLayer(ES, ObjectLayer, ConcurrentIRCompiler(*JTMB));
+    CompileLayer = new IRCompileLayer(*ES, *ObjectLayer, ConcurrentIRCompiler(*JTMB));
 
-    MangleAndInterner Mangle(ES, *DL);
-
-    ES.getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(*DL)));
+    ES->getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(*DL)));
 
     llvm->dib->finalize();
 
@@ -1992,24 +2061,31 @@ void LLVM_Jitter::init() {
     pass.run(*llvm->llvm_module);
 #endif
 
-    if (!llvm->llvm_module->getFunction("main")) {
-        compiler->report_error((Token *)nullptr, "No main function defined for meta program. Aborting.\n");
-        return;
-    }
-
-    cantFail(CompileLayer.add(ES.getMainJITDylib(),
+    cantFail(CompileLayer->add(ES->getMainJITDylib(),
                               ThreadSafeModule(std::unique_ptr<Module>(llvm->llvm_module), *llvm->thread_safe_context)));
-
-    auto sym = ES.lookup({&ES.getMainJITDylib()}, Mangle("main"));
-    if (!sym) {
-        sym.takeError();
-        return;
-    }
-
-    auto *Main = (void (*)(s32 argc, char **argv)) sym->getAddress();
-    Main(compiler->metaprogram_argc, compiler->metaprogram_argv);
 }
 
 void *LLVM_Jitter::lookup_symbol(String name) {
-    return nullptr;
+    auto JTMB = JITTargetMachineBuilder::detectHost();
+
+    if (!JTMB) {
+        JTMB.takeError();
+        return nullptr;
+    }
+
+    auto DL = JTMB->getDefaultDataLayoutForTarget();
+    if (!DL) {
+        DL.takeError();
+        return nullptr;
+    }
+
+    // We're contructing a new MangleAndInterner every time because it seems if you re-use one that was allocated on the heap,
+    // sometimes it just crashes...
+    MangleAndInterner Mangle(*ES, *DL);
+    auto sym = ES->lookup({&ES->getMainJITDylib()}, Mangle(string_ref(name)));
+    if (!sym) {
+        sym.takeError();
+        return nullptr;
+    }
+    return reinterpret_cast<void *>(sym->getAddress());
 }

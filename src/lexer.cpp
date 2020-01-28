@@ -248,22 +248,7 @@ Token Lexer::lex_multiline_string() {
     }
 
     for (string_length_type i = indent_spaces + indent_tabs; i < input.length; ++i) {
-        if (input[i] == '\\') {
-            if (i + 1 < input.length) {
-                if (translate_escape_sequence(input[i + 1], output_string)) {
-                    ++i;
-                    continue;
-                }
-                else {
-                    Token t = make_string_token(Token::STRING, Span(i, i+1), text.substring(i, i+1));
-                    compiler->report_error(&t, "Unrecognized escape sequence.");
-                    return t;
-                }
-            }
-            else {
-                assert(false); // @@ Can this happen?
-            }
-        } else {
+        {
             output_string.length++;
             output_string.data[output_string.length-1] = input[i];
 
@@ -312,6 +297,7 @@ Token Lexer::lex_token() {
         else if (result.string == to_string("enum"))      result.type = Token::KEYWORD_ENUM;
         else if (result.string == to_string("library"))   result.type = Token::KEYWORD_LIBRARY;
         else if (result.string == to_string("framework")) result.type = Token::KEYWORD_FRAMEWORK;
+        else if (result.string == to_string("operator"))  result.type = Token::KEYWORD_OPERATOR;
 
         else if (result.string == to_string("void"))   result.type = Token::KEYWORD_VOID;
         else if (result.string == to_string("string")) result.type = Token::KEYWORD_STRING;

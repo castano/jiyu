@@ -1,12 +1,23 @@
 # jiyu
 A compiler for fun.
 
-## Quick Setup
+## Setup
 Clone this repository:
 ```
 git clone https://github.com/machinamentum/jiyu.git
 cd jiyu
 ```
+### Fast Setup (macOS and Ubuntu)
+On macOS and several versions of Ubuntu, prebuilt distributions of LLVM can just be downloaded from llvm.org:
+```
+docs/setup_unix_fast.sh
+mkdir build
+cd build
+cmake ..
+cmake --build .
+cd ..
+```
+### Manual Setup
 Build LLVM and jiyu:
 ##### Windows
 ```
@@ -17,7 +28,7 @@ cmake .. -G "Visual Studio 15 2017 Win64" -Thost=x64
 cmake --build .
 cd ..
 ```
-##### macOS
+##### Unix-like Systems
 ```
 docs/setup_unix.sh
 mkdir build

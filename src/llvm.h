@@ -140,6 +140,10 @@ struct LLVM_Jitter {
 
     Compiler *compiler;
     LLVM_Generator *llvm;
+    llvm::orc::ExecutionSession  *ES;
+    llvm::orc::MangleAndInterner *Mangle;
+    llvm::orc::IRCompileLayer    *CompileLayer;
+    llvm::orc::RTDyldObjectLinkingLayer *ObjectLayer;
 
     LLVM_Jitter(LLVM_Generator *_llvm) {
         this->llvm     = _llvm;

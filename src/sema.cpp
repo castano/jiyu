@@ -468,9 +468,12 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
         }
         //else lit->type_info = compiler->type_float64; // @TODO we should probably have a check that verifies if the literal can fit in a 32-bit float and then default to that.
     }
+
     else if (lit->literal_type == Ast_Literal::NULLPTR) {
         if (target_type->type == Ast_Type_Info::POINTER) {
-            lit->type_info = target_type;
+            lit->type_info = want_numeric_type;
+        } else if (target_type->type == Ast_Type_Info::FUNCTION) {
+            lit->type_info = want_numeric_type;
         }
     }
 
@@ -530,21 +533,30 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
         } else if (is_float_type(ltype) && is_int_type(rtype)) {
             right = cast_int_to_float(compiler, right, ltype);
             viability_score += 10;
-        } else if ((allow_flags & ALLOW_COERCE_TO_PTR_VOID) && is_pointer_type(ltype) && is_pointer_type(rtype)) {
+        } else if (is_pointer_type(ltype) && is_pointer_type(rtype)) {
+
+            auto left_indir = get_levels_of_indirection(ltype);
+            auto right_indir = get_levels_of_indirection(rtype);
 
             // @Note you're only allowed to coerce right-to-left here, meaning if the right-expression is *void, the left-expression cannot coerce away from whatever ptr type it is.
-            if (type_points_to_void_eventually(ltype)) {
-                auto left_indir = get_levels_of_indirection(ltype);
-                auto right_indir = get_levels_of_indirection(rtype);
-
+            if ((allow_flags & ALLOW_COERCE_TO_PTR_VOID) && type_points_to_void_eventually(ltype)) {
                 if (left_indir == right_indir) {
+                    right = cast_ptr_to_ptr(compiler, right, ltype);
+                }
+            }
+
+            if (is_struct_type(ltype->pointer_to) && is_struct_type(rtype->pointer_to)) {
+                auto target = ltype->pointer_to;
+                auto source = rtype->pointer_to->parent_struct;
+
+                if (source && target == source) {
                     right = cast_ptr_to_ptr(compiler, right, ltype);
                 }
             }
 
             viability_score += 1;
         } else if (ltype->type == Ast_Type_Info::BOOL && (allow_flags & ALLOW_COERCE_TO_BOOL)) {
-            if (is_pointer_type(rtype)) {
+            if (is_pointer_type(rtype) || rtype->type == Ast_Type_Info::FUNCTION) {
                 auto null_expression = make_null_literal(compiler, rtype, /*location=*/expression);
                 auto not_equal_null = make_binary(compiler, Token::NE_OP, expression, null_expression, /*location=*/expression);
                 // @Speed we can probably just assign not_equal_null->type_info to ltype here...
@@ -688,6 +700,19 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     case Token::NE_OP: return make_bool_literal(compiler, l != r, bin);
                     case Token::LEFT_ANGLE : return make_bool_literal(compiler, l <  r, bin);
                     case Token::RIGHT_ANGLE: return make_bool_literal(compiler, l >  r, bin);
+
+                    default:
+                        assert(false && "Unhandled binary operator in folds_to_literal.");
+                        return nullptr;
+                }
+            } else if (left_type->type == Ast_Type_Info::BOOL) {
+                s64 left_bool  = left->bool_value;
+                s64 right_bool = right->bool_value;
+                switch (bin->operator_type) {
+                    case Token::OR_OP : FOLD_COMPARE(||, left_bool, right_bool, left_type, bin);
+                    case Token::AND_OP: FOLD_COMPARE(&&, left_bool, right_bool, left_type, bin);
+                    case Token::EQ_OP : FOLD_COMPARE(==, left_bool, right_bool, left_type, bin);
+                    case Token::NE_OP : FOLD_COMPARE(!=, left_bool, right_bool, left_type, bin);
 
                     default:
                         assert(false && "Unhandled binary operator in folds_to_literal.");
@@ -1063,6 +1088,56 @@ Ast_Function *Sema::get_polymorph_for_function_call(Ast_Function *template_funct
     return polymorph;
 }
 
+Ast_Function *Sema::get_best_overload_from_set(Ast_Function_Call *call, Array<Ast_Function *> &overload_set) {
+    Ast_Function *function = nullptr;
+    // @Cleanup I'm not sure why I did this, but we can probably merge this with the general case for multiple overloads.
+    if (overload_set.count == 1) {
+        function = overload_set[0];
+        typecheck_function_header(function);
+        if (compiler->errors_reported) return nullptr;
+
+        if (function->is_template_function) {
+            function = get_polymorph_for_function_call(function, call);
+            if (compiler->errors_reported) return nullptr;
+        }
+
+        auto tuple = function_call_is_viable(call, get_type_info(function), false);
+        if (compiler->errors_reported) return nullptr;
+
+        bool viable = tuple.item1;
+        if (!viable) return nullptr;
+    } else {
+        const u64 U64_MAX = 0xFFFFFFFFFFFFFFFF;
+        u64 lowest_score = U64_MAX;
+        for (auto overload : overload_set) {
+            if (overload->is_template_function) {
+                overload = get_polymorph_for_function_call(overload, call);
+                if (compiler->errors_reported) return nullptr;
+
+                if (!overload) continue; // no polymorphs that match this call, so skip it
+            }
+
+            typecheck_function_header(overload);
+            if (compiler->errors_reported) return nullptr;
+
+            auto tuple = function_call_is_viable(call, get_type_info(overload), false);
+            if (compiler->errors_reported) return nullptr;
+
+            bool viable = tuple.item1;
+            u64  score  = tuple.item2;
+
+            if (viable) {
+                if (score < lowest_score) {
+                    lowest_score = score;
+                    function = overload;
+                }
+            }
+        }
+    }
+
+    return function;
+}
+
 Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type_Info *function_type, bool perform_full_check) {
     assert(function_type);
     assert(function_type->type == Ast_Type_Info::FUNCTION);
@@ -1091,7 +1166,7 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
             if (!types_match(source_type, param_type)) {
                 bool is_struct_or_array = is_struct_type(source_type) || is_array_type(source_type);
                 bool is_param_struct_or_array = is_struct_type(param_type) || is_array_type(param_type);
-                if (is_struct_or_array && is_pointer_type(param_type) && types_match(source_type, param_type->pointer_to)) {
+                if (is_struct_or_array && is_pointer_type(param_type)) {
                     // Turn this struct into a pointer
                     auto unary = make_unary(compiler, Token::STAR, source);
                     // @Speed we can probably just assign the right type here.
@@ -1101,7 +1176,7 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
                     // We still add a viability score increment in case the user has two functions
                     // that overload between the const-ref and pointer types.
                     viability_score += 1;
-                } else if (is_pointer_type(source_type) && is_param_struct_or_array && types_match(source_type->pointer_to, param_type)) {
+                } else if (is_pointer_type(source_type) && is_param_struct_or_array) {
                     // Turn this into a dereference
                     auto unary = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, source);
                     // @Speed we can probably just assign the right type here.
@@ -1580,6 +1655,30 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
             }
 
+            if (is_valid_overloadable_operator(bin->operator_type)) {
+                Atom *operator_atom = compiler->make_operator_atom(bin->operator_type);
+
+                Ast_Identifier *ident = SEMA_NEW(Ast_Identifier);
+                ident->name = operator_atom;
+                collect_function_overloads_for_atom(operator_atom, bin->enclosing_scope, &ident->overload_set);
+
+                if (ident->overload_set.count) {
+                    Ast_Function_Call *call = SEMA_NEW(Ast_Function_Call);
+                    call->argument_list.add(bin->left);
+                    call->argument_list.add(bin->right);
+
+                    Ast_Function *function = get_best_overload_from_set(call, ident->overload_set);
+                    if (compiler->errors_reported) return;
+
+                    if (function) {
+                        bin->substitution = call;
+                        call->function_or_function_ptr = function;
+                        typecheck_expression(call);
+                        return;
+                    }
+                }
+            }
+
             if (bin->operator_type == Token::EQ_OP ||
                 bin->operator_type == Token::NE_OP ||
                 bin->operator_type == Token::LE_OP ||
@@ -1656,13 +1755,13 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                 }
 
-                if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
-                    if (!is_int_type(left_type) && !is_float_type(left_type) && !is_enum_type(left_type) &&
-                        left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
-                        && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE) {
-                        compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, and Type operands.\n");
-                        return;
-                    }
+            if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
+                if (!is_int_type(left_type) && !is_float_type(left_type) && !is_enum_type(left_type) &&
+                    left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
+                    && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE
+                    && left_type->type != Ast_Type_Info::FUNCTION) {
+                    compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, function, and Type operands.\n");
+                    return;
                 }
 
                 if (bin->operator_type == Token::PLUS  ||
@@ -1927,55 +2026,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 // If overload_set is empty, then it may still be a function pointer.
                 if (overload_set.count) {
-                    // assert(identifier->type_info == compiler->type_void);
-
-                    Ast_Function *function = nullptr;
-                    // @Cleanup I'm not sure why I did this, but we can probably merge this with the general case for multiple overloads.
-                    if (overload_set.count == 1) {
-                        function = overload_set[0];
-                        typecheck_function_header(function);
-                        if (compiler->errors_reported) return;
-
-                        if (function->is_template_function) {
-                            function = get_polymorph_for_function_call(function, call);
-                            if (compiler->errors_reported) return;
-                        }
-                    } else {
-                        const u64 U64_MAX = 0xFFFFFFFFFFFFFFFF;
-                        u64 lowest_score = U64_MAX;
-                        for (auto overload : overload_set) {
-                            if (overload->is_template_function) {
-                                overload = get_polymorph_for_function_call(overload, call);
-                                if (compiler->errors_reported) return;
-
-                                if (!overload) continue; // no polymorphs that match this call, so skip it
-                            }
-
-                            typecheck_function_header(overload);
-                            if (compiler->errors_reported) return;
-
-                            auto tuple = function_call_is_viable(call, get_type_info(overload), false);
-                            if (compiler->errors_reported) return;
-
-                            bool viable = tuple.item1;
-                            u64  score  = tuple.item2;
-
-                            if (viable) {
-                                if (score < lowest_score) {
-                                    lowest_score = score;
-                                    function = overload;
-                                }
-                            }
-                        }
-                    }
+                    Ast_Function *function = get_best_overload_from_set(call, overload_set);
+                    if (compiler->errors_reported) return;
 
                     if (!function) {
                         // @Incomplete print visible overload candidates
                         compiler->report_error(call, "No viable overload for function call.\n");
                         return;
                     }
-
-
 
                     function_call_is_viable(call, get_type_info(function), true);
                     if (compiler->errors_reported) return;
@@ -2180,6 +2238,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 // so attempt to typecheck it first. We probably want to do something more robust in the future in
                 // terms of AST nodes generated by clang_import. -josh 29 December 2019
                 typecheck_expression(left_type->struct_decl);
+                if (compiler->errors_reported) return;
 
                 // @Incomplete this should perform a scope lookup for a declaration so we can handle
                 // lets, functions, typealiases, etc..
@@ -2197,7 +2256,23 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                 }
 
-                if (found && deref->is_type_dereference) {
+                if (!found && left_type->parent_struct) {
+                    auto parent = left_type->parent_struct;
+                    for (auto member : parent->struct_members) {
+                        if (member.is_let) continue;
+
+                        if (member.name == field_atom) {
+                            found = true;
+
+                            deref->element_path_index = member.element_index;
+                            deref->type_info = member.type_info;
+                            deref->byte_offset = -1; // @Incomplete
+                            break;
+                        }
+                    }
+                }
+
+                if (found && derf->is_type_dereference) {
                     compiler->report_error(deref, "Attempt to use struct variable member without an instance!\n");
                     return;
                 }
@@ -2207,6 +2282,13 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     assert(_struct);
 
                     auto decl = find_declaration_for_atom_in_scope(&_struct->member_scope, field_atom);
+                    Ast_Scope *decl_scope = &_struct->member_scope;
+                    if (!decl && _struct->parent_struct) {
+                        auto parent = static_cast<Ast_Struct *>(_struct->parent_struct->resolved_declaration);
+                        assert(parent->type == AST_STRUCT);
+                        decl = find_declaration_for_atom_in_scope(&parent->member_scope, field_atom);
+                        decl_scope = &parent->member_scope;
+                    }
                     if (decl && decl->type == AST_DECLARATION) {
                         // this is not supposed to happen because regular var's should be handled by the above code.
                         if (deref->is_type_dereference) assert(static_cast<Ast_Declaration *>(decl)->is_let);
@@ -2214,7 +2296,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         // @Hack substitute to an identifier to get the quick benefit of the overloading sytem.
 
                         auto ident = make_identifier(compiler, field_atom);
-                        ident->enclosing_scope = &_struct->member_scope;
+                        ident->enclosing_scope = decl_scope;
 
                         // @Cutnpaste from the identifier stuff
                         // @Cleanup the only difference in this version is that we're only
@@ -2583,6 +2665,23 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             _struct->type_info = compiler->type_info_type;
 
+            if (_struct->parent_struct) {
+                if (_struct->is_union) {
+                    compiler->report_error(_struct, "Unions may not inherit from other types.\n");
+                    return;
+                }
+                typecheck_expression(_struct->parent_struct);
+                if (compiler->errors_reported) return;
+
+                // @Incomplete we should probably make this work with typealiases.
+                if (_struct->parent_struct->resolved_declaration->type != AST_STRUCT) {
+                    compiler->report_error(_struct->parent_struct, "Struct parent must a struct.\n");
+                    return;
+                }
+
+                _struct->type_value->parent_struct = get_type_declaration_resolved_type(_struct->parent_struct->resolved_declaration);
+            }
+
             // flag stuct member declarations
             for (auto _decl : _struct->member_scope.declarations) {
                 if (_decl->type == AST_DECLARATION) {
@@ -2600,6 +2699,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 s64 offset_cursor = 0;
                 s64 biggest_alignment = 1;
                 s64 element_path_index = 0;
+
+                if (_struct->parent_struct) {
+                    auto type_value = get_type_declaration_resolved_type(_struct->parent_struct->resolved_declaration);
+                    element_path_index = get_final_type(type_value)->struct_members.count;
+                }
 
                 // This is likely super @Incomplete
                 for (auto expr : _struct->member_scope.declarations) {
@@ -2735,6 +2839,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
 
             auto type = resolve_type_inst(size->target_type_inst);
+            if (compiler->errors_reported) return;
+
             auto final_type = get_final_type(type);
 
             Ast_Literal *lit = nullptr;

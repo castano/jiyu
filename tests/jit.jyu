@@ -1,0 +1,44 @@
+
+#import "Compiler";
+
+// Since metaprograms are just fully JIT-ed LLVM modules,
+// we have been internally using the JIT-er to lookup the "main" symbol
+// in a program and call that... We no longer do that internally.
+// There is a legacy function in Compiler to mimick the way this worked
+// previously, but now we allow user code to fully leverage this functionality.
+
+func @metaprogram main() {
+    var options: Build_Options;
+    options.only_want_obj_file = true;
+    var compiler = create_compiler_instance(*options);
+
+    if compiler_load_string(compiler, CODE_TO_COMPILE) != true return;
+    if compiler_typecheck_program(compiler) != true return;
+    if compiler_generate_llvm_module(compiler) != true return;
+
+    // New function to JIT the entire program.
+    if compiler_jit_program(compiler) != true return;
+
+    // Once compiler_jit_program passes, we can now arbitrarily query symbols
+    // and call into them.
+    var do_a_thing = cast(() -> void) compiler_jit_lookup_symbol(compiler, "do_a_thing");
+    do_a_thing();
+
+    var do_a_thing2 = cast((p: string) -> void) compiler_jit_lookup_symbol(compiler, "do_a_thing2");
+    do_a_thing2("Howdy :)");
+}
+
+let CODE_TO_COMPILE =
+"""
+#import "LibC";
+
+// We are using the @export tag here for the sake of demonstration, otherwise
+// we would need to lookup the proper jiyu-mangled names.
+func @export("do_a_thing") do_a_thing() {
+    printf("Hello, Sailor\n");
+}
+
+func @export("do_a_thing2") do_a_thing2(str: string) {
+    printf("Hello, Pilot! %.*s\n", str.length, str.data);
+}
+""";

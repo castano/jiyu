@@ -1,0 +1,47 @@
+#import "LibC";
+
+struct Vector3 {
+    var x: float;
+    var y: float;
+    var z: float;
+
+    func make(x: float, y: float, z: float) -> Vector3 {
+        var v: Vector3;
+        v.x = x;
+        v.y = y;
+        v.z = z;
+        return v;
+    }
+}
+
+operator+(b: float, str: string) -> float {
+    return b + cast(float) str.length;
+}
+
+operator+(a: Vector3, b: Vector3) -> Vector3 {
+    return Vector3.make(a.x+b.x, a.y+b.y, a.z+b.z);
+}
+
+operator-(a: Vector3, b: Vector3) -> Vector3 {
+    return Vector3.make(a.x-b.x, a.y-b.y, a.z-b.z);
+}
+
+func print_vector(v: Vector3) {
+    printf("vector3: %f, %f, %f\n", v.x, v.y, v.z);
+}
+
+func @metaprogram main() {
+    var a = Vector3.make(1, 2, 3);
+    var b = Vector3.make(4, 5, 6);
+
+    var c = a + b;
+    var d = b - a;
+
+    print_vector(a);
+    print_vector(b);
+    print_vector(c);
+    print_vector(d);
+
+    printf("1.0 + \"Hello\": %f\n", 1.0 + "Hello");
+}
+

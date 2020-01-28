@@ -4,12 +4,15 @@
 
 #include "general.h"
 #include "ast.h"
+#include "compiler_api.h"
+#include "lexer.h"
 
 #include <stdarg.h>
 
 struct Token;
 struct Span;
 struct LLVM_Generator;
+struct LLVM_Jitter;
 struct Sema;
 struct Copier;
 
@@ -49,15 +52,6 @@ struct Atom_Table {
 };
 
 // @Volatile must match Compiler.jyu stuff
-struct Build_Options {
-    String executable_name;
-    String target_triple;
-    bool only_want_obj_file  = false;
-    bool verbose_diagnostics = false;
-    bool emit_llvm_ir = false;
-};
-
-// @Volatile must match Compiler.jyu stuff
 struct Compiler {
     bool is_metaprogram = false;
     s64 errors_reported = 0;
@@ -72,12 +66,10 @@ struct Compiler {
 
     s64 pointer_size = -1; // @TargetInfo
 
-    s32    metaprogram_argc = 0;
-    char **metaprogram_argv = nullptr;
-
     Sema *sema;
     Copier *copier;
     LLVM_Generator *llvm_gen;
+    LLVM_Jitter    *jitter;
 
     Atom_Table *atom_table;
 
@@ -154,6 +146,7 @@ struct Compiler {
 
     // _name_ is internally copied.
     Atom *make_atom(String name);
+    Atom *make_operator_atom(Token::Type operator_type);
 
     void queue_directive(Ast_Directive *directive);
     void resolve_directives();
@@ -175,6 +168,11 @@ Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct);
 
 Ast_Type_Info *get_final_type(Ast_Type_Info *info);
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right);
+
+inline
+bool is_valid_overloadable_operator(Token::Type op) {
+    return op == Token::MINUS || op == Token::PLUS || op == Token::STAR || op == Token::SLASH;
+}
 
 inline
 bool is_int_type(Ast_Type_Info *info) {
