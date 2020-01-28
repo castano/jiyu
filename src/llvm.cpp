@@ -421,20 +421,8 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
     }
 
     if (type->type == Ast_Type_Info::ENUM) {
-        // createEnumerationType(DIScope *   Scope,
-        //     StringRef   Name,
-        //     DIFile *    File,
-        //     unsigned    LineNumber,
-        //     uint64_t    SizeInBits,
-        //     uint32_t    AlignInBits,
-        //     DINodeArray     Elements,
-        //     DIType *    UnderlyingType,
-        //     StringRef   UniqueIdentifier = "",
-        //     bool    IsScoped = false 
-        // )
-
-        // @@ TODO! Do we need to add info about enum members to the Ast_Type_Info?
-        return make_llvm_type(type->enum_base_type);
+        Type * base_type = make_llvm_type(type->enum_base_type);
+        return base_type;
     }
 
     if (type->type == Ast_Type_Info::FUNCTION) {
@@ -647,26 +635,42 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
     }
 
     if (type->type == Ast_Type_Info::ENUM) {
-        // if (type->debug_type_table_index >= 0) {
-        //     return llvm_debug_types[type->debug_type_table_index];
-        // }
+        //return get_debug_type(type->enum_base_type);
 
-        // auto enum_decl = type->enum_decl;
-        // auto debug_file = get_debug_file(llvm_context, debug_decl);
-        // auto line_number = get_line_number(debug_decl);
+        auto enum_decl = type->enum_decl;
 
-        // String name;
-        // if (enum_decl->identifier) name = enum_decl->identifier->name->name;
+        String name;
+        if (enum_decl->identifier) name = enum_decl->identifier->name->name;
 
+        auto debug_file = get_debug_file(llvm_context, enum_decl);
+        auto line_number = get_line_number(enum_decl);
 
-        // auto final_type = dib->createEnumerationType()
+        DIType * base_type = get_debug_type(type->enum_base_type);
 
-        //StructType(di_compile_unit, string_ref(name), debug_file,
-        //            line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
-        //            flags, derived_from, empty_elements);
+        Array<Metadata*> enumerators;
+        for (Ast_Expression * element_expr : enum_decl->member_scope.declarations) {
+            assert(element_expr->type == AST_DECLARATION);
+            auto element_decl = static_cast<Ast_Declaration *>(element_expr);
 
-        return get_debug_type(type->enum_base_type);
+            assert(element_decl->is_enum_member);
+            assert(element_decl->is_let);
+            assert(element_decl->initializer_expression != nullptr);
 
+            auto name = element_decl->identifier->name->name;
+            Ast_Literal * element_literal = resolves_to_literal_value(element_decl->initializer_expression);
+            assert(element_literal->literal_type == Ast_Literal::INTEGER);
+            
+            enumerators.add(dib->createEnumerator(string_ref(name), element_literal->integer_value));
+        }
+
+        DINodeArray elements = dib->getOrCreateArray(ArrayRef<Metadata *>(enumerators.data, enumerators.count));
+
+        // @@ What are UniqueIdentifier and IsScoped for?
+        // createEnumerationType(DIScope * Scope, StringRef Name, DIFile * File, unsigned LineNumber,
+        //     uint64_t SizeInBits, uint32_t AlignInBits, DINodeArray Elements, DIType * UnderlyingType,
+        //     StringRef UniqueIdentifier = "", bool IsScoped = false)
+
+        return dib->createEnumerationType(di_compile_unit, string_ref(name), debug_file, line_number, base_type->getSizeInBits(), base_type->getAlignInBits(), elements, base_type);
     }
 
     assert(false);
