@@ -1344,6 +1344,9 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
         next_token();
 
         // @TODO do we want to restructure this so that one can mix @c_function with a typealias?
+        // Ex:
+        // typealias My_Func_Type = () -> void;
+        // typealias My_C_Func_Type = @c_function My_Func_Type;
 
         auto func_type_inst = parse_type_inst();
         if (compiler->errors_reported) return nullptr;

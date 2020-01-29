@@ -1232,6 +1232,20 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     typecheck_expression(decl);
                     ident->resolved_declaration = decl;
                     ident->type_info = get_type_info(decl);
+
+                    if (decl->type == AST_DECLARATION) {
+                        auto declaration = static_cast<Ast_Declaration *>(decl);
+
+                        if (declaration->is_struct_member && !declaration->is_let) {
+                            // @TODO We usually get here if someone tries to use a struct-member-variable
+                            // from within a function declared within the struct. Usually, these functions
+                            // will almost always be typechecked before we get here, but that may not always
+                            // be the case. We will want to set is_struct_member in the Ast_Declaration type-
+                            // checking code. -josh 28 Janurary 2020
+                            compiler->report_error(ident, "Attempt to use struct variable member without an instance!\n");
+                            return;
+                        }
+                    }
                 }
             }
 
