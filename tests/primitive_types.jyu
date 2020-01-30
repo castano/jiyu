@@ -22,4 +22,6 @@ func main() -> void {
 
 func array_types() {
 	var _sized_array: [15] uint8;
+    var _unsized_array: [] uint8;
+    var _dynsized_array: [..] uint8;
 }

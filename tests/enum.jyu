@@ -1,0 +1,130 @@
+
+#import "LibC";
+#import "Basic";
+
+
+enum Day : uint {
+    Monday;
+    Tuesday = Monday + 1;       // + should give a type error -> Day, literal?
+    Wednesday = 2;
+
+    Thursday;
+    Friday = 1 + Thursday;
+
+    Saturday;
+    Sunday;
+
+    //Domingo = .Sunday;        // @@ Should this work?
+}
+
+enum WeekendDay {
+    Saturday = cast(WeekendDay)Day.Saturday;   // This should require a cast. Do not allow implicit cast from one enum to another.
+    Sunday;
+}
+
+enum Bool : uint8 { False; True; }
+
+typealias DAY = Day;
+
+var another_day : DAY = Day.Monday;
+
+
+var monday = Day.Monday;
+var tuesday : Day = Day.Tuesday;
+var sunday : Day = cast(Day)WeekendDay.Sunday;   // This should require a cast. Do not allow implicit cast from one enum to another.
+var my_day : Day;
+
+
+
+//let MONDAY = 0;
+//let TUESDAY = MONDAY + 1;
+
+func test(day : Day) -> int {
+    return cast(int)day + 1;
+}
+
+
+func main() {
+
+    // These require explicit casts.
+    //var f : float = 1;
+    //var i : int = 1.0;
+
+    // These do not:
+    var f : float = cast(float) 1;
+    var i : int = cast(int) 1.0;
+
+    {
+        var day : Day;
+
+        let Monday = Day.Monday;
+        let Tuesday = Monday + 1;
+        printf("typeof(Monday) = %d\n", typeof(Monday));
+        printf("typeof(Day.Monday) = %d\n", typeof(Day.Monday));
+        printf("typeof(Day.Monday + 1) = %d\n", typeof(Day.Monday + 1));    // This is incorrectly being cast to an integer.
+        printf("typeof(1 + Day.Monday) = %d\n", typeof(1 + Day.Monday));
+        printf("typeof(day) = %d\n", typeof(day));
+        printf("typeof(day + 1) = %d\n", typeof(day + 1));
+        printf("Day = %d\n", Day);
+        printf("DAY = %d\n", DAY);
+        printf("typeof(Day) = %d\n", typeof(Day));
+        assert(typeof(Monday) == Day);      // Type instantiations need to be folded to literals.
+
+        let MONDAY = cast(int)Day.Monday;   // Type of MONDAY is int
+        assert(typeof(MONDAY) == int);
+    }
+
+    /*{
+        var day = Day.Monday;
+        assert(typeof(day) == Day);
+
+        //day = day + 1;            // This correctly fails.
+        //day = Day.Monday + 1;    // Here the assignment fails, but not the +!
+
+        var day_index = cast(int)Day.Monday;   // Type of dayIndex is int
+        assert(typeof(day_index) == int);
+    }*/
+
+    //var monday = Day.Monday;
+
+    //test(Day.Monday + 1);
+    //printf("MONDAY = %d\n", MONDAY);
+    //printf("TUESDAY = %d\n", TUESDAY);
+  
+    printf("Monday = %d\n", Day.Monday);
+    printf("Tuesday = %d\n", Day.Tuesday);
+    printf("Wednesday = %d\n", Day.Wednesday);
+    printf("Thursday = %d\n", Day.Thursday);
+    printf("Friday = %d\n", Day.Friday);
+    printf("Saturday = %d\n", Day.Saturday);
+    printf("Sunday = %d\n", Day.Sunday);
+
+    printf("test(Day.Monday) = %d\n", test(Day.Monday));
+
+    // Implicit calls from integer to enum:
+    // Currently these are only allowed when the expression is a mutable literal.
+    {
+        var one : int = 1;
+        var day : Day = 0;
+        //var day_one : Day = one;              // Should we allow this?
+        printf("test(0) = %d\n", test(0));
+        //printf("test(0) = %d\n", test(one));  // What about this?
+        //var day2 : Day = Day.Monday + one;       // And this?
+    }
+    
+
+    //printf("Whatever = %d\n", Day.Whatever); // This should trigger an error.
+    {
+        var day : Day = .Monday;
+        test(.Tuesday);
+        if day == .Wednesday {
+            day = .Sunday;
+        }
+        if .Wednesday > day {
+            // test(1 + .Tuesday); // This produces an error, as expected.        
+        }
+        
+    }
+    
+}
+

@@ -141,6 +141,7 @@ struct Compiler {
     Ast_Type_Info *make_type_alias_type(Ast_Type_Info *aliasee);
     Ast_Type_Info *make_array_type(Ast_Type_Info *element, array_count_type count, bool is_dynamic);
     Ast_Type_Info *make_function_type(Ast_Function *function);
+    Ast_Type_Info *make_enum_type(Ast_Enum *_enum);
     void add_to_type_table(Ast_Type_Info *info);
 
     // _name_ is internally copied.
@@ -180,6 +181,12 @@ bool is_int_type(Ast_Type_Info *info) {
 }
 
 inline
+bool is_int_or_enum_type(Ast_Type_Info *info) {
+    info = get_final_type(info);
+    return info->type == Ast_Type_Info::INTEGER || info->type == Ast_Type_Info::ENUM;
+}
+
+inline
 bool is_float_type(Ast_Type_Info *info) {
     info = get_final_type(info);
     return info->type == Ast_Type_Info::FLOAT;
@@ -195,6 +202,12 @@ inline
 bool is_struct_type(Ast_Type_Info *info) {
     info = get_final_type(info);
     return info->type == Ast_Type_Info::STRUCT;
+}
+
+inline
+bool is_enum_type(Ast_Type_Info *info) {
+    info = get_final_type(info);
+    return info->type == Ast_Type_Info::ENUM;
 }
 
 inline
@@ -237,11 +250,15 @@ bool is_valid_primitive_cast(Ast_Type_Info *target, Ast_Type_Info *source) {
     }
 
     if (target->type == Ast_Type_Info::INTEGER) {
-        return (source->type == Ast_Type_Info::INTEGER || source->type == Ast_Type_Info::POINTER || source->type == Ast_Type_Info::FLOAT);
+        return (source->type == Ast_Type_Info::INTEGER || source->type == Ast_Type_Info::POINTER || source->type == Ast_Type_Info::FLOAT || source->type == Ast_Type_Info::ENUM);
     }
 
     if (target->type == Ast_Type_Info::FLOAT) {
         return (source->type == Ast_Type_Info::FLOAT || source->type == Ast_Type_Info::INTEGER);
+    }
+
+    if (target->type == Ast_Type_Info::ENUM) {
+        return (source->type == Ast_Type_Info::INTEGER) || (source->type == Ast_Type_Info::ENUM);
     }
 
     return false;
@@ -264,7 +281,7 @@ void copy_location_info(Ast *left, Ast *right) {
 
 inline
 bool is_a_type_declaration(Ast *expression) {
-    return expression->type == AST_STRUCT || expression->type == AST_TYPE_ALIAS;
+    return expression->type == AST_STRUCT || expression->type == AST_TYPE_ALIAS || expression->type == AST_ENUM;
 }
 
 inline
@@ -278,6 +295,9 @@ get_type_declaration_resolved_type(Ast *expression) {
     } else if (expression->type == AST_TYPE_ALIAS) {
         auto alias = static_cast<Ast_Type_Alias *>(expression);
         return alias->type_value;
+    } else if (expression->type == AST_ENUM) {
+        auto _enum = static_cast<Ast_Enum *>(expression);
+        return _enum->type_value;
     }
 
     return nullptr;

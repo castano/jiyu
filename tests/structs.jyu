@@ -86,3 +86,5 @@ func main() {
     union_test_ptr.i = <<cast(*int32) *f;
     printf("union_test.x: %f, union_test.i: %d\n", union_test.x, union_test.i);
 }
+
+

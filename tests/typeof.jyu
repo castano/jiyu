@@ -1,0 +1,39 @@
+#import "LibC";
+#import "Basic";
+
+
+struct MyStruct {
+    
+}
+
+func main () {
+
+    var f : float;
+    var i : int;
+    var s : MyStruct;
+    var x = "";
+    var b = true;
+
+    assert(typeof(f) == float);
+    assert(typeof(i) == int);
+    assert(typeof(s) == MyStruct);
+    assert(typeof(x) == string);
+    assert(typeof(b) == bool);
+    assert(typeof(typeof(x) == string) == bool);
+    assert(typeof(x == "") == bool);
+
+    printf("typeof(f) = %d\n", typeof(f));
+    printf("typeof(i) = %d\n", typeof(i));
+    printf("typeof(s) = %d\n", typeof(s));
+    printf("MyStruct = %d\n", MyStruct);
+    printf("typeof(x) = %d\n", typeof(x));
+    printf("typeof(b) = %d\n", typeof(b));
+
+
+    printf("typeof(float) = %d\n", typeof(float));
+    printf("typeof(int) = %d\n", typeof(int));
+    printf("typeof(MyStruct) = %d\n", typeof(MyStruct));
+
+    printf("typeof(typeof(float)) = %d\n", typeof(typeof(float)));
+
+}

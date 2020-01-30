@@ -63,6 +63,7 @@ String token_type_to_string(Token::Type type) {
         case Token::KEYWORD_TYPEALIAS: return copy_string(to_string("typealias"));
         case Token::KEYWORD_STRUCT:    return copy_string(to_string("struct"));
         case Token::KEYWORD_UNION:     return copy_string(to_string("union"));
+        case Token::KEYWORD_ENUM:      return copy_string(to_string("enum"));
         case Token::KEYWORD_LIBRARY:   return copy_string(to_string("library"));
         case Token::KEYWORD_FRAMEWORK: return copy_string(to_string("framework"));
         case Token::KEYWORD_OPERATOR : return copy_string(to_string("operator"));
@@ -98,10 +99,12 @@ String token_type_to_string(Token::Type type) {
 
         case Token::KEYWORD_CAST:   return copy_string(to_string("cast"));
         case Token::KEYWORD_SIZEOF: return copy_string(to_string("sizeof"));
+        case Token::KEYWORD_TYPEOF: return copy_string(to_string("typeof"));
 
         case Token::TAG_C_FUNCTION: return copy_string(to_string("@c_function"));
         case Token::TAG_META:       return copy_string(to_string("@metaprogram"));
         case Token::TAG_EXPORT:     return copy_string(to_string("@export"));
+        case Token::TAG_FLAGS:      return copy_string(to_string("@flags"));
 
         case Token::TEMPORARY_KEYWORD_C_VARARGS: return copy_string(to_string("temporary_c_vararg"));
 
@@ -176,6 +179,12 @@ Ast_Expression *Parser::parse_primary_expression() {
         return ident;
     }
 
+    // @@ Do not hardcode type keyword ranges.
+    if (token->type >= Token::KEYWORD_VOID && token->type <= Token::KEYWORD_BOOL) {
+        auto type_inst = parse_type_inst();
+        return type_inst;
+    }
+
     if (token->type == Token::INTEGER) {
         Ast_Literal *lit = PARSER_NEW(Ast_Literal);
         next_token();
@@ -242,6 +251,19 @@ Ast_Expression *Parser::parse_primary_expression() {
         if (!expect_and_eat(Token::RIGHT_PAREN)) return size;
 
         return size;
+    }
+
+    if (token->type == Token::KEYWORD_TYPEOF) {
+        Ast_Typeof *type_of = PARSER_NEW(Ast_Typeof);
+        next_token();
+        
+        if (!expect_and_eat(Token::LEFT_PAREN)) return type_of;
+        
+        type_of->expression = parse_expression();
+        
+        if (!expect_and_eat(Token::RIGHT_PAREN)) return type_of;
+        
+        return type_of;
     }
 
     return nullptr;
@@ -361,6 +383,18 @@ Ast_Expression *Parser::parse_unary_expression() {
         }
 
         return cast;
+    } else if (token->type == Token::DOT) {
+        Ast_Dereference * deref = PARSER_NEW(Ast_Dereference);
+        next_token();
+
+        // @TODO do other languages let you use anything other than an identifier for a field selection?
+        auto right = parse_identifier();
+        if (!right) return nullptr;
+
+        deref->left = nullptr;          // When this is null, we try to infer it in semantic analysis.
+        deref->field_selector = right;
+
+        return deref;
     }
 
     return parse_postfix_expression();
@@ -538,7 +572,9 @@ Ast_Expression *Parser::parse_equality_expression() {
 
             auto right = parse_relational_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -574,7 +610,9 @@ Ast_Expression *Parser::parse_and_expression() {
 
             auto right = parse_equality_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -610,7 +648,9 @@ Ast_Expression *Parser::parse_exclusive_or_expression() {
 
             auto right = parse_and_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -646,7 +686,9 @@ Ast_Expression *Parser::parse_inclusive_or_expression() {
 
             auto right = parse_exclusive_or_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -682,7 +724,9 @@ Ast_Expression *Parser::parse_logical_and_expression() {
 
             auto right = parse_inclusive_or_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -718,7 +762,9 @@ Ast_Expression *Parser::parse_logical_xor_expression() {
 
             auto right = parse_logical_and_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -754,7 +800,9 @@ Ast_Expression *Parser::parse_logical_or_expression() {
 
             auto right = parse_logical_xor_expression();
             if (!right) {
-                compiler->report_error(token, "Malformed expression following '%c' operator.\n", token->type);
+                auto token_string = token_type_to_string(token->type);
+                defer { free(token_string.data); };
+                compiler->report_error(token, "Malformed expression following '%.*s' operator.\n", PRINT_ARG(token_string));
                 return nullptr;
             }
             bin->right = right;
@@ -833,6 +881,47 @@ Ast_Expression *Parser::parse_statement() {
         set_location_info_from_token(&_struct->member_scope, peek_token());
         parse_scope(&_struct->member_scope, true);
         return _struct;
+    }
+
+    if (token->type == Token::KEYWORD_ENUM) {
+        Ast_Enum *_enum = PARSER_NEW(Ast_Enum);
+
+        next_token();
+        
+        Token * token = peek_token();
+        if (token->type == Token::TAG_FLAGS) {
+            _enum->is_flags = true;
+            next_token();
+        }
+        _enum->identifier = parse_identifier();
+
+        token = peek_token();
+        if (token->type == Token::COLON) {
+            next_token();
+
+            Ast_Type_Instantiation *type_inst = parse_type_inst();
+            if (!type_inst) return nullptr;
+
+            // Make sure it's an integer type.
+            if (!type_inst->builtin_primitive || type_inst->builtin_primitive->type != Ast_Type_Info::INTEGER) {
+                compiler->report_error(type_inst, "Expected integer type.\n");
+            }
+
+            _enum->base_type = type_inst;
+        }
+        else {
+            // If not type provided, assume uint32.
+            _enum->base_type = wrap_primitive_type(compiler->type_uint32);
+        }
+
+        _enum->enum_type_inst = PARSER_NEW(Ast_Type_Instantiation);
+        _enum->enum_type_inst->type_dereference_expression = _enum->identifier;
+
+        _enum->member_scope.parent = get_current_scope();
+        _enum->member_scope.owning_enum = _enum;
+        parse_enum_scope(&_enum->member_scope);
+
+        return _enum;
     }
 
     if (token->type == Token::KEYWORD_VAR) {
@@ -1174,7 +1263,39 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
     if (push_scope) pop_scopes();
 }
 
-Ast_Declaration *Parser::parse_variable_declaration(bool expect_var_keyword) {
+void Parser::parse_enum_scope(Ast_Scope *scope) {
+    assert(scope->owning_enum != nullptr);
+
+    push_scopes(scope);
+
+    if (!expect_and_eat((Token::Type) '{')) return;
+    
+    Token *token = peek_token();
+    while (token->type != Token::END) {
+        
+        if (token->type == '}') break;
+        
+        auto decl = parse_variable_declaration(/*expect_var_keyword=*/false, /*enum_value_declaration=*/true);
+        if (!expect_and_eat(Token::SEMICOLON)) return;
+        
+        decl->is_let = true;
+        decl->type_inst = scope->owning_enum->enum_type_inst;
+
+        scope->statements.add(decl);
+        scope->declarations.add(decl);
+        
+        if (compiler->errors_reported) return;
+                
+        token = peek_token();
+    }
+    
+    if (!expect_and_eat((Token::Type) '}')) return;
+
+    pop_scopes();
+}
+
+
+Ast_Declaration *Parser::parse_variable_declaration(bool expect_var_keyword, bool enum_value_declaration) {
     if (expect_var_keyword && !expect_and_eat(Token::KEYWORD_VAR)) return nullptr;
 
     Token *ident_token = peek_token(); // used for error below, @Cleanup we want to be able to report errors using an Ast
@@ -1186,6 +1307,7 @@ Ast_Declaration *Parser::parse_variable_declaration(bool expect_var_keyword) {
 
     Ast_Declaration *decl = PARSER_NEW(Ast_Declaration);
     decl->identifier = ident;
+    copy_location_info(decl, ident);
 
     Token *token = peek_token();
     if (token->type == Token::COLON) {
@@ -1213,7 +1335,7 @@ Ast_Declaration *Parser::parse_variable_declaration(bool expect_var_keyword) {
         decl->initializer_expression = expression;
     }
 
-    if (!decl->initializer_expression && !decl->type_inst) {
+    if (!decl->initializer_expression && !decl->type_inst && !enum_value_declaration) {
         // @TODO maybe this should be moved to semantic analysis
         compiler->report_error(ident_token, "Declared variable must be declared with a type or be initialized.\n");
         return nullptr;
@@ -1453,7 +1575,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
 bool is_tag_token(Token *token) {
     auto type = token->type;
     return type == Token::TAG_C_FUNCTION || type == Token::TAG_META
-        || type == Token::TAG_EXPORT;
+        || type == Token::TAG_EXPORT || type == Token::TAG_FLAGS;
 }
 
 Ast_Function *Parser::parse_function() {
@@ -1511,6 +1633,9 @@ Ast_Function *Parser::parse_function() {
             next_token();
 
             if (!expect_and_eat(Token::RIGHT_PAREN)) return nullptr;
+        } else if (token->type == Token::TAG_FLAGS) {
+            compiler->report_error(token, "@flags tag is not valid for function types.");
+            next_token();
         }
 
         token = peek_token();

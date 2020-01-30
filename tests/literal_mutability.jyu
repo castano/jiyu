@@ -1,0 +1,31 @@
+
+
+func main() {
+    {
+        var two : uint8 = 1+1;    
+    }
+    {
+        // var nil : uint32 = -1;      // error: Attempt to initialize 'nil' with expression of incompatible type (Wanted uint32, Given int32).
+        var nil : uint32 = cast()-1;
+    }
+    {
+        // var one : uint32 = 1;
+        // var two : uint8 = one+1;    // error: Attempt to initialize 'two' with expression of incompatible type (Wanted uint8, Given uint32)
+    }
+    {
+        let one : uint32 = 1;
+        var two : uint8 = one+1;        // @@ I think we should not allow this. 'one' should not be mutable, because it was explicitly declared with a type.
+    }
+    {
+        let one = 1;
+        var two : uint8 = one+1;        // @@ This should be OK, because one does not have an explicit type.
+    }
+    {
+        let a = 256;
+        // var b : uint8 = a;           // error: Attempt to initialize 'b' with expression of incompatible type (Wanted uint8, Given int32).
+    }
+    {
+        let a = 256*256*256*256+1;      // @@ The type of should not be int32
+        // var b : uint8 = a;              // error: Attempt to initialize 'b' with expression of incompatible type (Wanted uint8, Given int32).
+    }
+}

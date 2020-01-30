@@ -12,6 +12,7 @@ struct Ast_Type_Info;
 struct Ast_Identifier;
 struct Ast_Scope;
 struct Ast_Struct;
+struct Ast_Enum;
 struct Ast_Type_Alias;
 
 enum Ast_Type {
@@ -33,8 +34,10 @@ enum Ast_Type {
     AST_TYPE_ALIAS,
     AST_ARRAY_DEREFERENCE,
     AST_SIZEOF,
+    AST_TYPEOF,
     AST_FOR,
     AST_STRUCT,
+    AST_ENUM,
     AST_DIRECTIVE_LOAD,
     AST_DIRECTIVE_IMPORT,
     AST_DIRECTIVE_STATIC_IF,
@@ -72,6 +75,7 @@ struct Ast_Type_Info {
 
         // User defined (mostly)
         STRUCT,
+        ENUM,
     };
 
     Type type = UNINITIALIZED;
@@ -107,6 +111,17 @@ struct Ast_Type_Info {
     bool is_c_function = false;
     bool is_c_varargs  = false;
 
+    Ast_Enum *enum_decl = nullptr;
+    Ast_Type_Info *enum_base_type = nullptr;
+
+    // @Cleanup We probably want this information for reflection. Currently the llvm backend traverses the Ast_Enum directly, but
+    // if we generate this it may make more sense to only use the type info.
+    //struct Enum_Member {
+    //    Atom *name;
+    //    u64 value;
+    //};
+    //Array<Enum_Member> enum_member;
+
     s64 stride = -1;
     s64 alignment = -1;
     s64 size = -1;
@@ -133,9 +148,11 @@ struct Ast_Scope : Ast_Expression {
 
     Ast_Struct *owning_struct = nullptr; // @NoCopy set by the code that copies Ast_Struct
 
+
     // Only set for the top-level scope of a function body. scope->owning_function == scope->owning_function->scope.
     Ast_Function   *owning_function = nullptr;  // @NoCopy this is set on the root scope by Copier::copy_function
     Ast_Expression *owning_statement = nullptr; // @NoCopy this is set by respective copying code for owner-nodes (Ast_For ...).
+    Ast_Enum *owning_enum = nullptr;
 };
 
 // Used to specify a scope that was inserted due to the compiler resolving a static_if.
@@ -184,6 +201,18 @@ struct Ast_Struct : Ast_Expression {
     Ast_Identifier *parent_struct = nullptr;
 
     Ast_Type_Info *type_value = nullptr; // @NoCopy
+};
+
+struct Ast_Enum : Ast_Expression {
+    Ast_Enum() { type = AST_ENUM; }
+    
+    Ast_Identifier *identifier = nullptr;
+    Ast_Type_Instantiation *base_type = nullptr;
+    Ast_Type_Instantiation *enum_type_inst = nullptr;   // This is the type inst shared by all the enum members.
+    Ast_Scope member_scope;
+    bool is_flags = false;
+    
+    Ast_Type_Info *type_value = nullptr;
 };
 
 struct Ast_Unary_Expression : Ast_Expression {
@@ -298,6 +327,7 @@ struct Ast_Declaration : Ast_Expression {
     bool is_let = false;
     bool is_readonly_variable = false;
     bool is_struct_member = false;
+    bool is_enum_member = false;
 };
 
 struct Ast_Function : Ast_Expression {
@@ -337,6 +367,11 @@ struct Ast_Sizeof : Ast_Expression {
     Ast_Sizeof() { type = AST_SIZEOF; }
     Token::Type operator_type;
     Ast_Type_Instantiation *target_type_inst = nullptr;
+};
+
+struct Ast_Typeof : Ast_Expression {
+    Ast_Typeof() { type = AST_TYPEOF; }
+    Ast_Expression *expression = nullptr;
 };
 
 struct Ast_Os : Ast_Expression {
@@ -428,7 +463,8 @@ bool is_declaration(Ast_Type type) {
     return type == AST_DECLARATION
         || type == AST_FUNCTION
         || type == AST_TYPE_ALIAS
-        || type == AST_STRUCT;
+        || type == AST_STRUCT
+        || type == AST_ENUM;
 }
 
 inline

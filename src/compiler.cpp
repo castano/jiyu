@@ -91,6 +91,12 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
         return left->struct_decl == right->struct_decl;
     }
 
+    if (left->type == Ast_Type_Info::ENUM) {
+        assert(left->enum_decl);
+        assert(right->enum_decl);
+        return left->enum_decl == right->enum_decl;
+    }
+
     if (left->type == Ast_Type_Info::FUNCTION) {
         if (left->is_c_function != right->is_c_function) return false;
         if (left->is_c_varargs  != right->is_c_varargs) return false;
@@ -251,6 +257,13 @@ Ast_Type_Info *Compiler::make_function_type(Ast_Function *function) {
 
     add_to_type_table(info);
     return info;
+}
+
+Ast_Type_Info *Compiler::make_enum_type(Ast_Enum *_enum) {
+    Ast_Type_Info *info = new Ast_Type_Info();
+    info->type = Ast_Type_Info::ENUM;
+    info->enum_decl = _enum;
+    return info;    
 }
 
 static Ast_Type_Info *make_int_type(Compiler *compiler, bool is_signed, s64 size) {

@@ -1,0 +1,15 @@
+
+#import "LibC";
+#import "Basic";
+
+enum @flags Entity_Flags {
+    Invisible;
+    Solid;
+    Cast_Shadows;
+}
+
+func main () {
+    printf("%d\n", Entity_Flags.Invisible | .Solid | .Cast_Shadows);
+}
+
+

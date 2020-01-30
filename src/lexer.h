@@ -41,6 +41,7 @@ struct Token {
         KEYWORD_TYPEALIAS,
         KEYWORD_STRUCT,
         KEYWORD_UNION,
+        KEYWORD_ENUM,
         KEYWORD_LIBRARY,
         KEYWORD_FRAMEWORK,
         KEYWORD_OPERATOR,
@@ -76,14 +77,16 @@ struct Token {
 
         KEYWORD_CAST,
         KEYWORD_SIZEOF,
+        KEYWORD_TYPEOF,
         KEYWORD_STRIDEOF,
         KEYWORD_ALIGNOF,
-
+        
         TAG_C_FUNCTION,
         TAG_META,
         TAG_EXPORT,
+        TAG_FLAGS,
 
-        TEMPORARY_KEYWORD_C_VARARGS,
+        TEMPORARY_KEYWORD_C_VARARGS = 400,
 
         GE_OP,                // >=
         LE_OP,                // <=

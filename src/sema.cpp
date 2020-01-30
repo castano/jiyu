@@ -21,7 +21,17 @@
 
 #define SEMA_NEW(type) (new (compiler->get_memory(sizeof(type))) type())
 
-void add_type(String_Builder *builder, Ast_Type_Info *type) {
+static bool is_pow2(uint64_t x) {
+    return (x & (x - 1)) == 0;
+}
+
+static u64 max_integer(int bytesize, bool is_signed) {
+    // signed:   127, 32767...
+    // unsigned: 255, 65535...
+    return (u64(1) << (8 * bytesize - is_signed)) - 1;
+}
+
+static void add_type(String_Builder *builder, Ast_Type_Info *type) {
     if (type->type == Ast_Type_Info::INTEGER) {
         if (type->is_signed) builder->putchar('s');
         else                 builder->putchar('u');
@@ -67,6 +77,13 @@ void add_type(String_Builder *builder, Ast_Type_Info *type) {
         // @Incomplete anonymous structs?
         String name = type->struct_decl->identifier->name->name;
         builder->print("%d%.*s", name.length, name.length, name.data);
+    } else if (type->type == Ast_Type_Info::ENUM) {
+        builder->putchar('E');
+
+        // @Incomplete structs that are declared with other structs/named-scopes.
+        // @Incomplete anonymous structs?
+        String name = type->enum_decl->identifier->name->name;
+        builder->print("%d%.*s", name.length, name.length, name.data);
     } else if (type->type == Ast_Type_Info::FUNCTION) {
         builder->putchar('L');
 
@@ -78,7 +95,7 @@ void add_type(String_Builder *builder, Ast_Type_Info *type) {
         add_type(builder, type->return_type);
         builder->putchar('_');
         if (type->is_c_function) builder->putchar('C');
-        if (type->is_c_function) builder->putchar('V');
+        if (type->is_c_varargs) builder->putchar('V');
         builder->putchar('_');
     } else {
         assert(false && "Internal error: unhandled type when creating function mangled name.");
@@ -278,6 +295,24 @@ void print_type_to_builder(String_Builder *builder, Ast_Type_Info *info) {
         return;
     }
 
+    if (info->type == Ast_Type_Info::ENUM) {
+        auto _enum = info->enum_decl;
+
+        maybe_add_struct_parent_name(builder, _enum->member_scope.parent);
+
+        if (_enum->identifier) {
+            String name = _enum->identifier->name->name;
+            builder->print("%.*s", PRINT_ARG(name));
+        }
+        return;
+    }
+
+    if (info->type == Ast_Type_Info::TYPE) {
+        // @@ Print type name properly.
+        builder->print("<type>");
+        return;
+    }
+
     if (info->type == Ast_Type_Info::FUNCTION) {
         // @Incomplete
         builder->putchar('(');
@@ -355,26 +390,74 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
     }
 }
 
+static bool expression_needs_enum_type_inference(Ast_Expression * expr) {
+    if (expr->type == AST_DEREFERENCE) {
+        auto deref = static_cast<Ast_Dereference*>(expr);
+        return deref->left == nullptr;
+    }
+    return false;
+}
+
+// @@ Should this be an atribute of the literal that is propagated? Is 1+1 mutable?
+static bool is_mutable_literal(Ast_Literal * literal) {
+    if (literal->type_info->type == Ast_Type_Info::INTEGER || literal->type_info->type == Ast_Type_Info::FLOAT) {
+        return true;
+    }
+    if (literal->type_info->type == Ast_Type_Info::POINTER) {
+        return literal->literal_type == Ast_Literal::NULLPTR;
+    }
+    return false;
+}
 
 // @Returns viability contribution
-u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_type) {
-    want_numeric_type = get_final_type(want_numeric_type);
+u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
+    target_type = get_final_type(target_type);
+    assert(target_type != nullptr);
 
     u64 viability_score = 0;
     if (lit->literal_type == Ast_Literal::INTEGER) {
-        if (want_numeric_type && (want_numeric_type->type == Ast_Type_Info::INTEGER || want_numeric_type->type == Ast_Type_Info::FLOAT)) {
-            if (!types_match(get_type_info(lit), want_numeric_type)) {
+        if (target_type->type == Ast_Type_Info::INTEGER || target_type->type == Ast_Type_Info::ENUM || target_type->type == Ast_Type_Info::FLOAT) {
+            if (!types_match(get_type_info(lit), target_type)) {
                 viability_score += 1;
             }
             auto old_type = lit->type_info;
-            // @Incomplete check that number can fit in target type
-            // @Incomplete cast to float if we have an int literal
-            lit->type_info = want_numeric_type;
 
+            if (target_type->type == Ast_Type_Info::INTEGER || target_type->type == Ast_Type_Info::ENUM) {
+                auto target = target_type;
+                if (target_type->type == Ast_Type_Info::ENUM) target = target_type->enum_base_type;
+
+                // Check that number can fit in target type
+                if (target->is_signed) {
+                    s64 min, max;
+                    if (target->size == 1) { min = INT8_MIN; max = INT8_MAX; }
+                    else if (target->size == 2) { min = INT16_MIN; max = INT16_MAX; }
+                    else if (target->size == 4) { min = INT32_MIN; max = INT32_MAX; }
+                    else { assert(target->size == 8); min = INT64_MIN; max = INT64_MAX; }
+
+                    s64 x = lit->integer_value;
+                    if (x > max || x < min) return viability_score; // @@ Doest it matter what we return in this case?
+                }
+                else {
+                    u64 max;
+                    if (target->size == 1) { max = UINT8_MAX; }
+                    else if (target->size == 2) { max = UINT16_MAX; }
+                    else if (target->size == 4) { max = UINT32_MAX; }
+                    else { assert(target->size == 8); max = UINT64_MAX; }
+
+                    u64 x = (u64)lit->integer_value;
+                    if (x > max) return viability_score; // @@ Doest it matter what we return in this case?
+                }
+            }
+            else if (target_type->type == Ast_Type_Info::FLOAT) {
+                // @@ Check that integer can be represented exactly with a float.
+            }
+            
+            // @Incomplete cast to float if we have an int literal
+            lit->type_info = target_type;
 
             // @Cleanup I'm mutating the literal for now, but this would be a good place to use substitution, I think
             // Or since literal ints are considered completely typeless up until this point, maybe this is the right thing to do
-            if (want_numeric_type->type == Ast_Type_Info::FLOAT) {
+            if (target_type->type == Ast_Type_Info::FLOAT) {
                 lit->literal_type = Ast_Literal::FLOAT;
 
                 if (old_type->is_signed) {
@@ -388,20 +471,19 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *want_numeric_t
             // lit->type_info = compiler->type_int32;
         }
     }
-
-    if (lit->literal_type == Ast_Literal::FLOAT) {
-        if (want_numeric_type && want_numeric_type->type == Ast_Type_Info::FLOAT) {
-            if (!types_match(get_type_info(lit), want_numeric_type)) viability_score += 1;
-            lit->type_info = want_numeric_type;
+    else if (lit->literal_type == Ast_Literal::FLOAT) {
+        if (target_type && target_type->type == Ast_Type_Info::FLOAT) {
+            if (!types_match(get_type_info(lit), target_type)) viability_score += 1;
+            lit->type_info = target_type;
         }
         //else lit->type_info = compiler->type_float64; // @TODO we should probably have a check that verifies if the literal can fit in a 32-bit float and then default to that.
     }
 
-    if (lit->literal_type == Ast_Literal::NULLPTR) {
-        if (want_numeric_type->type == Ast_Type_Info::POINTER) {
-            lit->type_info = want_numeric_type;
-        } else if (want_numeric_type->type == Ast_Type_Info::FUNCTION) {
-            lit->type_info = want_numeric_type;
+    else if (lit->literal_type == Ast_Literal::NULLPTR) {
+        if (target_type->type == Ast_Type_Info::POINTER) {
+            lit->type_info = target_type;
+        } else if (target_type->type == Ast_Type_Info::FUNCTION) {
+            lit->type_info = target_type;
         }
     }
 
@@ -420,11 +502,27 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
 
     u64  viability_score  = 0;
 
-    if (auto lit = folds_to_literal(expression)) {
+    /*if (auto lit = folds_to_literal(expression)) {
         auto score = maybe_mutate_literal_to_type(lit, target_type_info);
         expression = lit;
         viability_score += score;
+    }*/
+
+    auto lit = folds_to_literal(expression);
+    if (lit) {
+        if (is_mutable_literal(lit)) {
+            auto score = maybe_mutate_literal_to_type(lit, target_type_info);
+            expression = lit;
+            //expression->substitution = lit;
+            viability_score += score;
+        }
+        else {
+            // We fold expressions even if they cannot be mutated.
+            expression = lit;
+            //expression->substitution = lit;
+        }
     }
+
 
     auto rtype = get_final_type(get_type_info(expression));
     auto ltype = get_final_type(target_type_info);
@@ -515,7 +613,6 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
                     // We don't penalize the viability for this. You get this as a courtesy.
                     right = cast;
                 }
-
             }
         }
     }
@@ -571,7 +668,7 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                 return nullptr;
             }
 
-            if (left_type->type == Ast_Type_Info::INTEGER) {
+            if (left_type->type == Ast_Type_Info::INTEGER || left_type->type == Ast_Type_Info::ENUM) {
                 s64 left_int  = left->integer_value;
                 s64 right_int = right->integer_value;
                 switch (bin->operator_type) {
@@ -631,6 +728,34 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                         assert(false && "Unhandled binary operator in folds_to_literal.");
                         return nullptr;
                 }
+            } else if (left_type->type == Ast_Type_Info::TYPE) {
+                #if 0 
+                    // This relies on the table index for type comparison, which is the same we currently do at runtime.
+                    s64 left_int  = left->integer_value;
+                    s64 right_int = right->integer_value;
+                    switch (bin->operator_type) {
+                        case Token::EQ_OP: return make_bool_literal(compiler, left_int == right_int, bin);
+                        case Token::NE_OP: return make_bool_literal(compiler, left_int != right_int, bin);
+                        default:
+                            assert(false && "Unexpected binary operator in folds_to_literal.");
+                            return nullptr;
+                    }
+                #else
+                    // Instead of the type index, use the type value at that index. Note, that at runtime we are still
+                    // comparing the indices directly.
+
+                    auto left_type = compiler->type_table[left->integer_value];
+                    auto right_type = compiler->type_table[right->integer_value];
+
+                    bool match = types_match(left_type, right_type);
+                    switch (bin->operator_type) {
+                        case Token::EQ_OP: return make_bool_literal(compiler, match, bin);
+                        case Token::NE_OP: return make_bool_literal(compiler, !match, bin);
+                        default:
+                            assert(false && "Unexpected binary operator in folds_to_literal.");
+                            return nullptr;
+                    }
+                #endif
             } else {
                 return nullptr;
             }
@@ -666,10 +791,24 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
 
         case AST_IDENTIFIER: {
             auto ident = static_cast<Ast_Identifier *>(expression);
-            auto decl = static_cast<Ast_Declaration *>(ident->resolved_declaration);
+            auto decl = ident->resolved_declaration;
 
             if (decl->type == AST_DECLARATION) {
-                return folds_to_literal(decl);
+                return folds_to_literal(static_cast<Ast_Declaration *>(decl));
+            }
+            if (decl->type == AST_TYPE_ALIAS) {
+                auto alias = static_cast<Ast_Type_Alias *>(decl);
+                return folds_to_literal(alias->internal_type_inst);
+            }
+            if (decl->type == AST_STRUCT) {
+                auto _struct = static_cast<Ast_Struct *>(decl);
+                auto literal = make_integer_literal(compiler, _struct->type_value->type_table_index, compiler->type_info_type, decl);
+                return literal;
+            }
+            if (decl->type == AST_ENUM) {
+                auto _enum = static_cast<Ast_Enum *>(decl);
+                auto literal = make_integer_literal(compiler, _enum->type_value->type_table_index, compiler->type_info_type, decl);
+                return literal;
             }
 
             return nullptr;
@@ -686,12 +825,89 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                     assert(literal->type == AST_LITERAL);
                     literal = static_cast<Ast_Literal *>(compiler->copier->copy(literal)); // Make a copy in case the user code wants to mutate the literal itself.
                     assert(literal);
+                    // Why are we changing the type of the declaration? This is producing incorrect results when
+                    // the declaration is an enum that's initialized with an integer expression.
+                    // @@ Is that really what's happening?
                     literal->type_info = get_type_info(decl->initializer_expression);
                 }
                 return literal;
             }
 
             return nullptr;
+        }
+
+        case AST_TYPE_INSTANTIATION: {
+            auto type_inst = static_cast<Ast_Type_Instantiation *>(expression);
+            
+            auto literal = make_integer_literal(compiler, type_inst->type_value->type_table_index, compiler->type_info_type, type_inst);
+
+            return literal;
+        }
+
+        case AST_CAST: {
+            auto cast = static_cast<Ast_Cast *>(expression);
+            auto target_type = cast->type_info;
+
+            //Ast_Type_Instantiation *target_type_inst = nullptr;
+            // Ast_Expression *expression = nullptr;
+
+            auto literal = folds_to_literal(cast->expression);
+            if (literal) {
+                assert(literal->type == AST_LITERAL);
+
+                // @@ Should we fold this with mutate_literal_to_type()
+
+                if (target_type->type == Ast_Type_Info::INTEGER) {
+                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                        return make_integer_literal(compiler, literal->integer_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::FLOAT) {
+                        return make_integer_literal(compiler, literal->float_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::BOOL) {
+                        return make_integer_literal(compiler, literal->bool_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::ENUM) {
+                        return make_integer_literal(compiler, literal->integer_value, target_type);
+                    }
+                }
+                else if (target_type->type == Ast_Type_Info::FLOAT) {
+                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                        return make_float_literal(compiler, literal->integer_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::FLOAT) {
+                        // @@ Should we avoid doing anything in this case?
+                        return make_float_literal(compiler, literal->float_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::BOOL) {
+                        return make_float_literal(compiler, literal->bool_value, target_type);
+                    }
+                }
+                else if (target_type->type == Ast_Type_Info::BOOL) {
+                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                        return make_bool_literal(compiler, literal->integer_value != 0);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::FLOAT) {
+                        return make_bool_literal(compiler, literal->float_value != 0.0);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::BOOL) {
+                        return literal;
+                    }
+                }
+                else if (target_type->type == Ast_Type_Info::ENUM) {
+                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                        return make_integer_literal(compiler, literal->integer_value, target_type);
+                    }
+                    else if (literal->type_info->type == Ast_Type_Info::ENUM) {
+                        return make_integer_literal(compiler, literal->integer_value, target_type);
+                    }
+                }
+                else {
+                    return nullptr;
+                }
+            }
+
+            return nullptr; // @@ Other casts not suported yet.
         }
 
         default: return nullptr;
@@ -703,6 +919,35 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
 // Actually, this is being deprecated for things other than binary operators and for-loop ranges... since function calls now use typecheck_and_implicit_cast_single_expression, declarations need only do one-way casting, returns are one-way.
 // Perhaps also, we should break this out into several calls to typecheck_and_implicit_cast_single_expression... -josh 21 July 2019
 Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression *left, Ast_Expression *right, Ast_Expression **result_left, Ast_Expression **result_right, bool allow_coerce_to_ptr_void) {
+    
+    auto lit_left = folds_to_literal(left);
+    if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
+
+    auto lit_right = folds_to_literal(right);
+    if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
+
+    // @@ Shouldn't we do substitution regardless of whether we mutate the type?
+    // I think we do, otherwise in expressions such as `day == Day.Tuesday` the right hand side is never folded.
+    if (lit_left) {
+        left->substitution = lit_left;
+    }
+    if (lit_right) {
+        right->substitution = lit_right;
+    }
+
+    if (lit_left && is_mutable_literal(lit_left)) {
+        maybe_mutate_literal_to_type(lit_left, get_type_info(right));
+        left = lit_left;
+        //left->substitution = lit_left;
+    }
+    else if (lit_right && is_mutable_literal(lit_right)) {
+        maybe_mutate_literal_to_type(lit_right, get_type_info(left));
+        right = lit_right;
+        //right->substitution = lit_right;
+    }
+
+    // Original code:
+    /*
     if (auto lit = folds_to_literal(left)) {
         typecheck_expression(right);
         if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
@@ -725,6 +970,7 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
 
         typecheck_expression(right, get_type_info(left));
     }
+    */
 
     if (compiler->errors_reported) return MakeTuple<u64, u64>(0, 0);
 
@@ -1067,6 +1313,9 @@ Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom 
         } else if (it->type == AST_STRUCT) {
             auto _struct = static_cast<Ast_Struct *>(it);
             if (_struct->identifier && _struct->identifier->name == atom) return _struct;
+        } else if (it->type == AST_ENUM) {
+            auto _enum = static_cast<Ast_Enum *>(it);
+            if (_enum->identifier && _enum->identifier->name == atom) return _enum;
         } else if (it->type == AST_SCOPE_EXPANSION) {
             auto exp = static_cast<Ast_Scope_Expansion *>(it);
 
@@ -1080,32 +1329,35 @@ Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom 
 
     if (check_private_declarations) {
         for (auto it : scope->private_declarations) {
-        while (it->substitution) it = it->substitution;
+            while (it->substitution) it = it->substitution;
 
-        if (it->type == AST_DECLARATION) {
-            auto decl = static_cast<Ast_Declaration *>(it);
-            if (decl->identifier->name == atom) return it;
-        } else if (it->type == AST_FUNCTION) {
-            auto function = static_cast<Ast_Function *>(it);
-            if (function->identifier->name == atom) return function;
-        } else if (it->type == AST_TYPE_ALIAS) {
-            auto alias = static_cast<Ast_Type_Alias *>(it);
-            if (alias->identifier && alias->identifier->name == atom) return alias;
-        } else if (it->type == AST_STRUCT) {
-            auto _struct = static_cast<Ast_Struct *>(it);
-            if (_struct->identifier && _struct->identifier->name == atom) return _struct;
-        } else if (it->type == AST_SCOPE_EXPANSION) {
-            auto exp = static_cast<Ast_Scope_Expansion *>(it);
+            if (it->type == AST_DECLARATION) {
+                auto decl = static_cast<Ast_Declaration *>(it);
+                if (decl->identifier->name == atom) return it;
+            } else if (it->type == AST_FUNCTION) {
+                auto function = static_cast<Ast_Function *>(it);
+                if (function->identifier->name == atom) return function;
+            } else if (it->type == AST_TYPE_ALIAS) {
+                auto alias = static_cast<Ast_Type_Alias *>(it);
+                if (alias->identifier && alias->identifier->name == atom) return alias;
+            } else if (it->type == AST_STRUCT) {
+                auto _struct = static_cast<Ast_Struct *>(it);
+                if (_struct->identifier && _struct->identifier->name == atom) return _struct;
+            } else if (it->type == AST_ENUM) {
+                auto _enum = static_cast<Ast_Struct *>(it);
+                if (_enum->identifier && _enum->identifier->name == atom) return _enum;
+            } else if (it->type == AST_SCOPE_EXPANSION) {
+                auto exp = static_cast<Ast_Scope_Expansion *>(it);
 
-            bool check_private = (exp->expanded_via_import_directive == nullptr);
-            auto decl = find_declaration_for_atom_in_scope(exp->scope, atom, check_private);
-            if (decl) return decl;
-        } else {
-            assert(false);
+                bool check_private = (exp->expanded_via_import_directive == nullptr);
+                auto decl = find_declaration_for_atom_in_scope(exp->scope, atom, check_private);
+                if (decl) return decl;
+            } else {
+                assert(false);
+            }
         }
     }
-    }
-
+    
     return nullptr;
 }
 
@@ -1149,7 +1401,16 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             // call typecheck_expression on Ast_Type_Instantiation because it is normally
             // only available attached to other AST nodes, which will call resolve_type_inst
             // on it.
-            assert(false);
+            //assert(false);
+
+            resolve_type_inst(static_cast<Ast_Type_Instantiation*>(expression));
+            expression->type_info = compiler->type_info_type;
+
+            if (auto lit = folds_to_literal(expression)) {
+                expression->substitution = lit;
+                //expression = lit;
+            }
+
             return;
         }
         case AST_DIRECTIVE_LOAD: {
@@ -1265,8 +1526,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 typecheck_expression(decl->initializer_expression, get_type_info(decl));
                 if (compiler->errors_reported) return;
             }
-
-            if (decl->is_let && !decl->is_readonly_variable && !decl->initializer_expression) {
+            
+            if (decl->is_let && !decl->is_readonly_variable && !decl->initializer_expression && !decl->is_enum_member) {
                 compiler->report_error(decl, "let constant must be initialized by an expression.\n");
                 return;
             }
@@ -1303,13 +1564,17 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (decl->type_info && decl->initializer_expression) {
                 auto result = typecheck_and_implicit_cast_single_expression(decl->initializer_expression, get_type_info(decl), ALLOW_COERCE_TO_PTR_VOID);
+                if (compiler->errors_reported) return;
 
                 if (decl->initializer_expression != result.item2) decl->initializer_expression = result.item2; // Don't do a substitution here, otherwise we can cause a loop
+                
                 if (!types_match(get_type_info(decl), get_type_info(decl->initializer_expression))) {
+                    // @@ The error message is good, but the error highlight could be improved, currently it points to the ':' in the declaration only.
+                    // Note that due to the above substitution it's not a good idea to point to the initializer.
                     auto wanted = type_to_string(get_type_info(decl));
                     auto given  = type_to_string(get_type_info(decl->initializer_expression));
-                    compiler->report_error(decl->initializer_expression, "Attempt to initialize variable with expression of incompatible type (Wanted %.*s, Given %.*s).\n",
-                                           wanted.length, wanted.data, given.length, given.data);
+                    compiler->report_error(decl, "Attempt to initialize '%.*s' with expression of incompatible type (Wanted %.*s, Given %.*s).\n",
+                                           PRINT_ARG(decl->identifier->name->name), PRINT_ARG(wanted), PRINT_ARG(given));
                     free(wanted.data);
                     free(given.data);
                     return;
@@ -1373,6 +1638,28 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 bin->right = tuple.item2;
             } else {
+                // Special case for enum type comparision with inference.
+                // IC: I think this should work with all operators.
+                //if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP ||
+                //    bin->operator_type == Token::LE_OP || bin->operator_type == Token::GE_OP ||
+                //    bin->operator_type == '<' || bin->operator_type == '>' || bin->operator_type == Token::VERTICAL_BAR)
+                {
+                    if (expression_needs_enum_type_inference(bin->right)) {
+                        // If lhs is enum, supply enum type to rhs.
+                        typecheck_expression(bin->left);
+                        if (bin->left->type_info != nullptr && bin->left->type_info->type == Ast_Type_Info::ENUM) {
+                            typecheck_expression(bin->right, bin->left->type_info);
+                        }
+                    }
+                    else if (expression_needs_enum_type_inference(bin->left)) {
+                        // If rhs is enum, supply enum type to lhs.
+                        typecheck_expression(bin->right);
+                        if (bin->right->type_info != nullptr && bin->right->type_info->type == Ast_Type_Info::ENUM) {
+                            typecheck_expression(bin->left, bin->right->type_info);
+                        }
+                    }
+                }
+
                 // @Incomplete change typecheck_and_implicit_cast_expression_pair to use flags
                 bool allow_coerce_to_ptr_void = (allow_coerce_to_ptr_void_flag & ALLOW_COERCE_TO_PTR_VOID);
                 typecheck_and_implicit_cast_expression_pair(bin->left, bin->right, &bin->left, &bin->right, allow_coerce_to_ptr_void);
@@ -1450,7 +1737,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     return;
                 }
 
-                // @TOOD report operator
+                // @TODO report operator
                 auto lhs = type_to_string(left_type);
                 auto rhs = type_to_string(right_type);
                 compiler->report_error(bin, "Incompatible types found on lhs and rhs of binary operator (%.*s, %.*s).", lhs.length, lhs.data, rhs.length, rhs.data);
@@ -1459,58 +1746,83 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 return;
             }
 
-            if (bin->operator_type == Token::LE_OP ||
-                bin->operator_type == Token::GE_OP ||
-                bin->operator_type == Token::RIGHT_ANGLE ||
-                bin->operator_type == Token::LEFT_ANGLE) {
-                if (!is_int_type(left_type) && !is_float_type(left_type)) {
-                    compiler->report_error(bin, "Comparison operators are only valid for integer and floating-point operands.\n");
+            // IC: I think it's more clear to check the operators for each type independently.
+            if (is_enum_type(left_type)) {
+                if (bin->operator_type == Token::SLASH ||
+                    bin->operator_type == Token::STAR || 
+                    bin->operator_type == Token::DEREFERENCE_OR_SHIFT ||
+                    bin->operator_type == Token::RIGHT_SHIFT) 
+                {
+                    // From parser.cpp
+                    extern String token_type_to_string(Token::Type type);
+
+                    // @@ Can we get a string that we don't have to deallocate?
+                    auto token_string = token_type_to_string(bin->operator_type);
+                    defer { free(token_string.data); };
+
+                    auto type_name = type_to_string(left_type);
+                    defer { free(type_name.data); };
+                    
+                    compiler->report_error(bin, "Operator '%s' not valid on '%.*s' type.\n", token_string, type_name);
                     return;
                 }
             }
-
-            if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
-                if (!is_int_type(left_type) && !is_float_type(left_type) &&
-                    left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
-                    && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE
-                    && left_type->type != Ast_Type_Info::FUNCTION) {
-                    compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, function, and Type operands.\n");
-                    return;
+            else {
+                if (bin->operator_type == Token::LE_OP ||
+                    bin->operator_type == Token::GE_OP ||
+                    bin->operator_type == Token::RIGHT_ANGLE ||
+                    bin->operator_type == Token::LEFT_ANGLE) {
+                    if (!is_int_type(left_type) && !is_float_type(left_type) && !is_enum_type(left_type)) {
+                        // @@ Reverse error message? Comparison op not valid for this type.
+                        compiler->report_error(bin, "Comparison operators are only valid for integer, floating-point, and enum operands.\n");
+                        return;
+                    }
                 }
-            }
 
-            if (bin->operator_type == Token::PLUS  ||
-                bin->operator_type == Token::MINUS ||
-                bin->operator_type == Token::SLASH ||
-                bin->operator_type == Token::STAR) {
-                bool pointer_arithmetic_allowed = (bin->operator_type == Token::MINUS) && is_pointer_type(left_type);
-                if (!is_int_type(left_type) && !is_float_type(left_type) && !pointer_arithmetic_allowed) {
-                    compiler->report_error(bin, "Arithmetic operators are only valid for integer and floating-point operands.\n");
-                    return;
+                if (bin->operator_type == Token::EQ_OP || bin->operator_type == Token::NE_OP) {
+                    if (!is_int_type(left_type) && !is_float_type(left_type) && !is_enum_type(left_type)
+                        && left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
+                        && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE
+                        && left_type->type != Ast_Type_Info::FUNCTION) {
+
+                        compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, function, and Type operands.\n");
+                        return;
+                    }
                 }
-            }
 
-            if (bin->operator_type == Token::AMPERSAND    ||
-                bin->operator_type == Token::VERTICAL_BAR ||
-                bin->operator_type == Token::CARET) {
-                if (!is_int_type(left_type)) {
-                    compiler->report_error(bin, "Bitwise logical operators are only valid for integer operands.\n");
-                    return;
+                if (bin->operator_type == Token::PLUS  ||
+                    bin->operator_type == Token::MINUS ||
+                    bin->operator_type == Token::SLASH ||
+                    bin->operator_type == Token::STAR) {
+                    bool pointer_arithmetic_allowed = (bin->operator_type == Token::MINUS) && is_pointer_type(left_type);
+                    if (!is_int_type(left_type) && !is_float_type(left_type) && !pointer_arithmetic_allowed) {
+                        compiler->report_error(bin, "Arithmetic operators are only valid for integer and floating-point operands.\n");
+                        return;
+                    }
                 }
-            }
 
-            if (bin->operator_type == Token::DEREFERENCE_OR_SHIFT    ||
-                bin->operator_type == Token::RIGHT_SHIFT) {
-                if (!is_int_type(left_type)) {
-                    compiler->report_error(bin, "Bitwise arithmetic operators are only valid for integer operands.\n");
-                    return;
+                if (bin->operator_type == Token::AMPERSAND    ||
+                    bin->operator_type == Token::VERTICAL_BAR ||
+                    bin->operator_type == Token::CARET) {
+                    if (!is_int_type(left_type)) {
+                        compiler->report_error(bin, "Bitwise logical operators are only valid for integer operands.\n");
+                        return;
+                    }
                 }
-            }
 
-            if (bin->operator_type == Token::PERCENT) {
-                if (!is_int_type(left_type) && !is_float_type(left_type)) {
-                    compiler->report_error(bin, "Remainder operator is only valid for integer and floating-point operands.\n");
-                    return;
+                if (bin->operator_type == Token::DEREFERENCE_OR_SHIFT    ||
+                    bin->operator_type == Token::RIGHT_SHIFT) {
+                    if (!is_int_type(left_type)) {
+                        compiler->report_error(bin, "Bitwise arithmetic operators are only valid for integer operands.\n");
+                        return;
+                    }
+                }
+
+                if (bin->operator_type == Token::PERCENT) {
+                    if (!is_int_type(left_type) && !is_float_type(left_type)) {
+                        compiler->report_error(bin, "Remainder operator is only valid for integer and floating-point operands.\n");
+                        return;
+                    }
                 }
             }
 
@@ -1772,63 +2084,83 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
         case AST_DEREFERENCE: {
             auto deref = static_cast<Ast_Dereference *>(expression);
-            typecheck_expression(deref->left);
-            if (compiler->errors_reported) return;
 
-            // Save this in case we need to check what the original thing was for struct member-function overloading.
-            // We dont want this change to propagate down to function-overloading.
-            deref->original_left = deref->left;
-            if (get_type_info(deref->left)->type == Ast_Type_Info::POINTER) {
-                // we allow you to dereference once through a pointer
-                // here we insert some desugaring that expands pointer.field into (<<pointer).field
+            Ast_Type_Info * left_type = nullptr;
 
-                auto un = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, deref->left);
-                copy_location_info(un, deref);
+            if (deref->left == nullptr) {
+                // Try to infer dereferenced type.
+                left_type = want_numeric_type;
 
-                typecheck_expression(un);
-                deref->left = un; // Dont set substitution here, otherwise we'll infinite loop
-            }
-
-            auto left_type = get_type_info(deref->left);
-            assert(left_type);
-
-            bool is_type_use = false;
-            auto left = deref->left;
-            if (left_type->type == Ast_Type_Info::TYPE) {
-                is_type_use = true;
-                while (left->substitution) left = left->substitution;
-
-                if (left->type == AST_IDENTIFIER) {
-                    auto identifier = static_cast<Ast_Identifier *>(left);
-
-                    left = identifier->resolved_declaration;
-                    left_type = get_type_info(left);
+                if (!left_type || left_type->type != Ast_Type_Info::ENUM) {
+                    compiler->report_error(deref, "Cannot infer enum type for expression.\n");
+                    return;
                 }
 
-                if (left->type == AST_TYPE_ALIAS) {
-                    auto alias = static_cast<Ast_Type_Alias *>(left);
-
-                    left_type = alias->type_value;
-                    left_type = get_final_type(left_type);
-
-                    assert(left_type);
-                    assert(alias->type_value->type == Ast_Type_Info::ALIAS);
-                } else if (left->type == AST_STRUCT) {
-                    auto _struct = static_cast<Ast_Struct *>(left);
-
-                    left_type = _struct->type_value;
-                    assert(left_type);
-                }
+                deref->is_type_dereference = true;
             }
+            else {
+                typecheck_expression(deref->left);
+                if (compiler->errors_reported) return;
+            
+                // Save this in case we need to check what the original thing was for struct member-function overloading.
+                // We dont want this change to propagate down to function-overloading.
+                deref->original_left = deref->left;
+                if (get_type_info(deref->left)->type == Ast_Type_Info::POINTER) {
+                    // we allow you to dereference once through a pointer
+                    // here we insert some desugaring that expands pointer.field into (<<pointer).field
 
-            deref->is_type_dereference = is_type_use;
+                    auto un = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, deref->left);
+                    copy_location_info(un, deref);
 
-            left_type = get_final_type(left_type);
-            if (left_type->type != Ast_Type_Info::STRING &&
-                left_type->type != Ast_Type_Info::ARRAY  &&
-                left_type->type != Ast_Type_Info::STRUCT) {
-                compiler->report_error(deref, "Attempt to dereference a type that is not a string, struct, or array!\n");
-                return;
+                    typecheck_expression(un);
+                    deref->left = un; // Dont set substitution here, otherwise we'll infinite loop
+                }
+
+                left_type = get_type_info(deref->left);
+                assert(left_type);
+
+                auto left = deref->left;
+                if (left_type->type == Ast_Type_Info::TYPE) {
+                    deref->is_type_dereference = true;
+                    while (left->substitution) left = left->substitution;
+
+                    if (left->type == AST_IDENTIFIER) {
+                        auto identifier = static_cast<Ast_Identifier *>(left);
+
+                        left = identifier->resolved_declaration;
+                        left_type = get_type_info(left);
+                    }
+
+                    if (left->type == AST_TYPE_ALIAS) {
+                        auto alias = static_cast<Ast_Type_Alias *>(left);
+
+                        left_type = alias->type_value;
+                        left_type = get_final_type(left_type);
+
+                        assert(left_type);
+                        assert(alias->type_value->type == Ast_Type_Info::ALIAS);
+                    } else if (left->type == AST_STRUCT) {
+                        auto _struct = static_cast<Ast_Struct *>(left);
+
+                        left_type = _struct->type_value;
+                        assert(left_type);
+                    }
+                    else if (left->type == AST_ENUM) {
+                        auto _enum = static_cast<Ast_Enum *>(left);
+
+                        left_type = _enum->type_value;
+                        assert(left_type);
+                    }
+                }
+
+                left_type = get_final_type(left_type);
+                if (left_type->type != Ast_Type_Info::STRING &&
+                    left_type->type != Ast_Type_Info::ARRAY  &&
+                    left_type->type != Ast_Type_Info::STRUCT &&
+                    left_type->type != Ast_Type_Info::ENUM) {
+                    compiler->report_error(deref, "Attempt to dereference a type that is not a string, struct, array, or enum!\n");
+                    return;
+                }
             }
 
             // @Hack until we have field members in the type_info (data and length would be field members of string)
@@ -1953,7 +2285,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                 }
 
-                if (found && is_type_use) {
+                if (found && deref->is_type_dereference) {
                     compiler->report_error(deref, "Attempt to use struct variable member without an instance!\n");
                     return;
                 }
@@ -1972,7 +2304,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                     if (decl && decl->type == AST_DECLARATION) {
                         // this is not supposed to happen because regular var's should be handled by the above code.
-                        if (is_type_use) assert(static_cast<Ast_Declaration *>(decl)->is_let);
+                        if (deref->is_type_dereference) assert(static_cast<Ast_Declaration *>(decl)->is_let);
                     } else if (decl && decl->type == AST_FUNCTION) {
                         // @Hack substitute to an identifier to get the quick benefit of the overloading sytem.
 
@@ -2023,7 +2355,32 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 if (!found) {
                     String field_name = field_atom->name;
                     String name = left_type->struct_decl->identifier->name->name;
-                    compiler->report_error(deref, "No member '%.*s' in struct %.*s.\n", field_name.length, field_name.data, name.length, name.data);
+                    compiler->report_error(deref, "No member '%.*s' in struct %.*s.\n", PRINT_ARG(field_name), PRINT_ARG(name));
+                }
+            } else if (left_type->type == Ast_Type_Info::ENUM) {
+                auto _enum = left_type->enum_decl;
+
+                bool found = false;
+                for (auto member : _enum->member_scope.declarations) {
+                    auto decl = static_cast<Ast_Declaration *>(member);
+                    if (decl->identifier->name == field_atom) {
+                        assert(decl->is_let);
+
+                        typecheck_expression(decl);
+                        if (compiler->errors_reported) return;
+
+                        // Substitute Enum.Value by Value's declaration.
+                        deref->substitution = decl;
+                        deref->type_info = decl->type_info;
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    String field_name = field_atom->name;
+                    String name = left_type->enum_decl->identifier->name->name;
+                    compiler->report_error(deref, "No member '%.*s' in enum %.*s.\n", PRINT_ARG(field_name), PRINT_ARG(name));
                 }
             }
 
@@ -2276,11 +2633,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             cast->type_info = target;
 
             if (!is_valid_primitive_cast(target, expr_type)) {
-                String from = type_to_string(expr_type);
-                String to   = type_to_string(target);
-                compiler->report_error(cast, "Invalid cast from '%.*s' to '%.*s'.\n", PRINT_ARG(from), PRINT_ARG(to));
-                free(from.data);
-                free(to.data);
+                compiler->report_error(cast, "Invalid cast.\n");
+                return;
             }
 
             return;
@@ -2517,6 +2871,28 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             size->substitution = lit;
             return;
         }
+        case AST_TYPEOF: {
+            Ast_Typeof *typeof = static_cast<Ast_Typeof *>(expression);
+
+            if (!typeof->expression) {
+                compiler->report_error(typeof, "typeof() must take one argument.\n");
+                return;
+            }
+
+            typecheck_expression(typeof->expression);
+            if (compiler->errors_reported) return;
+
+            auto expr_type = get_type_info(typeof->expression);
+
+            Ast_Type_Instantiation *type_inst = SEMA_NEW(Ast_Type_Instantiation);
+            copy_location_info(type_inst, typeof);
+            type_inst->type_value = expr_type;
+            type_inst->type_info = compiler->type_info_type;
+
+            typeof->substitution = type_inst;
+            typeof->type_info = compiler->type_info_type;
+            return;
+        }
         case AST_OS: {
             auto os = static_cast<Ast_Os *>(expression);
 
@@ -2617,6 +2993,100 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             flow->target_statement = target_statement;
             return;
         }
+
+        case AST_ENUM: {
+            auto _enum = static_cast<Ast_Enum *>(expression);
+            
+            // Set this early so we dont recurse indefinitely
+            _enum->type_value = compiler->make_enum_type(_enum);
+            _enum->type_info = compiler->type_info_type;
+            
+            auto base_type_info = resolve_type_inst(_enum->base_type);
+            if (compiler->errors_reported) return;
+
+            _enum->type_value->size = base_type_info->size;
+            _enum->type_value->alignment = base_type_info->alignment;
+            _enum->type_value->stride = base_type_info->stride;
+            _enum->type_value->is_signed = base_type_info->is_signed;
+
+            // flag stuct member declarations
+            for (auto _decl : _enum->member_scope.declarations) {
+                assert (_decl->type == AST_DECLARATION);
+                auto decl = static_cast<Ast_Declaration *>(_decl);
+                decl->is_enum_member = true;
+            }
+            
+            {
+                auto info = _enum->type_value;
+                assert(info->type == Ast_Type_Info::ENUM);
+                assert(info->enum_decl == _enum);
+
+                info->enum_base_type = base_type_info;
+                                
+                // Set to -1 so that first item is initialized to 0.
+                bool prev_value_set = false;
+                s64 prev_value;
+
+                for (auto expr : _enum->member_scope.declarations) {
+                    assert (expr->type == AST_DECLARATION);
+                    auto decl = static_cast<Ast_Declaration *>(expr);
+                    assert(decl->is_let);
+
+                    Ast_Literal * literal = nullptr;
+                    if (!decl->initializer_expression) {
+                        s64 value;
+                        if (_enum->is_flags) {
+                            value = 1;
+                            if (prev_value_set) {
+                                // Make sure prev_value only has one bit set.
+                                if (!is_pow2(prev_value)) {
+                                    compiler->report_error(decl, "Implicit flag initialization not allowed after elements with more than one bit set.");
+                                    return;
+                                }
+
+                                value = prev_value * 2;
+
+                                if ((u64)value > max_integer(base_type_info->size, base_type_info->is_signed)) {
+                                    compiler->report_error(decl, "Implicit flag initialization overflows internal enum type (%.*s == %lld).", PRINT_ARG(decl->identifier->name->name), value);
+                                    return;
+                                }
+                            }
+                        }
+                        else {
+                            value = 0;
+                            if (prev_value_set) {
+                                if (prev_value == (s64)max_integer(base_type_info->size, base_type_info->is_signed)) {
+                                    compiler->report_error(decl, "Implicit enum value initialization overflows internal enum type. (%d == %d)", prev_value, max_integer(base_type_info->size, base_type_info->is_signed));
+                                    return;
+                                }
+
+                                value = prev_value + 1;
+                            }
+                        }
+
+                        decl->initializer_expression = make_integer_literal(compiler, value, _enum->type_value, decl); 
+                    }
+                    
+                    literal = folds_to_literal(decl->initializer_expression);
+
+                    typecheck_expression(decl);
+                    if (compiler->errors_reported) return;
+
+                    assert(literal && literal->type == AST_LITERAL && literal->literal_type == Ast_Literal::INTEGER);
+                    prev_value = literal->integer_value;
+                    prev_value_set = true;
+                    
+                    assert(decl && decl->type_info);
+                }
+
+                compiler->add_to_type_table(info);
+            }
+            
+            typecheck_scope(&_enum->member_scope);
+            if (compiler->errors_reported) return;
+
+            return;
+        }
     }
 
     assert(false);
@@ -2672,6 +3142,12 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
             typecheck_expression(_struct);
 
             type_inst->type_value = _struct->type_value;
+            return type_inst->type_value;
+        } else if (decl->type == AST_ENUM) {
+            auto _enum = static_cast<Ast_Enum *>(decl);
+            typecheck_expression(_enum);
+
+            type_inst->type_value = _enum->type_value;
             return type_inst->type_value;
         } else {
             assert(false);

@@ -16,6 +16,10 @@ func main() {
         my_array[it] = cast(int) it * 2;
     }
 
+    for 0 ..< my_array.count {
+        my_array[it] -= 1;
+    }
+
     for my_array {
         printf("my_array[%d] = %d\n", it_index, it);
     }

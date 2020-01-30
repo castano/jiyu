@@ -352,7 +352,9 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
     }
 
     if (type->type == Ast_Type_Info::TYPE) {
-        return type_i8->getPointerTo();
+        return type_i64;
+        // In the future this should return a pointer to the runtime type info.
+        //return type_i8->getPointerTo();
     }
 
     if (type->type == Ast_Type_Info::INTEGER) {
@@ -461,6 +463,11 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         // final_type->dump();
 
         return final_type;
+    }
+
+    if (type->type == Ast_Type_Info::ENUM) {
+        Type * base_type = make_llvm_type(type->enum_base_type);
+        return base_type;
     }
 
     if (type->type == Ast_Type_Info::FUNCTION) {
@@ -665,6 +672,45 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
 
     if (type->type == Ast_Type_Info::TYPE) {
         return di_type_type;
+    }
+
+    if (type->type == Ast_Type_Info::ENUM) {
+        //return get_debug_type(type->enum_base_type);
+
+        auto enum_decl = type->enum_decl;
+
+        String name;
+        if (enum_decl->identifier) name = enum_decl->identifier->name->name;
+
+        auto debug_file = get_debug_file(llvm_context, enum_decl);
+        auto line_number = get_line_number(enum_decl);
+
+        DIType * base_type = get_debug_type(type->enum_base_type);
+
+        Array<Metadata*> enumerators;
+        for (Ast_Expression * element_expr : enum_decl->member_scope.declarations) {
+            assert(element_expr->type == AST_DECLARATION);
+            auto element_decl = static_cast<Ast_Declaration *>(element_expr);
+
+            assert(element_decl->is_enum_member);
+            assert(element_decl->is_let);
+            assert(element_decl->initializer_expression != nullptr);
+
+            auto name = element_decl->identifier->name->name;
+            Ast_Literal * element_literal = resolves_to_literal_value(element_decl->initializer_expression);
+            assert(element_literal->literal_type == Ast_Literal::INTEGER);
+            
+            enumerators.add(dib->createEnumerator(string_ref(name), element_literal->integer_value));
+        }
+
+        DINodeArray elements = dib->getOrCreateArray(ArrayRef<Metadata *>(enumerators.data, enumerators.count));
+
+        // @@ What are UniqueIdentifier and IsScoped for?
+        // createEnumerationType(DIScope * Scope, StringRef Name, DIFile * File, unsigned LineNumber,
+        //     uint64_t SizeInBits, uint32_t AlignInBits, DINodeArray Elements, DIType * UnderlyingType,
+        //     StringRef UniqueIdentifier = "", bool IsScoped = false)
+
+        return dib->createEnumerationType(di_compile_unit, string_ref(name), debug_file, line_number, base_type->getSizeInBits(), base_type->getAlignInBits(), elements, base_type);
     }
 
     assert(false);
@@ -897,7 +943,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 auto value = emit_expression(un->expression);
                 auto type = get_type_info(un->expression);
 
-                if (is_int_type(type)) {
+                if (is_int_or_enum_type(type)) {
                     return irb->CreateNeg(value);
                 } else if (is_float_type(type)) {
                     return irb->CreateFNeg(value);
@@ -928,7 +974,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 switch (bin->operator_type) {
                     case Token::STAR: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             return irb->CreateMul(left, right);
                         } else {
                             assert(is_float_type(info));
@@ -937,7 +983,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     }
                     case Token::PERCENT: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateSRem(left, right);
                             } else {
@@ -950,7 +996,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     }
                     case Token::SLASH: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateSDiv(left, right);
                             } else {
@@ -967,7 +1013,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                         auto right_type = get_type_info(bin->right);
 
                         if (is_pointer_type(left_type) &&
-                            is_int_type(right_type)) {
+                            is_int_or_enum_type(right_type)) {
                             return irb->CreateGEP(left, right);
                         } else if (is_pointer_type(left_type) && is_pointer_type(right_type)) {
                             Value *left_int  = irb->CreatePtrToInt(left,  type_intptr);
@@ -1019,7 +1065,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     }
                     case Token::LE_OP: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateICmpSLE(left, right);
                             } else {
@@ -1032,7 +1078,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                     }
                     case Token::GE_OP: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateICmpSGE(left, right);
                             } else {
@@ -1046,7 +1092,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                     case Token::LEFT_ANGLE: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateICmpSLT(left, right);
                             } else {
@@ -1060,7 +1106,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                     case Token::RIGHT_ANGLE: {
                         auto info = get_type_info(bin->left);
-                        if (is_int_type(info)) {
+                        if (is_int_or_enum_type(info)) {
                             if (info->is_signed) {
                                 return irb->CreateICmpSGT(left, right);
                             } else {
@@ -1170,9 +1216,11 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             } else if (is_a_type_declaration(ident->resolved_declaration)) {
                 Ast_Type_Info *type_value = get_type_declaration_resolved_type(ident->resolved_declaration);
 
+                // @@ Why not use the table index directly?
                 // @Incomplete just stuff the type table index in here for now.. until are able to emit a full type table.
                 auto const_int = ConstantInt::get(type_intptr, type_value->type_table_index, true);
-                return ConstantExpr::getIntToPtr(const_int, type_i8->getPointerTo());
+                //return ConstantExpr::getIntToPtr(const_int, type_i8->getPointerTo());
+                return const_int;
             } else {
                 assert(false && "Unhandled identifier type in emit_expression.");
                 return nullptr;
@@ -1181,7 +1229,12 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
         case AST_DECLARATION: {
             auto decl = static_cast<Ast_Declaration *>(expression);
-            if (decl->is_let && !decl->is_readonly_variable) return nullptr;
+
+            // Let declarations should have been handled through substitution with the corresponding literal. When invoked 
+            // from emit_scope we just skip these declarations, but when invoked from emit_expression this should be an error.
+            // Should we use an assert here and skip let declarations in emit_scope?
+            //if (decl->is_let && !decl->is_readonly_variable) return nullptr;
+            assert(!decl->is_let || decl->is_readonly_variable); 
 
             auto decl_value = get_value_for_decl(decl);
             if (decl->initializer_expression) {
@@ -1240,8 +1293,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                     auto type = value->getType();
                     if (type->isIntegerTy() && type->getPrimitiveSizeInBits() < type_i32->getPrimitiveSizeInBits()) {
-                        assert(is_int_type(get_type_info(arg)) ||
-                               get_final_type(get_type_info(arg))->type == Ast_Type_Info::BOOL);
+                        auto arg_type = get_final_type(get_type_info(arg));
+                        assert(arg_type->type == Ast_Type_Info::INTEGER || arg_type->type == Ast_Type_Info::BOOL);
                         if (get_type_info(arg)->is_signed) {
                             args[i] = irb->CreateSExt(value, type_i32);
                         } else {
@@ -1312,8 +1365,12 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto src = get_final_type(get_type_info(cast->expression));
             auto dst = get_final_type(cast->type_info);
 
+            // When casting, treat enums as if they were integers.
+            if (src->type == Ast_Type_Info::ENUM) src = src->enum_base_type;
+            if (dst->type == Ast_Type_Info::ENUM) dst = dst->enum_base_type;
+
             auto dst_type = get_type(dst);
-            if (is_int_type(src) && is_int_type(dst)) {
+            if (is_int_or_enum_type(src) && is_int_or_enum_type(dst)) {
                 if (src->size > dst->size) {
                     return irb->CreateTrunc(value, dst_type);
                 } else if (src->size < dst->size) {
@@ -1612,16 +1669,20 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         case AST_UNINITIALIZED:
             assert(false && "Unitialized AST Node!");
         // No-ops
-        case AST_TYPE_INSTANTIATION:
         case AST_TYPE_ALIAS:
         case AST_STRUCT:
+        case AST_ENUM:
         case AST_DIRECTIVE_LOAD:
         case AST_DIRECTIVE_IMPORT:
         case AST_DIRECTIVE_STATIC_IF:
         case AST_DIRECTIVE_CLANG_IMPORT:
         case AST_LIBRARY:
+            break;
+        case AST_TYPE_INSTANTIATION:
         case AST_OS:     // This is always subtituted by a literal at the AST level.
         case AST_SIZEOF: // This is always subtituted by a literal at the AST level.
+        case AST_TYPEOF: // This is always subtituted by a literal at the AST level.
+            assert(false);
             break;
     }
 
@@ -1728,6 +1789,11 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
     }
 
     for (auto &it : scope->statements) {
+        if (it->type == AST_DECLARATION) {
+            auto decl = static_cast<Ast_Declaration *>(it);
+            if (decl->is_let && !decl->is_readonly_variable) continue;
+        }
+
         irb->SetCurrentDebugLocation(DebugLoc::get(get_line_number(it), 0, di_current_scope));
         emit_expression(it);
     }

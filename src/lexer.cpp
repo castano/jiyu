@@ -294,6 +294,7 @@ Token Lexer::lex_token() {
         else if (result.string == to_string("typealias")) result.type = Token::KEYWORD_TYPEALIAS;
         else if (result.string == to_string("struct"))    result.type = Token::KEYWORD_STRUCT;
         else if (result.string == to_string("union"))     result.type = Token::KEYWORD_UNION;
+        else if (result.string == to_string("enum"))      result.type = Token::KEYWORD_ENUM;
         else if (result.string == to_string("library"))   result.type = Token::KEYWORD_LIBRARY;
         else if (result.string == to_string("framework")) result.type = Token::KEYWORD_FRAMEWORK;
         else if (result.string == to_string("operator"))  result.type = Token::KEYWORD_OPERATOR;
@@ -327,8 +328,9 @@ Token Lexer::lex_token() {
 
         else if (result.string == to_string("return")) result.type = Token::KEYWORD_RETURN;
 
-        else if (result.string == to_string("cast"))     result.type = Token::KEYWORD_CAST;
-        else if (result.string == to_string("sizeof"))   result.type = Token::KEYWORD_SIZEOF;
+        else if (result.string == to_string("cast"))   result.type = Token::KEYWORD_CAST;
+        else if (result.string == to_string("sizeof")) result.type = Token::KEYWORD_SIZEOF;
+        else if (result.string == to_string("typeof")) result.type = Token::KEYWORD_TYPEOF;
         else if (result.string == to_string("strideof")) result.type = Token::KEYWORD_STRIDEOF;
         else if (result.string == to_string("alignof"))  result.type = Token::KEYWORD_ALIGNOF;
 
@@ -336,6 +338,7 @@ Token Lexer::lex_token() {
         else if (result.string == to_string("@c_function"))  result.type = Token::TAG_C_FUNCTION;
         else if (result.string == to_string("@metaprogram")) result.type = Token::TAG_META;
         else if (result.string == to_string("@export")) result.type = Token::TAG_EXPORT;
+        else if (result.string == to_string("@flags")) result.type = Token::TAG_FLAGS;
 
         else if (result.string == to_string("temporary_c_vararg")) result.type = Token::TEMPORARY_KEYWORD_C_VARARGS;
 
