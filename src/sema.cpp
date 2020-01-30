@@ -21,6 +21,16 @@
 
 #define SEMA_NEW(type) (new (compiler->get_memory(sizeof(type))) type())
 
+static bool is_pow2(uint64_t x) {
+    return (x & (x - 1)) == 0;
+}
+
+static u64 max_integer(int bytesize, bool is_signed) {
+    // signed:   127, 32767...
+    // unsigned: 255, 65535...
+    return (u64(1) << (8 * bytesize - is_signed)) - 1;
+}
+
 static void add_type(String_Builder *builder, Ast_Type_Info *type) {
     if (type->type == Ast_Type_Info::INTEGER) {
         if (type->is_signed) builder->putchar('s');
@@ -3000,7 +3010,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 info->enum_base_type = base_type_info;
                                 
                 // Set to -1 so that first item is initialized to 0.
-                s64 prev_value = -1;
+                bool prev_value_set = false;
+                s64 prev_value;
 
                 for (auto expr : _enum->member_scope.declarations) {
                     assert (expr->type == AST_DECLARATION);
@@ -3009,15 +3020,37 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                     Ast_Literal * literal = nullptr;
                     if (!decl->initializer_expression) {
+                        s64 value;
                         if (_enum->is_flags) {
-                            int value = prev_value == -1 ? 1 : prev_value * 2;
-                            // @@ Make sure prev_value only has one bit set?
-                            // @@ Detect overflow?
-                            decl->initializer_expression = make_integer_literal(compiler, value, _enum->type_value, decl);
+                            value = 1;
+                            if (prev_value_set) {
+                                // Make sure prev_value only has one bit set.
+                                if (!is_pow2(prev_value)) {
+                                    compiler->report_error(decl, "Implicit flag initialization not allowed after elements with more than one bit set.");
+                                    return;
+                                }
+
+                                value = prev_value * 2;
+
+                                if ((u64)value > max_integer(base_type_info->size, base_type_info->is_signed)) {
+                                    compiler->report_error(decl, "Implicit flag initialization overflows internal enum type (%.*s == %lld).", PRINT_ARG(decl->identifier->name->name), value);
+                                    return;
+                                }
+                            }
                         }
                         else {
-                            decl->initializer_expression = make_integer_literal(compiler, prev_value + 1, _enum->type_value, decl);
+                            value = 0;
+                            if (prev_value_set) {
+                                if (prev_value == (s64)max_integer(base_type_info->size, base_type_info->is_signed)) {
+                                    compiler->report_error(decl, "Implicit enum value initialization overflows internal enum type. (%d == %d)", prev_value, max_integer(base_type_info->size, base_type_info->is_signed));
+                                    return;
+                                }
+
+                                value = prev_value + 1;
+                            }
                         }
+
+                        decl->initializer_expression = make_integer_literal(compiler, value, _enum->type_value, decl); 
                     }
                     
                     literal = folds_to_literal(decl->initializer_expression);
@@ -3027,6 +3060,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                     assert(literal && literal->type == AST_LITERAL && literal->literal_type == Ast_Literal::INTEGER);
                     prev_value = literal->integer_value;
+                    prev_value_set = true;
                     
                     assert(decl && decl->type_info);
                 }

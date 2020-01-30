@@ -1275,7 +1275,7 @@ void Parser::parse_enum_scope(Ast_Scope *scope) {
         
         if (token->type == '}') break;
         
-        auto decl = parse_variable_declaration(false, /*enum_value_declaration=*/true);
+        auto decl = parse_variable_declaration(/*expect_var_keyword=*/false, /*enum_value_declaration=*/true);
         if (!expect_and_eat(Token::SEMICOLON)) return;
         
         decl->is_let = true;
@@ -1307,6 +1307,7 @@ Ast_Declaration *Parser::parse_variable_declaration(bool expect_var_keyword, boo
 
     Ast_Declaration *decl = PARSER_NEW(Ast_Declaration);
     decl->identifier = ident;
+    copy_location_info(decl, ident);
 
     Token *token = peek_token();
     if (token->type == Token::COLON) {
