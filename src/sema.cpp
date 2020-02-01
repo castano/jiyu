@@ -399,6 +399,17 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
             }
         }
 
+        case AST_TUPLE_EXPRESSION: {
+            // If all arguments of a tuple expression are lvalues, then so is the tuple.
+            auto tuple = static_cast<Ast_Tuple_Expression *>(expression);
+
+            for (auto arg: tuple->arguments) {
+                if (!expression_is_lvalue(arg, parent_wants_lvalue)) return false;
+            }
+
+            return true;
+        }
+
         default:
             return false;
     }
@@ -928,7 +939,7 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
     }
 }
 
-// @Cleanup if we introduce expression substitution, then we can remove the resut parameters and just set (left/right)->substitution
+// @Cleanup if we introduce expression substitution, then we can remove the result parameters and just set (left/right)->substitution
 // Actually, if we do that, then we can't really use this for checking function calls.
 // Actually, this is being deprecated for things other than binary operators and for-loop ranges... since function calls now use typecheck_and_implicit_cast_single_expression, declarations need only do one-way casting, returns are one-way.
 // Perhaps also, we should break this out into several calls to typecheck_and_implicit_cast_single_expression... -josh 21 July 2019
@@ -1645,6 +1656,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (bin->operator_type == Token::EQUALS) {
                 // we're only allowed to cast on the rhs of an assignment.
+
                 typecheck_expression(bin->left);
                 if (compiler->errors_reported) return;
 
@@ -3106,19 +3118,37 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             Ast_Tuple_Expression *tuple = static_cast<Ast_Tuple_Expression *>(expression);
 
             if (!want_numeric_type) {
-                // Ast_Struct *tuple_struct = SEMA_NEW(Ast_Struct);
-                // tuple_struct->is_tuple = true;
+                Ast_Struct *tuple_struct = SEMA_NEW(Ast_Struct);
+                copy_location_info(tuple_struct, tuple);
 
-                // for (auto arg: tuple->arguments) {
-                //     typecheck_expression(arg);
-                //     if (compiler->errors_reported) return;
+                tuple_struct->is_tuple = true;
 
-                //     tuple_struct->member_scope.add(arg);
-                // }
+                for (array_count_type i = 0; i < tuple->arguments.count; ++i) {
+                    auto arg = tuple->arguments[i];
+                    typecheck_expression(arg);
+                    if (compiler->errors_reported) return;
 
-                // @Incomplete
-                compiler->report_error(tuple, "Could not fully infer type for tuple expression.\n");
-                assert(false);
+                    Ast_Declaration *decl = SEMA_NEW(Ast_Declaration);
+                    copy_location_info(decl, arg);
+
+                    decl->type_info = get_type_info(arg);
+
+                    String name = mprintf("item%d", i);
+                    Atom *atom = compiler->make_atom(name);
+                    free(name.data);
+
+                    Ast_Identifier *ident = SEMA_NEW(Ast_Identifier);
+                    ident->name = atom;
+                    copy_location_info(ident, decl);
+                    decl->identifier = ident;
+
+                    tuple_struct->member_scope.declarations.add(decl);
+                }
+
+                typecheck_expression(tuple_struct);
+                if (compiler->errors_reported) return;
+
+                tuple->type_info = tuple_struct->type_value;
             } else {
                 auto final_type = get_final_type(want_numeric_type);
                 if (!final_type->is_tuple) {
@@ -3153,9 +3183,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                     if (expr != tuple->arguments[i]) tuple->arguments[i] = expr; // @Cleanup should be using substituion.
                 }
-            }
 
-            tuple->type_info = want_numeric_type;
+                tuple->type_info = want_numeric_type;
+            }
             return;
         }
     }

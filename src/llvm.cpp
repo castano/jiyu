@@ -961,6 +961,27 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto bin = static_cast<Ast_Binary_Expression *>(expression);
 
             if (bin->operator_type == Token::EQUALS) {
+                if (bin->left->type == AST_TUPLE_EXPRESSION) {
+                    // @Hack I think.
+                    // This is needed, otherwise, the tuple-expression will
+                    // generate a tuple struct, copy the tuple arguments into
+                    // that struct, then return the memory to the struct.
+                    // Here we are unpacking the values of the rhs tuple
+                    // into the tuple-expression arguments.
+
+                    Value *right = emit_expression(bin->right, false);
+
+                    auto tuple = static_cast<Ast_Tuple_Expression *>(bin->left);
+                    for (array_count_type i = 0; i < tuple->arguments.count; ++i) {
+                        auto arg = emit_expression(tuple->arguments[i], true);
+                        auto value = irb->CreateExtractValue(right, i);
+
+                        irb->CreateStore(value, arg);
+                    }
+
+                    return nullptr;
+                }
+
                 Value *left  = emit_expression(bin->left,  true);
                 Value *right = emit_expression(bin->right, false);
 

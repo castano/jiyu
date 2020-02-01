@@ -1,7 +1,7 @@
 #import "LibC";
 
 func test() -> (a: int, b: float) {
-    return (1, 1);
+    return (1, 4);
 }
 
 func test2(a: (a: int, b: float)) {
@@ -22,4 +22,29 @@ func main() {
 
     test2(t);
     test2((6, 9));
+
+    var n: int;
+    var m: float;
+
+    // In the event that a tuple-expression is on the left-hand-side
+    // of an assignment, the type of the tuple is directly determined by
+    // the types of its arguments, regardless of the type of the tuple
+    // on the right-hand-side.
+    // Each field of the tuple on the right-hand-side is unpacked into
+    // the individual arguments of the tuple-expression on the left-hand-
+    // side.
+    (n, m) = test();
+
+    // Like other types of assignments, you cannot try to use a literal
+    // in a tuple expression on the left-hand-side of an assignment.
+    // (n, 1) = test(); // does not work.
+
+    printf("n: %d\n", n);
+    printf("m: %f\n", m);
+
+    // Not working yet.
+    /*
+    var (i, j) = test();
+    var (i: int, j: float) = test();
+    */
 }
