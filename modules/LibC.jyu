@@ -58,3 +58,5 @@ func @c_function sinf(a: float) -> float;
 func @c_function exit(exit_code: int32) -> void;
 
 func @c_function system(command: *uint8) -> int32;
+
+func @c_function mkdir(dirname: *uint8) -> int32;
