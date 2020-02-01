@@ -1,6 +1,8 @@
 #import "LibC";
 
 func test() -> (a: int, b: float) {
+    // arguments in tuple-expressions are automatically inferred
+    // according to the fields of the tuple being assigned, returned, or passed to.
     return (1, 4);
 }
 
