@@ -288,6 +288,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             copy_scope(&_new->member_scope, &old->member_scope);
             _new->member_scope.owning_struct = _new;
             COPY_P(is_union);
+            COPY_P(is_tuple);
 
             return _new;
         }
@@ -347,6 +348,15 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
 
             COPY_P(control_type);
             _new->current_scope = get_current_scope();
+
+            return _new;
+        }
+
+        case AST_TUPLE_EXPRESSION: {
+            auto old  = static_cast<Ast_Tuple_Expression *>(expression);
+            auto _new = COPIER_NEW(Ast_Tuple_Expression);
+
+            COPY_ARRAY(arguments);
 
             return _new;
         }
