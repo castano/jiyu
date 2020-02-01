@@ -339,8 +339,9 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
                 function->linkage_name = compiler->copy_string(name);
             }
 
-            function->return_decl = IMPORT_NEW(Ast_Declaration);
-            function->return_decl->type_info = get_jiyu_type(visitor_data, clang_getCursorResultType(cursor));
+            function->return_type = IMPORT_NEW(Ast_Type_Instantiation);
+            function->return_type->type_info  = compiler->type_info_type;
+            function->return_type->type_value = get_jiyu_type(visitor_data, clang_getCursorResultType(cursor)); // @Hack
 
             // We should maybe make get_jiyu_type work for the function prototype type, but
             // doing this for now just to get things going.

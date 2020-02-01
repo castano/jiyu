@@ -71,6 +71,14 @@ static void add_type(String_Builder *builder, Ast_Type_Info *type) {
         add_type(builder, type->array_element);
         builder->putchar('_');
     } else if (type->type == Ast_Type_Info::STRUCT) {
+        if (type->is_tuple) {
+            builder->putchar('T');
+            for (auto mem: type->struct_members) {
+                add_type(builder, mem.type_info);
+            }
+            return;
+        }
+
         builder->putchar('S');
 
         // @Incomplete structs that are declared with other structs/named-scopes.
@@ -269,6 +277,12 @@ void print_type_to_builder(String_Builder *builder, Ast_Type_Info *info) {
 
     if (info->type == Ast_Type_Info::STRUCT) {
         auto _struct = info->struct_decl;
+
+        // if (_struct->is_tuple) {
+        //     // @Incomplete
+        //     builder->print("(tuple)");
+        //     return;
+        // }
 
         maybe_add_struct_parent_name(builder, _struct->member_scope.parent);
 
@@ -2051,8 +2065,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     function_call_is_viable(call, get_type_info(function), true);
                     if (compiler->errors_reported) return;
 
-                    if (function->return_decl) {
-                        call->type_info = function->return_decl->type_info;
+                    if (function->return_type) {
+                        call->type_info = function->return_type->type_value;
                     } else {
                         call->type_info = compiler->type_void;
                     }
@@ -2569,11 +2583,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             auto ret = static_cast<Ast_Return *>(expression);
 
             auto function = ret->owning_function;
-            if (function->return_decl) {
+            if (function->return_type) {
                 // since we are currently in the scope of this function, return_decl should be gauranteed to be typechecked already.
-                assert(get_type_info(function->return_decl));
+                assert(get_type_info(function->return_type));
 
-                auto return_type = get_type_info(function->return_decl);
+                auto return_type = function->return_type->type_value;
 
                 if (!ret->expression) {
                     String name = type_to_string(return_type);
@@ -2581,10 +2595,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     return;
                 }
 
-                typecheck_expression(ret->expression);
-                bool allow_coerce_to_ptr_void = false;
-                typecheck_and_implicit_cast_expression_pair(ret->expression, function->return_decl, &ret->expression, nullptr, allow_coerce_to_ptr_void);
+                auto result = typecheck_and_implicit_cast_single_expression(ret->expression, return_type, ALLOW_COERCE_TO_PTR_VOID);
                 if (compiler->errors_reported) return;
+
+                if (result.item2 != ret->expression) ret->expression = result.item2; // @Cleanup Should be using substitutions
 
                 auto value_type = get_type_info(ret->expression);
 
@@ -3087,6 +3101,63 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             return;
         }
+
+        case AST_TUPLE_EXPRESSION: {
+            Ast_Tuple_Expression *tuple = static_cast<Ast_Tuple_Expression *>(expression);
+
+            if (!want_numeric_type) {
+                // Ast_Struct *tuple_struct = SEMA_NEW(Ast_Struct);
+                // tuple_struct->is_tuple = true;
+
+                // for (auto arg: tuple->arguments) {
+                //     typecheck_expression(arg);
+                //     if (compiler->errors_reported) return;
+
+                //     tuple_struct->member_scope.add(arg);
+                // }
+
+                // @Incomplete
+                compiler->report_error(tuple, "Could not fully infer type for tuple expression.\n");
+                assert(false);
+            } else {
+                auto final_type = get_final_type(want_numeric_type);
+                if (!final_type->is_tuple) {
+                    // @FixMe error message coule be more clear.
+                    compiler->report_error(tuple, "Could not infer type for tuple expression.\n");
+                    return;
+                }
+                assert(final_type->type == Ast_Type_Info::STRUCT);
+
+                if (final_type->struct_members.count != tuple->arguments.count) {
+                    compiler->report_error(tuple, "Mismatch in number of arguments for tuple expression (wanted %d, got %d).\n", final_type->struct_members.count, tuple->arguments.count);
+                    return;
+                }
+
+                for (array_count_type i = 0; i < tuple->arguments.count; ++i) {
+                    auto want_type = final_type->struct_members[i].type_info;
+                    auto result = typecheck_and_implicit_cast_single_expression(tuple->arguments[i], want_type, ALLOW_COERCE_TO_BOOL | ALLOW_COERCE_TO_PTR_VOID);
+                    if (compiler->errors_reported) return;
+
+                    auto expr = result.item2;
+                    auto given_type = get_type_info(expr);
+                    if (!types_match(given_type, want_type)) {
+                        auto wanted = type_to_string(want_type);
+                        auto given  = type_to_string(given_type);
+                        compiler->report_error(tuple, "Mismatch in argument types. (Wanted %.*s, Given %.*s).\n",
+                                               PRINT_ARG(wanted), PRINT_ARG(given));
+
+                        free(wanted.data);
+                        free(given.data);
+                        return;
+                    }
+
+                    if (expr != tuple->arguments[i]) tuple->arguments[i] = expr; // @Cleanup should be using substituion.
+                }
+            }
+
+            tuple->type_info = want_numeric_type;
+            return;
+        }
     }
 
     assert(false);
@@ -3233,7 +3304,7 @@ void Sema::typecheck_function_header(Ast_Function *function, bool is_for_type_in
         typecheck_expression(a);
     }
 
-    if (function->return_decl) typecheck_expression(function->return_decl);
+    if (function->return_type) typecheck_expression(function->return_type);
 
     if (compiler->errors_reported) return;
 

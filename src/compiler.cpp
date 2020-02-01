@@ -85,6 +85,16 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
     }
 
     if (left->type == Ast_Type_Info::STRUCT) {
+        if (left->is_tuple) {
+            if (left->struct_members.count != right->struct_members.count) return false;
+
+            for (array_count_type i = 0; i < left->struct_members.count; ++i) {
+                if (!types_match(left->struct_members[i].type_info, right->struct_members[i].type_info)) return false;
+            }
+
+            return true;
+        }
+
         // @Incomplete how would this work for anonymous structs for which a struct declaration doesnt exist? Do we always just create a faux declaration in that case?
         assert(left->struct_decl);
         assert(right->struct_decl);
@@ -226,6 +236,7 @@ Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct) {
     info->type = Ast_Type_Info::STRUCT;
     info->struct_decl = _struct;
     info->is_union = _struct->is_union;
+    info->is_tuple = _struct->is_tuple;
     return info;
 }
 
@@ -247,9 +258,8 @@ Ast_Type_Info *Compiler::make_function_type(Ast_Function *function) {
         info->arguments.add(arg_info);
     }
 
-    if (function->return_decl) {
-        assert(function->return_decl);
-        info->return_type = get_type_info(function->return_decl);
+    if (function->return_type) {
+        info->return_type = function->return_type->type_value;
         assert(info->return_type);
     } else {
         info->return_type = this->type_void;

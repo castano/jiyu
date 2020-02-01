@@ -46,6 +46,7 @@ enum Ast_Type {
     AST_OS,
     AST_LIBRARY,
     AST_CONTROL_FLOW,
+    AST_TUPLE_EXPRESSION,
 };
 
 struct Ast {
@@ -104,6 +105,7 @@ struct Ast_Type_Info {
     Ast_Type_Info *parent_struct = nullptr;
     Array<Struct_Member> struct_members; // for STRUCT
     bool is_union = false;
+    bool is_tuple = false;
 
     // FUNCTION
     Array<Ast_Type_Info *> arguments;
@@ -197,10 +199,18 @@ struct Ast_Struct : Ast_Expression {
     Ast_Identifier *identifier = nullptr;
     Ast_Scope member_scope;
     bool is_union = false;
+    bool is_tuple = false;
 
     Ast_Identifier *parent_struct = nullptr;
 
     Ast_Type_Info *type_value = nullptr; // @NoCopy
+};
+
+struct Ast_Tuple_Expression : Ast_Expression {
+    Ast_Tuple_Expression() { type = AST_TUPLE_EXPRESSION; }
+
+    Array<Ast_Expression *> arguments;
+
 };
 
 struct Ast_Enum : Ast_Expression {
@@ -336,7 +346,7 @@ struct Ast_Function : Ast_Expression {
     Ast_Identifier *identifier;
 
     Array<Ast_Declaration *> arguments;
-    Ast_Declaration *return_decl = nullptr; // @FixMe this should be a Ast_Type_Instantiation not a declaration.
+    Ast_Type_Instantiation *return_type = nullptr;
 
     Ast_Scope *polymorphic_type_alias_scope = nullptr;
     Ast_Scope arguments_scope;

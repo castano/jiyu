@@ -59,7 +59,7 @@ Ast_Function *Copier::copy_function(Ast_Function *old) {
     for (auto a: _new->arguments) {
         _new->arguments_scope.declarations.add(a);
     }
-    COPY(return_decl);
+    COPY(return_type);
 
 
     COPY(scope);

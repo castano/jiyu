@@ -1666,6 +1666,22 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             return nullptr;
         }
 
+        case AST_TUPLE_EXPRESSION: {
+            auto tuple = static_cast<Ast_Tuple_Expression *>(expression);
+
+            auto memory = create_alloca_in_entry(irb, get_type(get_type_info(tuple)));
+
+            for (array_count_type i = 0; i < tuple->arguments.count; ++i) {
+                auto value = emit_expression(tuple->arguments[i]);
+
+                irb->CreateStore(value, dereference(memory, i, true));
+            }
+
+            if (is_lvalue) return memory;
+
+            return irb->CreateLoad(memory);
+        }
+
         case AST_UNINITIALIZED:
             assert(false && "Unitialized AST Node!");
         // No-ops
@@ -1928,10 +1944,10 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
     auto current_block = irb->GetInsertBlock();
 
     if (!current_block->getTerminator()) {
-        auto return_decl = function->return_decl;
+        auto return_type = function->return_type;
         // @Cleanup early out for void types since we use i8 for pointers
-        if (return_decl && get_type_info(return_decl)->type != Ast_Type_Info::VOID) {
-            irb->CreateRet(Constant::getNullValue(get_type(get_type_info(return_decl))));
+        if (return_type && get_final_type(return_type->type_value)->type != Ast_Type_Info::VOID) {
+            irb->CreateRet(Constant::getNullValue(get_type(return_type->type_value)));
         } else {
             irb->CreateRetVoid();
         }

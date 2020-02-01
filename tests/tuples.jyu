@@ -1,0 +1,25 @@
+#import "LibC";
+
+func test() -> (a: int, b: float) {
+    return (1, 1);
+}
+
+func test2(a: (a: int, b: float)) {
+    printf("T2: %d\n", a.a);
+    printf("T2: %f\n", a.b);
+}
+
+func main() {
+    var t = test();
+
+    printf("%d\n", t.a);
+    printf("%f\n", t.b);
+
+    t = (2, 4);
+
+    printf("%d\n", t.a);
+    printf("%f\n", t.b);
+
+    test2(t);
+    test2((6, 9));
+}

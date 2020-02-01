@@ -233,10 +233,26 @@ Ast_Expression *Parser::parse_primary_expression() {
         next_token();
 
         auto expr = parse_expression();
+        Array<Ast_Expression *> tuple_args;
+        tuple_args.add(expr);
+
+        while (peek_token()->type == Token::COMMA) {
+            next_token();
+
+            auto expr = parse_expression();
+            tuple_args.add(expr);
+        }
 
         if (!expect_and_eat(Token::RIGHT_PAREN)) return nullptr;
 
-        return expr;
+        if (tuple_args.count == 1) return expr;
+
+        Ast_Tuple_Expression *tuple = PARSER_NEW(Ast_Tuple_Expression);
+        for (auto arg: tuple_args) {
+            tuple->arguments.add(arg);
+        }
+
+        return tuple;
     }
 
     if (token->type == Token::KEYWORD_SIZEOF || token->type == Token::KEYWORD_STRIDEOF || token->type == Token::KEYWORD_ALIGNOF) {
@@ -1550,20 +1566,26 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
                 return nullptr;
             }
 
-            // @Cleanup change this from a declaration to just the type-instantiation?
-            Ast_Declaration *decl = PARSER_NEW(Ast_Declaration);
-            // decl->identifier = nullptr;
-            decl->type_inst = type_inst;
-
-            function->return_decl = decl;
+            function->return_type = type_inst;
 
             token = peek_token();
 
             final_type_inst->function_header = function;
             return final_type_inst;
         } else {
-            compiler->report_error(final_type_inst, "Tuples are not supported yet!\n");
-            return nullptr;
+            Ast_Struct *tuple = PARSER_NEW(Ast_Struct);
+            tuple->is_tuple = true;
+
+            for (auto mem: members) {
+                mem->is_let = false; // @Hack since this gets set in the loop above
+                // @Incomplete right now we require you to name each field because of how we're parsing the declarations
+                // we will want a way to detect that a name is given in order to assign a default name
+                tuple->member_scope.declarations.add(mem);
+            }
+
+            Ast_Type_Instantiation *inst  = PARSER_NEW(Ast_Type_Instantiation);
+            inst->type_dereference_expression = tuple; // Tiny @Hack to stuff this tuple struct into Type_Instantiation, we'll want to do something similar for anon structs.
+            return inst;
         }
 
         return nullptr;
@@ -1757,12 +1779,7 @@ Ast_Function *Parser::parse_function() {
             return nullptr;
         }
 
-        // @Cleanup change this from a declaration to just the type-instantiation?
-        Ast_Declaration *decl = PARSER_NEW(Ast_Declaration);
-        // decl->identifier = nullptr;
-        decl->type_inst = type_inst;
-
-        function->return_decl = decl;
+        function->return_type = type_inst;
 
         token = peek_token();
     }
