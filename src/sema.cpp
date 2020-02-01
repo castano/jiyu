@@ -276,14 +276,25 @@ void print_type_to_builder(String_Builder *builder, Ast_Type_Info *info) {
     }
 
     if (info->type == Ast_Type_Info::STRUCT) {
+        if (info->is_tuple) {
+            builder->putchar('(');
+
+            for (array_count_type i = 0; i < info->struct_members.count; ++i) {
+                auto mem = info->struct_members[i];
+                if (mem.name) builder->print("%.*s: ", PRINT_ARG(mem.name->name));
+                print_type_to_builder(builder, mem.type_info);
+
+                if (i+1 < info->struct_members.count) {
+                    builder->putchar(',');
+                    builder->putchar(' ');
+                }
+            }
+
+            builder->putchar(')');
+            return;
+        }
+
         auto _struct = info->struct_decl;
-
-        // if (_struct->is_tuple) {
-        //     // @Incomplete
-        //     builder->print("(tuple)");
-        //     return;
-        // }
-
         maybe_add_struct_parent_name(builder, _struct->member_scope.parent);
 
         if (_struct->identifier) {
@@ -2380,8 +2391,16 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 if (!found) {
                     String field_name = field_atom->name;
-                    String name = left_type->struct_decl->identifier->name->name;
-                    compiler->report_error(deref, "No member '%.*s' in struct %.*s.\n", PRINT_ARG(field_name), PRINT_ARG(name));
+
+                    if (!left_type->is_tuple) {
+                        const char *TYPE = "struct";
+                        if (left_type->is_union) TYPE = "union";
+                        String name = left_type->struct_decl->identifier->name->name;
+                        compiler->report_error(deref, "No member '%.*s' in %s %.*s.\n", PRINT_ARG(field_name), TYPE, PRINT_ARG(name));
+                    } else {
+                        String tuple_type = type_to_string(left_type);
+                        compiler->report_error(deref, "No member '%.*s' in tuple %.*s.\n", PRINT_ARG(field_name), PRINT_ARG(tuple_type));
+                    }
                 }
             } else if (left_type->type == Ast_Type_Info::ENUM) {
                 auto _enum = left_type->enum_decl;

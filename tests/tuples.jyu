@@ -6,6 +6,10 @@ func test() -> (a: int, b: float) {
     return (1, 4);
 }
 
+func test3() -> (c: int, d: float) {
+    return (1, 2);
+}
+
 func test2(a: (a: int, b: float)) {
     printf("T2: %d\n", a.a);
     printf("T2: %f\n", a.b);
@@ -13,9 +17,23 @@ func test2(a: (a: int, b: float)) {
 
 func main() {
     var t = test();
+    var t3 = test3();
+
+    // t and t3 are the same type as far as the type system is concerned,
+    // their tuples will share the same type information in the RTTI system,
+    // and internally, they will have the same type table index,
+    // however, since the semantic analysis system assigns types in-place,
+    // t and t3 have distinct fields.
+
+    // t.c = t3.a; // this fails
 
     printf("%d\n", t.a);
     printf("%f\n", t.b);
+
+    printf("%d\n", t3.c);
+    printf("%f\n", t3.d);
+
+    t = t3;
 
     t = (2, 4);
 
