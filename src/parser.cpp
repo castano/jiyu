@@ -985,6 +985,58 @@ Ast_Expression *Parser::parse_statement() {
         return _if;
     }
 
+    if (token->type == Token::KEYWORD_SWITCH) {
+        Ast_Switch *_switch = PARSER_NEW(Ast_Switch);
+        next_token();
+
+        _switch->condition = parse_expression();
+        if (compiler->errors_reported) return _switch;
+
+        if (!_switch->condition) {
+            // @Cleanup move to sema?
+            compiler->report_error(_switch, "'switch' must be followed by an expression.\n");
+            return _switch;
+        }
+
+        set_location_info_from_token(&_switch->scope, peek_token());
+        _switch->scope.parent = get_current_scope();
+        _switch->scope.owning_statement = _switch;
+        parse_scope(&_switch->scope, true);
+        return _switch;
+    }
+
+    if (token->type == Token::KEYWORD_CASE) {
+        Ast_Case *_case = PARSER_NEW(Ast_Case);
+        next_token();
+
+        while (true) {
+            Ast_Expression *expr = parse_expression();
+            if (compiler->errors_reported) return nullptr;
+
+            if (!expr) {
+                compiler->report_error(_case, "Empty expression following 'case' statement");
+                return nullptr;
+            }
+
+            _case->conditions.add(expr);
+
+            if (peek_token()->type == Token::COMMA) {
+                next_token();
+                continue;
+            }
+
+            break;
+        }
+
+        if (!expect_and_eat(Token::COLON)) return nullptr;
+
+        set_location_info_from_token(&_case->scope, peek_token());
+        _case->scope.parent = get_current_scope();
+        parse_scope(&_case->scope, /*requires_braces*/false, /*only_one_statement*/false, /*push_scope*/true, /*is_for_case*/true);
+
+        return _case;
+    }
+
     if (token->type == Token::KEYWORD_FOR) {
         Ast_For *_for = PARSER_NEW(Ast_For);
         next_token();
@@ -1201,9 +1253,9 @@ Ast_Expression *Parser::parse_statement() {
 
             left = bin;
         }
-    }
 
-    if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
+        if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
+    }
 
     return left;
 }
@@ -1241,7 +1293,7 @@ bool Parser::add_declaration(Array<Ast_Expression *> * declarations, Ast_Express
     return true;
 }
 
-void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_statement, bool push_scope) {
+void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_statement, bool push_scope, bool is_for_case) {
     if (push_scope) push_scopes(scope);
 
     if (!requires_braces && only_one_statement == true && peek_token()->type == '{') {
@@ -1256,6 +1308,10 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
 
         if (requires_braces && token->type == '}') break;
 
+        // We get here if we are in the process of parsing a scope for a case statement,
+        // so if we hit another case token, stop.
+        if (is_for_case && peek_token()->type == Token::KEYWORD_CASE) break;
+
         Ast_Expression *stmt = parse_statement();
         if (stmt) {
             scope->statements.add(stmt);
@@ -1265,6 +1321,10 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
                     return;
                 }
             }
+        } else {
+            // If there are no more statements we can parse (because we have hit the closing brace of the switch),
+            // then break.
+            if (is_for_case) break;
         }
 
         if (compiler->errors_reported) return;

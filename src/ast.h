@@ -14,6 +14,7 @@ struct Ast_Scope;
 struct Ast_Struct;
 struct Ast_Enum;
 struct Ast_Type_Alias;
+struct Ast_Case;
 
 enum Ast_Type {
     AST_UNINITIALIZED,
@@ -47,6 +48,8 @@ enum Ast_Type {
     AST_LIBRARY,
     AST_CONTROL_FLOW,
     AST_TUPLE_EXPRESSION,
+    AST_SWITCH,
+    AST_CASE,
 };
 
 struct Ast {
@@ -467,6 +470,25 @@ struct Ast_Library : Ast_Expression {
     bool is_framework = false;
     String libname;
 };
+
+struct Ast_Switch : Ast_Expression {
+    Ast_Switch() { type = AST_SWITCH; }
+
+    Ast_Expression *condition = nullptr;
+    Ast_Scope scope;
+
+    Array<Ast_Case *> cases; // @NoCopy filled by sema
+};
+
+struct Ast_Case : Ast_Expression {
+    Ast_Case() { type = AST_CASE; }
+
+    Array<Ast_Expression *> conditions;
+    Ast_Scope scope;
+
+    Ast_Switch *target_switch = nullptr; // @NoCopy filled by sema
+};
+
 
 inline
 bool is_declaration(Ast_Type type) {

@@ -1,0 +1,43 @@
+#import "LibC";
+
+func main() {
+
+    enum Test {
+        A;
+        B;
+        C;
+        D;
+    }
+
+    var i = Test.D;
+
+    switch i {
+        case .A:
+            printf(".A\n");
+        case .B:
+            printf(".B\n");
+
+        // Like Swift, we do not support fallthrough in cases, but one can
+        // specify multiple conditions per case.
+        case .C, .D:
+            printf(".C or .D\n");
+    }
+
+    let Y = 10;
+
+    var x = 2;
+
+    // Currently only integer and enum (integer derived) types are support.
+    switch x {
+
+        // Currently only expressions that resolve to integer literals are supported.
+        case 1:
+            printf("1\n");
+        case 2:
+            printf("2\n");
+        case Y:
+            printf("Y\n");
+    }
+
+    printf("Done\n");
+}

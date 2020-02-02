@@ -37,6 +37,7 @@ func compile_failing_test(source: string) {
 func @metaprogram main() {
     var as_metaprogram = true;
 
+    compile_single_test_file("tests/switch.jyu", as_metaprogram);
     compile_single_test_file("tests/tuples.jyu", as_metaprogram);
     compile_single_test_file("tests/array_index.jyu", as_metaprogram);
     compile_single_test_file("tests/conditional_compilation.jyu", as_metaprogram);

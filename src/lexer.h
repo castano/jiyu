@@ -53,6 +53,9 @@ struct Token {
         KEYWORD_BREAK,
         KEYWORD_CONTINUE,
         KEYWORD_FOR,
+        KEYWORD_SWITCH,
+        KEYWORD_CASE,
+        KEYWORD_DEFAULT,
 
         KEYWORD_RETURN,
 

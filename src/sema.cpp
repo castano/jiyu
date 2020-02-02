@@ -1409,6 +1409,15 @@ Ast_Expression *Sema::find_declaration_for_atom(Atom *atom, Ast_Scope *start, bo
     return nullptr;
 }
 
+static
+Ast_Expression *get_nearest_owner(Ast_Scope *scope) {
+    if (scope->owning_statement) return scope->owning_statement;
+    else if (scope->owning_enum) return scope->owning_enum;
+    else if (scope->owning_function) return scope->owning_function;
+
+    return get_nearest_owner(scope->parent);
+}
+
 s64 pad_to_alignment(s64 current, s64 align) {
     assert(align >= 1);
 
@@ -3205,6 +3214,87 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 tuple->type_info = want_numeric_type;
             }
+            return;
+        }
+
+        case AST_SWITCH: {
+            auto _switch = static_cast<Ast_Switch *>(expression);
+
+            typecheck_expression(_switch->condition);
+            if (compiler->errors_reported) return;
+
+            if (!is_int_or_enum_type(get_type_info(_switch->condition))) {
+                compiler->report_error(_switch->condition, "Only integer and enum types are supported in switch conditions at this time.\n");
+                return;
+            }
+
+            // set type_info before checking the scope such that we do not recurse indefinitely when checking Ast_Case.
+            _switch->type_info = compiler->type_void;
+
+            typecheck_scope(&_switch->scope);
+
+            for (auto stmt: _switch->scope.statements) {
+                // @Incomplete this does not account for Ast_Scope_Expansion due to static-if
+                if (stmt->type != AST_CASE) {
+                    compiler->report_error(stmt, "Only 'case' statements are allowed within the scope of 'switch'.\n");
+                    return;
+                }
+
+                auto _case = static_cast<Ast_Case *>(stmt);
+                _switch->cases.add(_case);
+            }
+
+
+            return;
+        }
+
+        case AST_CASE: {
+            auto _case = static_cast<Ast_Case *>(expression);
+
+            auto owner = get_nearest_owner(_case->scope.parent);
+            bool owner_is_valid = (owner && owner->type == AST_SWITCH);
+
+            if (!owner_is_valid) {
+                compiler->report_error(_case, "'case' statement only allowed within the scope of a 'switch' statement.\n");
+                return;
+            }
+
+            // set type_info before checking the switch to avoid accidentally typechecking this case twice.
+            _case->type_info = compiler->type_void;
+
+            auto _switch = static_cast<Ast_Switch *>(owner);
+            typecheck_expression(_switch);
+            if (compiler->errors_reported) return;
+
+            _case->target_switch = _switch;
+
+            auto cond_type = get_type_info(_switch->condition);
+
+            for (array_count_type i = 0; i < _case->conditions.count; ++i) {
+                auto result = typecheck_and_implicit_cast_single_expression(_case->conditions[i], cond_type, 0);
+
+                if (result.item2 != _case->conditions[i]) _case->conditions[i] = result.item2; // @Cleanup use substitution if possible
+
+                if (!folds_to_literal(_case->conditions[i])) {
+                    compiler->report_error(_case, "'case' condition must resolve to a literal expression.\n");
+                    return;
+                }
+
+                auto type = get_type_info(_case->conditions[i]);
+                if (!types_match(cond_type, type)) {
+                    auto wanted = type_to_string(cond_type);
+                    auto given  = type_to_string(type);
+                    compiler->report_error(_case->conditions[i], "Mismatch in switch condition types. (Wanted %.*s, Given %.*s).\n",
+                                           wanted.length, wanted.data, given.length, given.data);
+
+                    free(wanted.data);
+                    free(given.data);
+                    return;
+                }
+            }
+
+            typecheck_scope(&_case->scope);
+
             return;
         }
     }

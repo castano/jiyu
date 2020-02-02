@@ -1444,8 +1444,6 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         case AST_IF: {
             auto _if = static_cast<Ast_If *>(expression);
 
-            auto loc = irb->getCurrentDebugLocation();
-            assert(loc.getLine() != 0);
             auto cond = emit_expression(_if->condition);
 
             auto current_block = irb->GetInsertBlock();
@@ -1701,6 +1699,70 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             if (is_lvalue) return memory;
 
             return irb->CreateLoad(memory);
+        }
+
+        case AST_SWITCH: {
+            auto _switch = static_cast<Ast_Switch *>(expression);
+
+            auto cond = emit_expression(_switch->condition);
+
+            auto current_block = irb->GetInsertBlock();
+            auto current_debug_location = irb->getCurrentDebugLocation();
+
+            BasicBlock *next_block = BasicBlock::Create(*llvm_context, "", current_block->getParent());
+
+            loop_exit_map.add(MakeTuple(static_cast<Ast_Expression *>(_switch), next_block));
+
+            auto swinst = irb->CreateSwitch(cond, next_block);
+
+            for (auto stmt : _switch->scope.statements) {
+                if (stmt->type != AST_CASE) continue; // @FixMe this doesnt account for Ast_Scope_Expansion
+
+                auto _case = static_cast<Ast_Case *>(stmt);
+
+                BasicBlock *case_block = static_cast<BasicBlock *>(emit_expression(_case));
+
+                for (auto case_cond: _case->conditions) {
+                    auto value = emit_expression(case_cond);
+                    assert(dyn_cast<ConstantInt>(value));
+
+                    swinst->addCase(static_cast<ConstantInt *>(value), case_block);
+                }
+            }
+
+
+            irb->SetInsertPoint(next_block);
+
+            return nullptr;
+        }
+
+        case AST_CASE: {
+            auto _case = static_cast<Ast_Case *>(expression);
+
+            // Case works different to the rest of the control-flow constructs in that we are only here to generate
+            // the contents of its scope into a block and then returning those blocks as values to Ast_Switch.
+            // Ast_Switch will handle generating the case conditions.
+
+            auto current_block = irb->GetInsertBlock();
+            auto current_debug_location = irb->getCurrentDebugLocation();
+
+            BasicBlock *block = BasicBlock::Create(*llvm_context, "case_block", current_block->getParent());
+            irb->SetInsertPoint(block);
+            emit_scope(&_case->scope);
+            if (!irb->GetInsertBlock()->getTerminator()) {
+                for (auto &entry : loop_exit_map) {
+                    if (entry.item1 == _case->target_switch) {
+                        irb->CreateBr(entry.item2);
+                        break;
+                    }
+                }
+
+                assert(irb->GetInsertBlock()->getTerminator());
+            }
+
+            irb->SetInsertPoint(current_block);
+            irb->SetCurrentDebugLocation(current_debug_location);
+            return block;
         }
 
         case AST_UNINITIALIZED:
