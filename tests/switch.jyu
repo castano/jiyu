@@ -17,8 +17,6 @@ func main() {
         case .B:
             printf(".B\n");
 
-        // Like Swift, we do not support fallthrough in cases, but one can
-        // specify multiple conditions per case.
         case .C, .D:
             printf(".C or .D\n");
     }
