@@ -277,6 +277,7 @@ void print_type_to_builder(String_Builder *builder, Ast_Type_Info *info) {
 
     if (info->type == Ast_Type_Info::STRUCT) {
         if (info->is_tuple) {
+            builder->append("Tuple");
             builder->putchar('(');
 
             for (array_count_type i = 0; i < info->struct_members.count; ++i) {
@@ -1782,8 +1783,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 bin->type_info = compiler->type_bool;
             }
 
-            auto left_type  = get_type_info(bin->left);
-            auto right_type = get_type_info(bin->right);
+            auto left_type  = get_final_type(get_type_info(bin->left));
+            auto right_type = get_final_type(get_type_info(bin->right));
 
             if (bin->operator_type == Token::AND_OP ||
                 bin->operator_type == Token::OR_OP) {
@@ -1852,8 +1853,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         && left_type->type != Ast_Type_Info::STRING && !is_pointer_type(left_type)
                         && left_type->type != Ast_Type_Info::BOOL && left_type->type != Ast_Type_Info::TYPE
                         && left_type->type != Ast_Type_Info::FUNCTION) {
-
-                        compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, function, and Type operands.\n");
+                        String given = type_to_string(left_type);
+                        compiler->report_error(bin, "Equal operator is only valid for integer, floating-point, pointer, string, function, and Type operands (Given %.*s).\n", PRINT_ARG(given));
+                        free(given.data);
                         return;
                     }
                 }
@@ -2132,10 +2134,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
 
             // fall through case for expressions that generate function pointers
-            auto info = get_type_info(subexpression);
+            auto info = get_final_type(get_type_info(subexpression));
 
             if (info->type != Ast_Type_Info::FUNCTION) {
-                compiler->report_error(call, "Function-call target does not name a function.");
+                String given = type_to_string(info);
+                compiler->report_error(call, "Function-call target does not name a function (Given %.*s).\n", PRINT_ARG(given));
+                free(given.data);
                 return;
             }
 
@@ -2472,8 +2476,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             if (compiler->errors_reported) return;
 
             auto cond = _if->condition;
-            if (get_type_info(cond)->type != Ast_Type_Info::BOOL) {
-                compiler->report_error(cond, "'if' condition isn't of boolean type.\n");
+            if (get_final_type(get_type_info(cond))->type != Ast_Type_Info::BOOL) {
+                String given = type_to_string(get_final_type(get_type_info(cond)));
+                compiler->report_error(cond, "'if' condition isn't of boolean type (Given %.*s).\n", PRINT_ARG(given));
+                free(given.data);
             }
 
             typecheck_scope(&_if->then_scope);
