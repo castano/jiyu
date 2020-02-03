@@ -20,6 +20,10 @@ static bool is_letter(int c) {
 
 static bool is_digit(int c, int radix = 10) {
 
+    if (radix == 2) {
+        return c >= '0' && c <= '1';
+    }
+
     if (radix == 16) {
         int l = to_lower(c);
         if (l >= 'a' && l <= 'f') return true;
@@ -358,6 +362,11 @@ Token Lexer::lex_token() {
             if (current_char < text.length &&
                 (text[current_char] == 'x' || text[current_char] == 'X')) {
                 radix = 16;
+                current_char++;
+                number_start = current_char;
+            } else if (current_char < text.length &&
+                (text[current_char] == 'b' || text[current_char] == 'B')) {
+                radix = 2;
                 current_char++;
                 number_start = current_char;
             }

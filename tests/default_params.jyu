@@ -20,7 +20,10 @@ func test(a: int32, b: float = 1) {
 
 func main() {
     test();
+
+    // Will print "Dang"
     test(1);
+
     test(2, 5, "test");
 
     // Will print "Dang"
