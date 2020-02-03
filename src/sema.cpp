@@ -1147,7 +1147,7 @@ Ast_Function *Sema::get_best_overload_from_set(Ast_Function_Call *call, Array<As
             if (compiler->errors_reported) return nullptr;
         }
 
-        auto tuple = function_call_is_viable(call, get_type_info(function), false);
+        auto tuple = function_call_is_viable(call, get_type_info(function), function, false);
         if (compiler->errors_reported) return nullptr;
 
         bool viable = tuple.item1;
@@ -1166,7 +1166,7 @@ Ast_Function *Sema::get_best_overload_from_set(Ast_Function_Call *call, Array<As
             typecheck_function_header(overload);
             if (compiler->errors_reported) return nullptr;
 
-            auto tuple = function_call_is_viable(call, get_type_info(overload), false);
+            auto tuple = function_call_is_viable(call, get_type_info(overload), overload, false);
             if (compiler->errors_reported) return nullptr;
 
             bool viable = tuple.item1;
@@ -1184,11 +1184,34 @@ Ast_Function *Sema::get_best_overload_from_set(Ast_Function_Call *call, Array<As
     return function;
 }
 
-Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type_Info *function_type, bool perform_full_check) {
+Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type_Info *function_type, Ast_Function *source, bool perform_full_check) {
     assert(function_type);
     assert(function_type->type == Ast_Type_Info::FUNCTION);
 
     bool pass_c_varags = (function_type->is_c_varargs && call->argument_list.count >= function_type->arguments.count);
+
+    auto old_call_count = call->argument_list.count; // This feels like a bit of a @Hack
+    defer { if (!perform_full_check) call->argument_list.count = old_call_count; };
+
+    u64 viability_score = 0;
+
+    // Insert default arguments from source function if able.
+    if (source && call->argument_list.count < source->arguments.count) {
+        for (array_count_type i = call->argument_list.count; i < source->arguments.count; ++i) {
+            auto arg = source->arguments[i];
+
+            if (arg->initializer_expression) {
+                // @Cleanup this folds_to_literal is likely unnecessary since we can typecheck this expression once in typecheck_function_header
+                // and it will not need to mutate its type or value, maybe.
+                auto lit = folds_to_literal(arg->initializer_expression);
+                assert(lit);
+
+                call->argument_list.add(lit);
+                viability_score += 1;
+            }
+        }
+    }
+
     if (!pass_c_varags && call->argument_list.count != function_type->arguments.count) {
         // @TODO print function declaration as well as call site
         if (perform_full_check) {
@@ -1197,7 +1220,6 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
         return MakeTuple<bool, u64>(false, 0);
     }
 
-    u64 viability_score = 0;
     for (array_count_type i = 0; i < call->argument_list.count; ++i) {
         auto original_value = call->argument_list[i];
         auto value = original_value;
@@ -2094,7 +2116,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         return;
                     }
 
-                    function_call_is_viable(call, get_type_info(function), true);
+                    function_call_is_viable(call, get_type_info(function), function, true);
                     if (compiler->errors_reported) return;
 
                     if (function->return_type) {
@@ -2117,7 +2139,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 return;
             }
 
-            auto tuple = function_call_is_viable(call, info, true);
+            auto tuple = function_call_is_viable(call, info, nullptr, true);
 
             bool viable = tuple.item1;
             if (viable) {
@@ -3459,6 +3481,27 @@ void Sema::typecheck_function_header(Ast_Function *function, bool is_for_type_in
         compiler->report_error(function, "Function tagged @c_function may only have 1 return value.\n");
         }
         */
+    }
+
+    if (!is_for_type_instantiation) {
+        for (array_count_type i = 0, j = 1; i < (function->arguments.count - 1) && j < function->arguments.count; ++i, ++j) {
+            auto prev = function->arguments[i];
+            auto next = function->arguments[j];
+
+            if (prev->initializer_expression && !next->initializer_expression) {
+                compiler->report_error(next, "Default argument missing for parameter %d of function.\n", j+1);
+                return;
+            }
+        }
+
+        for (auto arg: function->arguments) {
+            if (arg->initializer_expression) {
+                if (!folds_to_literal(arg->initializer_expression)) {
+                    compiler->report_error(arg->initializer_expression, "Default value for parameter must resolve to a literal value.\n");
+                    return;
+                }
+            }
+        }
     }
 
     function->type_info = compiler->make_function_type(function);

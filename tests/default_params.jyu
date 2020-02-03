@@ -1,0 +1,28 @@
+
+#import "LibC";
+
+func test(a: int32 = 10, b: float = 1, c = "hello") {
+    printf("a: %d\n", a);
+    printf("b: %f\n", b);
+
+    printf("c: %.*s\n", c.length, c.data);
+}
+
+// We don't currently error on the case that two or more functions
+// cause an ambigous overload situation. Currently, the behavior
+// is that the functions with fewer needed default params is prefered.
+// This means you cannot call the above function via test(2, 3), or test(1), as
+// the function below will be chosen instead since it requires less parameters
+// to be filled in.
+func test(a: int32, b: float = 1) {
+    printf("Dang\n");
+}
+
+func main() {
+    test();
+    test(1);
+    test(2, 5, "test");
+
+    // Will print "Dang"
+    test(3, 5);
+}

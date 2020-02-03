@@ -25,7 +25,7 @@ struct Sema {
 
     Ast_Function *get_polymorph_for_function_call(Ast_Function *template_function, Ast_Function_Call *call);
 
-    Tuple<bool, u64> function_call_is_viable(Ast_Function_Call *call, Ast_Type_Info *function_type, bool do_errors);
+    Tuple<bool, u64> function_call_is_viable(Ast_Function_Call *call, Ast_Type_Info *function_type, Ast_Function *source, bool do_errors);
     Ast_Function *get_best_overload_from_set(Ast_Function_Call *call, Array<Ast_Function *> &overload_set);
     void collect_function_overloads_for_atom_in_scope(Atom *atom, Ast_Scope *start, Array<Ast_Function *> *overload_set, bool check_private_declarations = true);
     void collect_function_overloads_for_atom(Atom *atom, Ast_Scope *start, Array<Ast_Function *> *overload_set, bool check_private_declarations = true);
