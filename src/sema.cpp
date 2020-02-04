@@ -2129,8 +2129,17 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     if (compiler->errors_reported) return;
 
                     if (!function) {
-                        // @Incomplete print visible overload candidates
                         compiler->report_error(call, "No viable overload for function call.\n");
+
+                        auto errors_reported = compiler->errors_reported;
+
+                        for (auto func : overload_set) {
+                            // @TODO this is a bit of an easy out for the time being, there are many ways to improve this with better diagnostics.
+                            compiler->errors_reported = 0; // Clear errors_reported so that we can get the full diagnostics from the call checking
+                            function_call_is_viable(call, get_type_info(func), func, true);
+                        }
+
+                        compiler->errors_reported = errors_reported;
                         return;
                     }
 
