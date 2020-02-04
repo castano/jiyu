@@ -59,4 +59,8 @@ func @c_function exit(exit_code: int32) -> void;
 
 func @c_function system(command: *uint8) -> int32;
 
-func @c_function mkdir(dirname: *uint8) -> int32;
+#if os(Windows) {
+    func @c_function("_mkdir") mkdir(dirname: *uint8) -> int32;  
+} else {
+    func @c_function mkdir(dirname: *uint8) -> int32;   
+}
