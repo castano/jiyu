@@ -463,6 +463,11 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
                 auto target = target_type;
                 if (target_type->type == Ast_Type_Info::ENUM) target = target_type->enum_base_type;
 
+                // I have disabled this stuff for the time being because it prevents the user from being able to do:
+                // let MY_UNSIGNED_VALUE: uint32 = -1;
+                // which is completely valid code, a cast should not be necessary. -josh 4 February 2020
+
+                /*
                 // Check that number can fit in target type
                 if (target->is_signed) {
                     s64 min, max;
@@ -484,6 +489,7 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
                     u64 x = (u64)lit->integer_value;
                     if (x > max) return viability_score; // @@ Doest it matter what we return in this case?
                 }
+                */
             }
             else if (target_type->type == Ast_Type_Info::FLOAT) {
                 // @@ Check that integer can be represented exactly with a float.
@@ -806,14 +812,14 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             if (!rhs) return nullptr;
 
             if (un->operator_type == Token::MINUS) {
-                auto left_type = get_type_info(un);
+                auto left_type = get_final_type(get_type_info(un));
 
                 assert(types_match(left_type, get_type_info(rhs)));
-                if (left_type->type == Ast_Type_Info::INTEGER) {
+                if (is_int_type(left_type)) {
                     assert(rhs->literal_type == Ast_Literal::INTEGER);
                     // @Incomplete if we need to work about casting between the target type sizes and s64, the we probably need to do that here too.
                     return make_integer_literal(compiler, -rhs->integer_value, left_type, un);
-                } else if (left_type->type == Ast_Type_Info::FLOAT) {
+                } else if (is_float_type(left_type)) {
                     assert(rhs->literal_type == Ast_Literal::FLOAT);
                     return make_float_literal(compiler, -rhs->float_value, left_type, un);
                 } else {
@@ -883,7 +889,7 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
 
         case AST_CAST: {
             auto cast = static_cast<Ast_Cast *>(expression);
-            auto target_type = cast->type_info;
+            auto target_type = get_final_type(cast->type_info);
 
             //Ast_Type_Instantiation *target_type_inst = nullptr;
             // Ast_Expression *expression = nullptr;
@@ -894,48 +900,48 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
 
                 // @@ Should we fold this with mutate_literal_to_type()
 
-                if (target_type->type == Ast_Type_Info::INTEGER) {
-                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                if (is_int_type(target_type)) {
+                    if (is_int_type(literal->type_info)) {
                         return make_integer_literal(compiler, literal->integer_value, target_type);
                     }
-                    else if (literal->type_info->type == Ast_Type_Info::FLOAT) {
+                    else if (is_float_type(literal->type_info)) {
                         return make_integer_literal(compiler, literal->float_value, target_type);
                     }
-                    else if (literal->type_info->type == Ast_Type_Info::BOOL) {
+                    else if (get_final_type(literal->type_info)->type == Ast_Type_Info::BOOL) {
                         return make_integer_literal(compiler, literal->bool_value, target_type);
                     }
-                    else if (literal->type_info->type == Ast_Type_Info::ENUM) {
+                    else if (is_enum_type(literal->type_info)) {
                         return make_integer_literal(compiler, literal->integer_value, target_type);
                     }
                 }
-                else if (target_type->type == Ast_Type_Info::FLOAT) {
-                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                else if (is_float_type(target_type)) {
+                    if (is_int_type(literal->type_info)) {
                         return make_float_literal(compiler, literal->integer_value, target_type);
                     }
-                    else if (literal->type_info->type == Ast_Type_Info::FLOAT) {
+                    else if (is_float_type(literal->type_info)) {
                         // @@ Should we avoid doing anything in this case?
                         return make_float_literal(compiler, literal->float_value, target_type);
                     }
-                    else if (literal->type_info->type == Ast_Type_Info::BOOL) {
+                    else if (get_final_type(literal->type_info)->type == Ast_Type_Info::BOOL) {
                         return make_float_literal(compiler, literal->bool_value, target_type);
                     }
                 }
                 else if (target_type->type == Ast_Type_Info::BOOL) {
-                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                    if (is_int_type(literal->type_info)) {
                         return make_bool_literal(compiler, literal->integer_value != 0);
                     }
-                    else if (literal->type_info->type == Ast_Type_Info::FLOAT) {
+                    else if (is_float_type(literal->type_info)) {
                         return make_bool_literal(compiler, literal->float_value != 0.0);
                     }
-                    else if (literal->type_info->type == Ast_Type_Info::BOOL) {
+                    else if (get_final_type(literal->type_info)) {
                         return literal;
                     }
                 }
-                else if (target_type->type == Ast_Type_Info::ENUM) {
-                    if (literal->type_info->type == Ast_Type_Info::INTEGER) {
+                else if (is_enum_type(target_type)) {
+                    if (is_int_type(literal->type_info)) {
                         return make_integer_literal(compiler, literal->integer_value, target_type);
                     }
-                    else if (literal->type_info->type == Ast_Type_Info::ENUM) {
+                    else if (is_enum_type(literal->type_info)) {
                         return make_integer_literal(compiler, literal->integer_value, target_type);
                     }
                 }
@@ -1591,7 +1597,15 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             // @TODO prevent use of a declaration in it's initializer
             if (decl->initializer_expression) {
-                typecheck_expression(decl->initializer_expression, get_type_info(decl));
+                auto decl_type = get_type_info(decl);
+
+                if (decl_type) {
+                    auto result = typecheck_and_implicit_cast_single_expression(decl->initializer_expression, decl_type, 0);
+                    decl->initializer_expression = result.item2; // @Cleanup use substitution if possible
+                } else {
+                    typecheck_expression(decl->initializer_expression);
+                }
+
                 if (compiler->errors_reported) return;
             }
             
@@ -1998,11 +2012,13 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         case AST_LITERAL: {
             auto lit = static_cast<Ast_Literal *>(expression);
 
+            if (want_numeric_type) want_numeric_type = get_final_type(want_numeric_type);
+
             // @Incomplete @Cleanup we should be able to get rid of want_numeric_type here now that literal folding exists.
 
             // @Incomplete if we have a float literal but want an int type, keep a float type and let the implicit cast system do its job
             if (lit->literal_type == Ast_Literal::INTEGER) {
-                if (want_numeric_type && (want_numeric_type->type == Ast_Type_Info::INTEGER || want_numeric_type->type == Ast_Type_Info::FLOAT)) {
+                if (want_numeric_type && (is_int_type(want_numeric_type) || is_float_type(want_numeric_type))) {
                     // @Incomplete check that number can fit in target type
                     // @Incomplete cast to float if we have an int literal
                     lit->type_info = want_numeric_type;
@@ -2026,7 +2042,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
 
             if (lit->literal_type == Ast_Literal::FLOAT) {
-                if (want_numeric_type && want_numeric_type->type == Ast_Type_Info::FLOAT) lit->type_info = want_numeric_type;
+                if (want_numeric_type && is_float_type(want_numeric_type)) lit->type_info = want_numeric_type;
                 else lit->type_info = compiler->type_float64; // @TODO we should probably have a check that verifies if the literal can fit in a 32-bit float and then default to that.
             }
 
@@ -2036,7 +2052,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (lit->literal_type == Ast_Literal::NULLPTR) {
                 lit->type_info = compiler->type_ptr_void;
-                if (want_numeric_type && want_numeric_type->type == Ast_Type_Info::POINTER) {
+                if (want_numeric_type && is_pointer_type(want_numeric_type)) {
                     lit->type_info = want_numeric_type;
                 }
             }
