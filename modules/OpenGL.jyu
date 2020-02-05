@@ -432,6 +432,7 @@ func @c_function glDisable(cap: GLenum);
 
 func @c_function glBegin(mode: GLenum);
 func @c_function glEnd();
+func @c_function glTexCoord2f(s: GLfloat, t: GLfloat);
 func @c_function glColor3f(r: GLfloat, g: GLfloat, b: GLfloat);
 func @c_function glVertex3f(x: GLfloat, y: GLfloat, z: GLfloat);
 func @c_function glNormal3f(nx: GLfloat, ny: GLfloat, nz: GLfloat);
