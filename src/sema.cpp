@@ -2366,6 +2366,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                 }
 
+                // @Incomplete this doesnt check the parent_struct's potential parent_struct.
                 if (!found && left_type->parent_struct) {
                     auto parent = left_type->parent_struct;
                     for (auto member : parent->struct_members) {
@@ -2393,12 +2394,15 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                     auto decl = find_declaration_for_atom_in_scope(&_struct->member_scope, field_atom);
                     Ast_Scope *decl_scope = &_struct->member_scope;
+
+                    // @Incomplete this doesnt check the parent_struct's potential parent_struct.
                     if (!decl && _struct->parent_struct) {
                         auto parent = static_cast<Ast_Struct *>(_struct->parent_struct->resolved_declaration);
                         assert(parent->type == AST_STRUCT);
                         decl = find_declaration_for_atom_in_scope(&parent->member_scope, field_atom);
                         decl_scope = &parent->member_scope;
                     }
+
                     if (decl && decl->type == AST_DECLARATION) {
                         // this is not supposed to happen because regular var's should be handled by the above code.
                         if (deref->is_type_dereference) assert(static_cast<Ast_Declaration *>(decl)->is_let);
@@ -2430,14 +2434,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             typecheck_expression(decl);
                             ident->resolved_declaration = decl;
                             ident->type_info = get_type_info(decl);
-                            return;
+                            decl = ident;
+                        } else {
+                            // resolved_declaration and type_info will be resolved by the Ast_Function_Call code.
+                            // Set to void for now, Ast_Function_Call code will either error or fix this up.
+                            ident->type_info = compiler->type_void;
+
+                            decl = ident;
                         }
-
-                        // resolved_declaration and type_info will be resolved by the Ast_Function_Call code.
-                        // Set to void for now, Ast_Function_Call code will either error or fix this up.
-                        ident->type_info = compiler->type_void;
-
-                        decl = ident;
                     }
 
                     if (decl) {
