@@ -1221,6 +1221,11 @@ Ast_Expression *Parser::parse_statement() {
         return scope;
     }
 
+    if (token->type == '}') {
+        return nullptr;
+    }
+
+
     Ast_Expression *left = parse_expression();
 
     if (left) {
@@ -1255,9 +1260,13 @@ Ast_Expression *Parser::parse_statement() {
         }
 
         if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
-    }
 
-    return left;
+        return left;
+    }
+    else {
+        compiler->report_error(token, "Unexpected token");
+        return nullptr;
+    }
 }
 
 static Ast_Expression * find_declaration(Array<Ast_Expression *> * array, Atom * name) {
