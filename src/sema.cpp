@@ -2908,7 +2908,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             typecheck_expression(deref->array_or_pointer_expression);
             if (compiler->errors_reported) return;
 
-            typecheck_expression(deref->index_expression);
+            auto result = typecheck_and_implicit_cast_single_expression(deref->index_expression, compiler->type_array_count, 0);
+            if (result.item2 != deref->index_expression) deref->index_expression = result.item2; // @Cleanup use substitution if available
             if (compiler->errors_reported) return;
 
             auto array_type = get_type_info(deref->array_or_pointer_expression);
