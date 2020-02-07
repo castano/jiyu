@@ -64,3 +64,5 @@ func @c_function system(command: *uint8) -> int32;
 } else {
     func @c_function mkdir(dirname: *uint8) -> int32;   
 }
+
+func @c_function snprintf(s: *uint8, n: size_t, fmt: *uint8, temporary_c_vararg);
