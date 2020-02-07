@@ -399,6 +399,18 @@ extern "C" {
 
         free(cmd_line);
         free(obj_name.data);
+
+        if (triple.isOSDarwin()) {
+            args.reset();
+            args.add(to_string("dsymutil"));
+            args.add(exec_name);
+
+            auto cmd_line = get_command_line(&args);
+            if (compiler->build_options.verbose_diagnostics) printf("dsymutil line: %s\n", cmd_line);
+            system((char *)cmd_line);
+
+            free(cmd_line);
+        }
 #endif
 
         // @TODO make sure we successfully launch the link command and that it returns a success code
