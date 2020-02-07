@@ -132,7 +132,7 @@ void LLVM_Generator::init() {
     bool is_optimized = false; // @BuildOptions
     const char *COMMAND_LINE_FLAGS = "";
     const unsigned runtime_version = 0;
-    di_compile_unit = dib->createCompileUnit(dwarf::DW_LANG_C, DIFile::get(*llvm_context, "fib.jyu", ""), JIYU_PRODUCER_STRING, is_optimized, COMMAND_LINE_FLAGS, runtime_version);
+    di_compile_unit = dib->createCompileUnit(dwarf::DW_LANG_C, DIFile::get(*llvm_context, "fib.jyu", "."), JIYU_PRODUCER_STRING, is_optimized, COMMAND_LINE_FLAGS, runtime_version);
 
     type_void = Type::getVoidTy(*llvm_context);
     type_i1   = Type::getInt1Ty(*llvm_context);
