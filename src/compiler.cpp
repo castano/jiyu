@@ -707,14 +707,13 @@ void Compiler::report_diagnostic_valist(String filename, String source, Span err
             char_current++;
         }
 
-        char_current++; // count newline character
         if (char_current == (error_location.start + error_location.length)) {
             printf(TTY_RESET);
         }
 
-        advance(&s);
-
         putchar('\n');
+        advance(&s);
+        char_current++;
     }
 
     putchar('\n');
