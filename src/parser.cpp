@@ -1048,55 +1048,55 @@ Ast_Expression *Parser::parse_statement() {
             _for->is_element_pointer_iteration = true;
         }
 
-		// We currently support for loops with these formats:
+        // We currently support for loops with these formats:
 
-		// for a..b {}
-		// for array {}
-		// for it in a..b {}
-		// for it in array {}
+        // for a..b {}
+        // for array {}
+        // for it in a..b {}
+        // for it in array {}
 
-		// In the future we may also add:
-		// for it_index,it in array {}
+        // In the future we may also add:
+        // for it_index,it in array {}
 
-		// This could be an array, the first part of a range, or an iterator identifier.
-		auto first_expression = parse_expression();
+        // This could be an array, the first part of a range, or an iterator identifier.
+        auto first_expression = parse_expression();
 
-		// If we encounter "in", then the firt expression was an iterator identifier.
-		// We treat "in" as a contextual keyword, instead of a reserved token, that way we can use the "in" identifier in other contexts.
-		
-		Ast_Identifier * ident = nullptr;
-		if (first_expression->type == Ast_Type::AST_IDENTIFIER) {
-			ident = static_cast<Ast_Identifier *>(first_expression);
-		}
+        // If we encounter "in", then the firt expression was an iterator identifier.
+        // We treat "in" as a contextual keyword, instead of a reserved token, that way we can use the "in" identifier in other contexts.
+        
+        Ast_Identifier * ident = nullptr;
+        if (first_expression->type == Ast_Type::AST_IDENTIFIER) {
+            ident = static_cast<Ast_Identifier *>(first_expression);
+        }
 
 
-		token = peek_token();
-		if (token->type == Token::IDENTIFIER && token->string == to_string("in")) {
-			if (ident == nullptr) {
-				compiler->report_error(first_expression, "Invalid iterator declaration.\n");
-				return _for;
-			}
-			// For clarity, it's ilegal to name your iterator 'in'.
-			if (ident->name->name == to_string("in")) {
-				compiler->report_error(ident, "Invalid iterator declaration.\n");
-				return _for;
-			}
+        token = peek_token();
+        if (token->type == Token::IDENTIFIER && token->string == to_string("in")) {
+            if (ident == nullptr) {
+                compiler->report_error(first_expression, "Invalid iterator declaration.\n");
+                return _for;
+            }
+            // For clarity, it's ilegal to name your iterator 'in'.
+            if (ident->name->name == to_string("in")) {
+                compiler->report_error(ident, "Invalid iterator declaration.\n");
+                return _for;
+            }
 
-			_for->iterator_ident = ident;
+            _for->iterator_ident = ident;
 
-			next_token();
+            next_token();
 
-			first_expression = parse_expression();
-			token = peek_token();
-		}
-		else {
-			if (ident && ident->name->name == to_string("in")) {
-				compiler->report_error(ident, "'in' must be preceeded by an iterator declaration.\n");
-				return _for;
-			}
-		}
+            first_expression = parse_expression();
+            token = peek_token();
+        }
+        else {
+            if (ident && ident->name->name == to_string("in")) {
+                compiler->report_error(ident, "'in' must be preceeded by an iterator declaration.\n");
+                return _for;
+            }
+        }
 
-		_for->initial_iterator_expression = first_expression;
+        _for->initial_iterator_expression = first_expression;
         
         if (token->type == Token::DOTDOT || token->type == Token::DOTDOTLT) {
             if (token->type == Token::DOTDOTLT) _for->is_exclusive_end = true;

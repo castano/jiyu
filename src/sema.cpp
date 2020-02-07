@@ -2634,8 +2634,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                     else {
                         copy_location_info(decl, _for);
-	                    decl->identifier = make_identifier(compiler, compiler->atom_it);
-	                    copy_location_info(decl->identifier, decl);
+                        decl->identifier = make_identifier(compiler, compiler->atom_it);
+                        copy_location_info(decl->identifier, decl);
                     }
                     decl->identifier->enclosing_scope = &_for->body;
                     decl->initializer_expression = indexed;
@@ -2643,7 +2643,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     decl->is_readonly_variable = true;
                     // decl->type_info = get_type_info(indexed);
 
-					_for->iterator_decl = decl;
+                    _for->iterator_decl = decl;
                 }
 
                 assert(_for->upper_range_expression == nullptr);
