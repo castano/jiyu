@@ -37,6 +37,26 @@ error when we use an identifier before it's declared withing function scope
 
         // destruct here
     }
+
+    // Update 6 February 2020, after some discussion on the Handmade Network Discord,
+    // it seems like this would be a preferrable implementation of this feature:
+
+    // As long as the struct implements begin_block, end_block it is valid to use
+    // Additionally, as long as there are no vars declared in Profile, this is technically stateless
+    struct Profile {
+        func begin_block(this: *Profile) {}
+        func end_block(this: *Profile) {}
+    }
+
+    @Profile {
+        // Profile.begin_block(...); runs here
+
+        // ....
+
+        // Profile.end_block(...); runs here
+    }
+
+    // This way construction/destruction semantics of a type does not conflate with block encapsulation semantics.
 */
 
 
