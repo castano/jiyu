@@ -32,6 +32,24 @@ set (JIYU_SRCS
     src/clang_import.cpp
 )
 
+if (MSVC)
+	LIST(APPEND JIYU_SRCS
+		src/ast.h
+		src/clang_import.h
+		src/compiler.h
+		src/copier.h
+		src/general.h
+		src/lexer.h
+		src/llvm.h
+		src/meow_hash.h
+		src/meow_intrinsics.h
+		src/microsoft_craziness.h
+		src/os_support.h
+		src/parser.h
+		src/sema.h
+	)
+endif()
+
 
 if (UNIX AND NOT APPLE)
     set(LINUX TRUE)
