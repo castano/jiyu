@@ -1264,7 +1264,9 @@ Ast_Expression *Parser::parse_statement() {
         return left;
     }
     else {
-        compiler->report_error(token, "Unexpected token");
+        String token_name = token_type_to_string(token->type);
+        defer { free(token_name.data); };
+        compiler->report_error(token, "Unexpected token '%.*s'.\n", PRINT_ARG(token_name));
         return nullptr;
     }
 }
@@ -1737,6 +1739,7 @@ Ast_Function *Parser::parse_function() {
 
         if (!is_valid_overloadable_operator(token->type)) {
             String op_name = token_type_to_string(token->type);
+            defer { free(op_name.data); };
             compiler->report_error(token, "Token '%.*s' is not a valid operator for overloading.\n", PRINT_ARG(op_name));
             return nullptr;
         }
