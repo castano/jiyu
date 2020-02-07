@@ -399,6 +399,9 @@ struct Ast_For : Ast_Expression {
     bool is_element_pointer_iteration = false; // for * my_array { /*..*/ } // "it" is a writable pointer instead of a readonly copy.
     bool is_exclusive_end = false;             // for ..< ranges
 
+	Ast_Identifier *iterator_ident		 = nullptr;
+    Ast_Identifier *iterator_index_ident = nullptr;	// not used yet.
+
     Ast_Declaration *iterator_decl       = nullptr;
     Ast_Declaration *iterator_index_decl = nullptr;
 

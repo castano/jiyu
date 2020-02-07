@@ -2595,14 +2595,21 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 typecheck_expression(count_expr);
 
                 auto zero = make_integer_literal(compiler, 0, get_type_info(count_expr));
-                auto it_index_ident = make_identifier(compiler, compiler->atom_it_index);
-                copy_location_info(it_index_ident, _for);
-                it_index_ident->enclosing_scope = &_for->body;
+                
+                Ast_Identifier * it_index_ident = nullptr;
+              
                 {
                     Ast_Declaration *decl = SEMA_NEW(Ast_Declaration);
-                    copy_location_info(decl, _for);
-                    decl->identifier = it_index_ident;
-                    copy_location_info(decl->identifier, _for);
+                    if (_for->iterator_index_ident) {
+                        it_index_ident = decl->identifier = _for->iterator_index_ident;
+                        copy_location_info(decl, _for->iterator_index_ident);
+                    }
+                    else {
+                        copy_location_info(decl, _for);
+                        it_index_ident = decl->identifier = make_identifier(compiler, compiler->atom_it_index);
+                        copy_location_info(decl->identifier, _for);
+                    }
+                    it_index_ident->enclosing_scope = &_for->body;
                     decl->initializer_expression = zero;
                     decl->is_let = true;
                     decl->is_readonly_variable = true;
@@ -2621,15 +2628,22 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
 
                     Ast_Declaration *decl = SEMA_NEW(Ast_Declaration);
-                    copy_location_info(decl, _for);
-                    decl->identifier = make_identifier(compiler, compiler->atom_it);
-                    copy_location_info(decl->identifier, decl);
+                    if (_for->iterator_ident) {
+                        decl->identifier = _for->iterator_ident;
+                        copy_location_info(decl, _for->iterator_ident);
+                    }
+                    else {
+                        copy_location_info(decl, _for);
+	                    decl->identifier = make_identifier(compiler, compiler->atom_it);
+	                    copy_location_info(decl->identifier, decl);
+                    }
+                    decl->identifier->enclosing_scope = &_for->body;
                     decl->initializer_expression = indexed;
                     decl->is_let = true;
                     decl->is_readonly_variable = true;
                     // decl->type_info = get_type_info(indexed);
 
-                    _for->iterator_decl = decl;
+					_for->iterator_decl = decl;
                 }
 
                 assert(_for->upper_range_expression == nullptr);
@@ -2639,9 +2653,15 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             if (!_for->iterator_decl) {
                 // for integer ranges only
                 Ast_Declaration *decl = SEMA_NEW(Ast_Declaration);
-                copy_location_info(decl, _for);
-                decl->identifier = make_identifier(compiler, compiler->atom_it);
-                copy_location_info(decl->identifier, _for);
+                if (_for->iterator_ident) {
+                    decl->identifier = _for->iterator_ident;
+                    copy_location_info(decl, _for->iterator_ident);
+                }
+                else {
+                    copy_location_info(decl, _for);
+                    decl->identifier = make_identifier(compiler, compiler->atom_it);
+                    copy_location_info(decl->identifier, _for);
+                }
                 decl->identifier->enclosing_scope = &_for->body;
                 decl->initializer_expression = _for->initial_iterator_expression;
                 decl->is_let = true;
