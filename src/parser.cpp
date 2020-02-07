@@ -1221,6 +1221,11 @@ Ast_Expression *Parser::parse_statement() {
         return scope;
     }
 
+    if (token->type == '}') {
+        return nullptr;
+    }
+
+
     Ast_Expression *left = parse_expression();
 
     if (left) {
@@ -1255,9 +1260,15 @@ Ast_Expression *Parser::parse_statement() {
         }
 
         if (!expect_and_eat(Token::SEMICOLON)) return nullptr;
-    }
 
-    return left;
+        return left;
+    }
+    else {
+        String token_name = token_type_to_string(token->type);
+        defer { free(token_name.data); };
+        compiler->report_error(token, "Unexpected token '%.*s'.\n", PRINT_ARG(token_name));
+        return nullptr;
+    }
 }
 
 static Ast_Expression * find_declaration(Array<Ast_Expression *> * array, Atom * name) {
@@ -1728,6 +1739,7 @@ Ast_Function *Parser::parse_function() {
 
         if (!is_valid_overloadable_operator(token->type)) {
             String op_name = token_type_to_string(token->type);
+            defer { free(op_name.data); };
             compiler->report_error(token, "Token '%.*s' is not a valid operator for overloading.\n", PRINT_ARG(op_name));
             return nullptr;
         }
