@@ -26,6 +26,7 @@ func @c_function glfwSetWindowTitle(window: *GLFWwindow, title: *uint8) -> void;
 func @c_function glfwSetErrorCallback(fun: GLFWerrorfun) -> void;
 func @c_function glfwSetKeyCallback(window: *GLFWwindow, callback: GLFWkeyfun) -> GLFWkeyfun;
 func @c_function glfwGetWindowSize(window: *GLFWwindow, width: *int32, height: *int32) -> void;
+func @c_function glfwGetWindowContentScale(window: *GLFWwindow, xscale: *float, yscale: *float) -> void;
 
 let GLFW_CONTEXT_VERSION_MAJOR = 0x00022002;
 let GLFW_CONTEXT_VERSION_MINOR = 0x00022003;
