@@ -3302,6 +3302,31 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 _switch->cases.add(_case);
             }
 
+            Array<Tuple<s64, Ast_Expression *>> previous_conditions;
+
+            for (auto c : _switch->cases) {
+                for (auto cond: c->conditions) {
+                    auto lit = resolves_to_literal_value(cond);
+                    assert(lit); // This should be gauranteed by type checking at this point
+                    assert(lit->literal_type == Ast_Literal::INTEGER);
+
+                    s64 value = lit->integer_value;
+
+                    bool exists = false;
+
+                    for (auto &prev : previous_conditions) {
+                        if (value == prev.item1) {
+                            exists = true;
+                            compiler->report_error(cond, "Duplicate condition in switch case.\n");
+
+                            compiler->report_error(prev.item2, "Previous condition here.\n");
+                        }
+                    }
+
+                    if (!exists) previous_conditions.add(MakeTuple<s64, Ast_Expression *>(value, cond));
+                }
+            }
+
 
             return;
         }
