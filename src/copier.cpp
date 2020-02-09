@@ -71,6 +71,8 @@ Ast_Function *Copier::copy_function(Ast_Function *old) {
     COPY_P(is_c_varargs);
     COPY_P(is_template_function);
     COPY_P(linkage_name);
+    COPY_P(is_operator_function);
+    COPY_P(operator_type);
 
 
     return _new;
@@ -87,6 +89,9 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY_P(operator_type);
             COPY(left);
             COPY(right);
+
+            _new->enclosing_scope = get_current_scope();
+
             return _new;
         }
         case AST_UNARY_EXPRESSION: {

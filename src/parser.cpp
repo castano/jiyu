@@ -432,10 +432,7 @@ Ast_Expression *Parser::parse_multiplicative_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_unary_expression();
             if (!right) {
@@ -469,10 +466,7 @@ Ast_Expression *Parser::parse_additive_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_multiplicative_expression();
             if (!right) {
@@ -506,10 +500,7 @@ Ast_Expression *Parser::parse_shift_expression() {
             bin->left = sub_expression;
 
             next_token();
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_additive_expression();
             if (!right) {
@@ -546,9 +537,7 @@ Ast_Expression *Parser::parse_relational_expression() {
 
             next_token();
 
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_shift_expression();
             if (!right) {
@@ -582,10 +571,7 @@ Ast_Expression *Parser::parse_equality_expression() {
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_relational_expression();
             if (!right) {
@@ -620,10 +606,7 @@ Ast_Expression *Parser::parse_and_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_equality_expression();
             if (!right) {
@@ -658,10 +641,7 @@ Ast_Expression *Parser::parse_exclusive_or_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_and_expression();
             if (!right) {
@@ -696,10 +676,7 @@ Ast_Expression *Parser::parse_inclusive_or_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_exclusive_or_expression();
             if (!right) {
@@ -734,10 +711,7 @@ Ast_Expression *Parser::parse_logical_and_expression() {
             bin->left = sub_expression;
 
             next_token();
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_inclusive_or_expression();
             if (!right) {
@@ -772,10 +746,7 @@ Ast_Expression *Parser::parse_logical_xor_expression() {
             bin->left = sub_expression;
 
             next_token();
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_logical_and_expression();
             if (!right) {
@@ -810,10 +781,7 @@ Ast_Expression *Parser::parse_logical_or_expression() {
             bin->left = sub_expression;
 
             next_token();
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_logical_xor_expression();
             if (!right) {
@@ -1286,10 +1254,7 @@ Ast_Expression *Parser::parse_statement() {
             bin->operator_type = token->type;
 
             next_token();
-
-            if (is_valid_overloadable_operator(token->type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             Ast_Expression *right = parse_expression();
             if (!right) {
@@ -1812,6 +1777,7 @@ Ast_Function *Parser::parse_function() {
 
     if (is_operator_function) {
         token = peek_token();
+        function->operator_type = token->type;
 
         Ast_Identifier *ident = PARSER_NEW(Ast_Identifier);
         ident->enclosing_scope = get_current_scope();

@@ -1141,8 +1141,10 @@ Ast_Function *Sema::get_polymorph_for_function_call(Ast_Function *template_funct
     bool is_existing = result.item2;
     if (polymorph) {
         if (!is_existing) {
-            typecheck_function(polymorph);
+            // Add polypmorph to polymorphed_overloads first so we do not cause in infinite loop
+            // in some cases.
             template_function->polymorphed_overloads.add(polymorph);
+            typecheck_function(polymorph);
         }
     }
     if (compiler->errors_reported) return nullptr;
@@ -1476,6 +1478,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
     // @Temporary maybe, if this is a function declaration, typecheck it anyways since typecheck_function_header() will have set
     // the type info on the function node, but not have checked the entire body.
     if (expression->type != AST_FUNCTION && expression->type_info) return;
+    if (expression->type == AST_FUNCTION && static_cast<Ast_Function *>(expression)->body_checked) return;
 
     switch (expression->type) {
         case AST_UNINITIALIZED: {
@@ -1715,7 +1718,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
 
                 auto operation = make_binary(compiler, op, bin->left, bin->right, bin);
+                operation->enclosing_scope = bin->enclosing_scope;
                 auto assignment = make_binary(compiler, Token::EQUALS, bin->left, operation, bin);
+                assignment->enclosing_scope = bin->enclosing_scope;
 
                 bin->substitution = assignment;
                 bin = assignment;
@@ -1767,19 +1772,22 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             assert(bin->type_info);
 
-
-            if (bin->operator_type == Token::EQUALS) {
-                if (!expression_is_lvalue(bin->left, true)) {
-                    compiler->report_error(bin->left, "expression on lhs of '=' must be an lvalue.\n");
-                }
-            }
-
             if (is_valid_overloadable_operator(bin->operator_type)) {
                 Atom *operator_atom = compiler->make_operator_atom(bin->operator_type);
 
                 Ast_Identifier *ident = SEMA_NEW(Ast_Identifier);
                 ident->name = operator_atom;
-                collect_function_overloads_for_atom(operator_atom, bin->enclosing_scope, &ident->overload_set);
+
+                // First we check in the type on the left if an overload is available.
+                // This should save a lot of time compared to doing a full scope tree lookup.
+                auto left_type = get_type_info(bin->left);
+                if (is_struct_type(left_type)) {
+                    auto struct_decl = left_type->struct_decl;
+
+                    collect_function_overloads_for_atom(operator_atom, &struct_decl->member_scope, &ident->overload_set);
+                }
+
+                if (!ident->overload_set.count) collect_function_overloads_for_atom(operator_atom, bin->enclosing_scope, &ident->overload_set);
 
                 if (ident->overload_set.count) {
                     Ast_Function_Call *call = SEMA_NEW(Ast_Function_Call);
@@ -1790,12 +1798,25 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     Ast_Function *function = get_best_overload_from_set(call, ident->overload_set);
                     if (compiler->errors_reported) return;
 
+                    if (!function && bin->operator_type == Token::EQUALS) {
+                        call->argument_list[0] = make_unary(compiler, Token::STAR, bin->left);
+                        copy_location_info(call->argument_list[0], bin->left);
+                        function = get_best_overload_from_set(call, ident->overload_set);
+                        if (compiler->errors_reported) return;
+                    }
+
                     if (function) {
                         bin->substitution = call;
                         call->function_or_function_ptr = function;
                         typecheck_expression(call);
                         return;
                     }
+                }
+            }
+
+            if (bin->operator_type == Token::EQUALS) {
+                if (!expression_is_lvalue(bin->left, true)) {
+                    compiler->report_error(bin->left, "expression on lhs of '=' must be an lvalue.\n");
                 }
             }
 

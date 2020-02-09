@@ -3,7 +3,6 @@
 #import "Array";
 
 typealias string_length_type = __builtin_string_length_type;
-typealias array_count_type   = __builtin_array_count_type;
 
 // Okay, so, there's nothing in the language right now to do something like new(My_Struct)
 // SO we take an initializer parameter so we can use the already established template system.

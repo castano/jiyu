@@ -3,6 +3,8 @@
 
 let NEW_MEM_CHUNK_ELEMENT_COUNT = 16;
 
+typealias array_count_type   = __builtin_array_count_type;
+
 func __array_reserve<T>(array: *[..] T, _amount: int) {
     var amount = _amount;
     if amount <= 0
