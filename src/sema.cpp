@@ -81,6 +81,15 @@ static void add_type(String_Builder *builder, Ast_Type_Info *type) {
 
         builder->putchar('S');
 
+        auto struct_decl = type->struct_decl;
+        if (struct_decl->polymorphic_type_alias_scope) {
+            for (auto decl: struct_decl->polymorphic_type_alias_scope->declarations) {
+                auto type_value = get_type_declaration_resolved_type(decl);
+                assert(type_value);
+                add_type(builder, type_value);
+            }
+        }
+
         // @Incomplete structs that are declared with other structs/named-scopes.
         // @Incomplete anonymous structs?
         String name = type->struct_decl->identifier->name->name;
@@ -841,7 +850,8 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
             }
             if (decl->type == AST_TYPE_ALIAS) {
                 auto alias = static_cast<Ast_Type_Alias *>(decl);
-                return folds_to_literal(alias->internal_type_inst);
+                auto literal = make_integer_literal(compiler, alias->type_value->type_table_index, compiler->type_info_type, decl);
+                return literal;
             }
             if (decl->type == AST_STRUCT) {
                 auto _struct = static_cast<Ast_Struct *>(decl);
