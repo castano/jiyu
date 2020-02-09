@@ -1353,6 +1353,13 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             while (left_expr->substitution) left_expr = left_expr->substitution;
 
             auto left_type = get_final_type(get_type_info(left_expr));
+            bool do_pointer_deref = false;
+            if (is_pointer_type(left_type)) {
+                // free pointer dereference
+                left_type = left_type->pointer_to;
+                do_pointer_deref = true;
+            }
+
             if (left_type->type == Ast_Type_Info::STRUCT) {
                 // if we're dereferencing a union, bitcast to the right type
                 // since LLVM does not have a union type by default.
@@ -1375,6 +1382,9 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             // @Incomplete
             // assert(deref->byte_offset >= 0);
 
+            if (do_pointer_deref) {
+                lhs = irb->CreateLoad(lhs);
+            }
             auto value = dereference(lhs, deref->element_path_index, is_lvalue);
             return value;
         }

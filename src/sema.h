@@ -23,6 +23,8 @@ struct Sema {
         this->compiler = compiler;
     }
 
+    Array<Ast_Expression *> expression_stack;
+
     Ast_Literal *folds_to_literal(Ast_Expression *expression);
 
     Ast_Function *get_polymorph_for_function_call(Ast_Function *template_function, Ast_Function_Call *call, bool do_errors);

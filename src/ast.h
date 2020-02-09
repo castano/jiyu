@@ -241,6 +241,8 @@ struct Ast_Unary_Expression : Ast_Expression {
 
     Token::Type operator_type;
     Ast_Expression *expression = nullptr;
+
+    Ast_Scope *enclosing_scope = nullptr; // @NoCopy
 };
 
 struct Ast_Binary_Expression : Ast_Expression {

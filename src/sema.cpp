@@ -390,6 +390,10 @@ bool expression_is_lvalue(Ast_Expression *expression, bool parent_wants_lvalue) 
         case AST_DEREFERENCE: {
             auto deref = static_cast<Ast_Dereference *>(expression);
 
+            if (!deref->is_type_dereference && is_pointer_type(get_type_info(deref->left))) {
+                return true;
+            }
+
             return expression_is_lvalue(deref->left, parent_wants_lvalue);
         }
 
@@ -2241,16 +2245,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 // Save this in case we need to check what the original thing was for struct member-function overloading.
                 // We dont want this change to propagate down to function-overloading.
                 deref->original_left = deref->left;
-                if (get_type_info(deref->left)->type == Ast_Type_Info::POINTER) {
-                    // we allow you to dereference once through a pointer
-                    // here we insert some desugaring that expands pointer.field into (<<pointer).field
-
-                    auto un = make_unary(compiler, Token::DEREFERENCE_OR_SHIFT, deref->left);
-                    copy_location_info(un, deref);
-
-                    typecheck_expression(un);
-                    deref->left = un; // Dont set substitution here, otherwise we'll infinite loop
-                }
 
                 left_type = get_type_info(deref->left);
                 assert(left_type);
@@ -2289,12 +2283,20 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     }
                 }
 
+                if (is_pointer_type(get_type_info(deref->left))) {
+                    // we allow you to dereference once through a pointer
+
+                    left_type = get_final_type(get_type_info(deref->left))->pointer_to;
+                }
+
                 left_type = get_final_type(left_type);
                 if (left_type->type != Ast_Type_Info::STRING &&
                     left_type->type != Ast_Type_Info::ARRAY  &&
                     left_type->type != Ast_Type_Info::STRUCT &&
                     left_type->type != Ast_Type_Info::ENUM) {
-                    compiler->report_error(deref, "Attempt to dereference a type that is not a string, struct, array, or enum!\n");
+                    String given = type_to_string(left_type);
+                    compiler->report_error(deref, "Attempt to dereference a type that is not a string, struct, array, or enum! (Given %.*s)\n", PRINT_ARG(given));
+                    free(given.data);
                     return;
                 }
             }

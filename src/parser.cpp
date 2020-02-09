@@ -370,6 +370,7 @@ Ast_Expression *Parser::parse_unary_expression() {
         token->type == Token::TILDE) {
         Ast_Unary_Expression *ref = PARSER_NEW(Ast_Unary_Expression);
         ref->operator_type = token->type;
+        ref->enclosing_scope = get_current_scope();
 
         next_token();
 

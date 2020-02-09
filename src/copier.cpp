@@ -100,6 +100,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
 
             COPY_P(operator_type);
             COPY(expression);
+            _new->enclosing_scope = get_current_scope();
+
             return _new;
         }
         case AST_IDENTIFIER: {
