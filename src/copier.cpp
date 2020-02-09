@@ -304,6 +304,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY_P(is_union);
             COPY_P(is_tuple);
             COPY_P(is_template_struct);
+            COPY_P(polymorph_source_struct); // Light copy; I am not totally sure this is the right thing to do...
 
             return _new;
         }
@@ -430,7 +431,7 @@ Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Functi
 
     for (auto _alias: poly_copy->polymorphic_type_alias_scope->declarations) {
         auto alias = static_cast<Ast_Type_Alias *>(_alias);
-        if (!alias->type_value) {
+        if (!alias->internal_type_inst && !alias->type_value) {
             String name = alias->identifier->name->name;
             if (allow_errors) {
                 compiler->report_error(alias, "Could not fill typealias '%.*s'.\n", name.length, name.data);
@@ -470,7 +471,9 @@ Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Functi
 // @Incomplete do_stuff_for_implicit_arg currently allows you to dereference a struct-or-array-type
 // and automatically fill one level of indirection of a pointer, but it doesnt allow you to dereference
 // a pointer-type and fill a struct-or-array-type argument.
-bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_inst, Ast_Type_Info *target_type_info, bool do_stuff_for_implicit_arg) {
+bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_inst, Ast_Type_Info *target_type_info, bool do_stuff_for_implicit_arg, bool is_for_filling_a_template_inst) {
+    target_type_info = get_final_type(target_type_info);
+
     if (type_inst->pointer_to) {
         if (do_stuff_for_implicit_arg) {
             bool is_struct_or_array = is_struct_type(target_type_info) || is_array_type(target_type_info);
@@ -510,6 +513,22 @@ bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_i
             if (!alias->internal_type_inst && !alias->type_value) {
                 // template argument
                 assert(target_type_info);
+
+                if (is_for_filling_a_template_inst) {
+                    auto target_struct = target_type_info->struct_decl;
+                    if (target_struct && target_struct->polymorph_source_struct) {
+                        compiler->report_error(ident, "Filling polymorphic template argument using an uninstantiated polymorphic type is unsupported.\n");
+                        return false;
+                        /*
+                        auto old = alias;
+                        auto type_inst = COPIER_NEW(Ast_Type_Instantiation);
+                        type_inst->type_dereference_expression = target_struct->polymorph_source_struct;
+                        alias->internal_type_inst = type_inst;
+                        return true;
+                        */
+                    }
+                }
+
                 alias->type_value = target_type_info;
                 return true;
             } else {
@@ -522,6 +541,13 @@ bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_i
         } else if (decl->type == AST_STRUCT) {
             auto _struct = static_cast<Ast_Struct *>(decl);
             compiler->sema->typecheck_expression(_struct);
+
+            if (_struct->is_template_struct) {
+                auto target = target_type_info->struct_decl;
+                if (!target) return false;;
+
+                return _struct == target->polymorph_source_struct;
+            }
             return types_match(_struct->type_value, target_type_info);
         } else {
             assert(false);
@@ -536,6 +562,30 @@ bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_i
         if (compiler->errors_reported) return false;
 
         return success;
+    }
+
+    if (type_inst->template_type_inst_of) {
+        if (target_type_info->type != Ast_Type_Info::STRUCT) return false;
+
+        auto struct_decl = target_type_info->struct_decl;
+        if (!struct_decl->polymorphic_type_alias_scope) return false;
+
+        bool success = try_to_fill_polymorphic_type_aliases(type_inst->template_type_inst_of, struct_decl->type_value, false, true);
+        if (!success) return false;
+
+        for (array_count_type i = 0; i < struct_decl->polymorphic_type_alias_scope->declarations.count; ++i) {
+            auto alias = struct_decl->polymorphic_type_alias_scope->declarations[i];
+            assert(alias->type == AST_TYPE_ALIAS);
+
+            auto type_value = get_type_declaration_resolved_type(alias);
+            assert(type_value);
+
+            auto inst = type_inst->template_type_arguments[i];
+            bool success = try_to_fill_polymorphic_type_aliases(inst, type_value, false);
+            if (!success) return false;
+        }
+
+        return true;
     }
 
     assert(false);

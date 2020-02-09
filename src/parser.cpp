@@ -1287,6 +1287,10 @@ Ast_Expression *Parser::parse_statement() {
 
             next_token();
 
+            if (is_valid_overloadable_operator(token->type)) {
+                bin->enclosing_scope = get_current_scope();
+            }
+
             Ast_Expression *right = parse_expression();
             if (!right) {
                 if (!compiler->errors_reported) {

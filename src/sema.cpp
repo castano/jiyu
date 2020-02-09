@@ -1783,6 +1783,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 if (ident->overload_set.count) {
                     Ast_Function_Call *call = SEMA_NEW(Ast_Function_Call);
+                    copy_location_info(call, bin);
                     call->argument_list.add(bin->left);
                     call->argument_list.add(bin->right);
 
@@ -2775,9 +2776,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 resolve_type_inst(alias->internal_type_inst);
                 if (compiler->errors_reported) return;
 
-                assert(alias->internal_type_inst->type_value);
-                alias->type_value = compiler->make_type_alias_type(alias->internal_type_inst->type_value);
-                alias->type_value->alias_decl = alias;
+                // internal_type_inst->type_value can be unfilled if this is a reference to a polymorphic struct
+                if (alias->internal_type_inst->type_value) {
+                    alias->type_value = compiler->make_type_alias_type(alias->internal_type_inst->type_value);
+                    alias->type_value->alias_decl = alias;
+                }
             } else {
                 // We got here due to polymorphing taking advantage of the
                 // alias system. No need to create an _alias_ type, but maybe
@@ -3475,6 +3478,7 @@ Ast_Struct *Sema::get_polymorph_for_struct(Ast_Struct *_struct, Array<Ast_Type_I
     assert(copy && copy->type == AST_STRUCT);
 
     copy->is_template_struct = false;
+    copy->polymorph_source_struct = _struct;
     for (array_count_type i = 0; i < copy->polymorphic_type_alias_scope->declarations.count; ++i) {
         auto alias = static_cast<Ast_Type_Alias *>(copy->polymorphic_type_alias_scope->declarations[i]);
         assert(alias->type == AST_TYPE_ALIAS);
@@ -3536,6 +3540,41 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
             auto alias = static_cast<Ast_Type_Alias *>(decl);
             typecheck_expression(alias);
             if (compiler->errors_reported) return nullptr;
+
+            if (!alias->type_value) {
+                // We get here when:
+                /*
+                    struct Reference<T> {}
+                    typealias Ref = Reference;
+                */
+                auto inst = alias->internal_type_inst;
+
+                if (inst->type_dereference_expression) {
+                    auto expr = inst->type_dereference_expression;
+                    while (expr->substitution) expr = expr->substitution;
+
+                    while (expr->type == AST_IDENTIFIER) {
+                        expr = static_cast<Ast_Identifier *>(expr)->resolved_declaration;
+
+                        if (expr->type == AST_TYPE_ALIAS) {
+                            auto alias = static_cast<Ast_Type_Alias *>(expr);
+
+                            if (alias->internal_type_inst && alias->internal_type_inst->type_dereference_expression) {
+                                expr = alias->internal_type_inst->type_dereference_expression;
+                            }
+                        }
+                    }
+
+                    if (expr->type == AST_STRUCT) {
+                        auto _struct = static_cast<Ast_Struct *>(expr);
+
+                        // @Hack so that a template instantiation can get this struct
+                        if (_struct->is_template_struct) {
+                            return make_struct_type(compiler, _struct);
+                        }
+                    }
+                }
+            }
 
             assert(alias->type_value);
             type_inst->type_value = alias->type_value;

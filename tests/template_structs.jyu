@@ -21,6 +21,14 @@ struct Poly<T> {
     }
 }
 
+struct Reference<T> {
+    var data: *T;
+}
+
+operator= <T>(ref: Reference<T>, rhs: T) {
+    printf("TEST\n");
+}
+
 func main() {
     var a: Poly<int>;
     a.a = 10;
@@ -40,4 +48,16 @@ func main() {
     // in regular expressions, so currently one cannot use templates in first-class
     // uses unless one uses a typealias (since the right hand side of a type alias is
     // always a type instantiation).
+
+    typealias Ref = Reference;
+
+    typealias Ref2 = Ref;
+
+    typealias Ref3 = Ref2<float>;
+
+    var ref: Ref2<int>;
+    ref = 10;
+
+    var ref2: Ref3;
+    ref2 = 1;
 }

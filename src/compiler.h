@@ -173,7 +173,7 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right);
 
 inline
 bool is_valid_overloadable_operator(Token::Type op) {
-    return op == Token::MINUS || op == Token::PLUS || op == Token::STAR || op == Token::SLASH;
+    return op == Token::MINUS || op == Token::PLUS || op == Token::STAR || op == Token::SLASH || op == Token::EQUALS;
 }
 
 inline

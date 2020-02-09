@@ -210,6 +210,7 @@ struct Ast_Struct : Ast_Expression {
     bool is_template_struct = false;
 
     Array<Ast_Struct *> polymorphed_structs; // @NoCopy
+    Ast_Struct *polymorph_source_struct = nullptr;
 
     Ast_Identifier *parent_struct = nullptr;
 
