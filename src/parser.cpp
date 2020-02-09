@@ -889,6 +889,47 @@ Ast_Expression *Parser::parse_statement() {
         _struct->member_scope.owning_struct = _struct;
         _struct->is_union = (token->type == Token::KEYWORD_UNION);
 
+        if (peek_token()->type == Token::LEFT_ANGLE) {
+            Ast_Scope *polymorphic_scope = PARSER_NEW(Ast_Scope);
+            polymorphic_scope->is_template_argument_block = true;
+            polymorphic_scope->parent = get_current_scope();
+            _struct->polymorphic_type_alias_scope = polymorphic_scope;
+            next_token();
+
+            push_scopes(polymorphic_scope);
+
+            token = peek_token();
+            while (token->type != Token::END) {
+                Ast_Type_Alias *alias = PARSER_NEW(Ast_Type_Alias);
+                alias->identifier = parse_identifier();
+
+                if (!alias->identifier) {
+                    compiler->report_error(alias, "Expected identifier in template argument list but got something else.\n");
+                    return nullptr;
+                }
+
+                polymorphic_scope->declarations.add(alias);
+
+                token = peek_token();
+                if (token->type == Token::COMMA) {
+                    next_token();
+
+                    token = peek_token();
+                    continue;
+                }
+
+                if (!expect_and_eat(Token::RIGHT_ANGLE)) return nullptr;
+
+                break;
+            }
+
+            pop_scopes();
+
+            _struct->member_scope.parent = polymorphic_scope;
+
+            _struct->is_template_struct = true;
+        }
+
         if (peek_token()->type == Token::COLON) {
             next_token();
 
@@ -1447,6 +1488,36 @@ Ast_Type_Instantiation *Parser::wrap_primitive_type(Ast_Type_Info *info) {
 }
 
 Ast_Type_Instantiation *Parser::parse_type_inst() {
+    auto inst = parse_primary_type_inst();
+
+    while (peek_token()->type == Token::LEFT_ANGLE) {
+        Ast_Type_Instantiation *_template = PARSER_NEW(Ast_Type_Instantiation);
+        _template->template_type_inst_of = inst;
+
+        next_token();
+
+        while (peek_token()->type != Token::END) {
+            auto arg = parse_type_inst();
+
+            _template->template_type_arguments.add(arg);
+
+            if (peek_token()->type == Token::COMMA) {
+                next_token();
+                continue;
+            }
+
+            if (peek_token()->type == Token::RIGHT_ANGLE) break;
+        }
+
+        if (!expect_and_eat(Token::RIGHT_ANGLE)) return nullptr;
+
+        inst = _template;
+    }
+
+    return inst;
+}
+
+Ast_Type_Instantiation *Parser::parse_primary_type_inst() {
     Token *token = peek_token();
 
     Ast_Type_Info *builtin_primitive = nullptr;
@@ -1580,7 +1651,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
         return nullptr;
     }
 
-    if (token->type == '(') {
+    if (token->type == Token::LEFT_PAREN) {
         Ast_Type_Instantiation *final_type_inst = PARSER_NEW(Ast_Type_Instantiation);
         next_token();
 

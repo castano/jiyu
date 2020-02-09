@@ -216,6 +216,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY(array_size_expression);
             COPY_P(array_is_dynamic);
             COPY(function_header);
+            COPY(template_type_inst_of);
+            COPY_ARRAY(template_type_arguments);
 
             return _new;
         }
@@ -287,10 +289,21 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto _new = COPIER_NEW(Ast_Struct);
 
             COPY(identifier);
+
+            COPY(polymorphic_type_alias_scope);
+            if (_new->polymorphic_type_alias_scope) {
+                COPY_ARRAY(polymorphic_type_alias_scope->declarations);
+                scope_stack.add(_new->polymorphic_type_alias_scope);
+            }
+
             copy_scope(&_new->member_scope, &old->member_scope);
+
+            if (_new->polymorphic_type_alias_scope) scope_stack.pop();
+
             _new->member_scope.owning_struct = _new;
             COPY_P(is_union);
             COPY_P(is_tuple);
+            COPY_P(is_template_struct);
 
             return _new;
         }

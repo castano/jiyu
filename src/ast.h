@@ -178,6 +178,9 @@ struct Ast_Type_Instantiation : Ast_Expression {
     Ast_Type_Instantiation *pointer_to = nullptr;
     Ast_Expression *type_dereference_expression = nullptr;
 
+    Ast_Type_Instantiation *template_type_inst_of = nullptr;
+    Array<Ast_Type_Instantiation *> template_type_arguments;
+
     Ast_Type_Instantiation *array_element_type = nullptr;
     Ast_Expression *array_size_expression = nullptr;
     bool array_is_dynamic = false;
@@ -199,10 +202,14 @@ struct Ast_Type_Alias : Ast_Expression {
 struct Ast_Struct : Ast_Expression {
     Ast_Struct() { type = AST_STRUCT; }
 
+    Ast_Scope *polymorphic_type_alias_scope = nullptr;
     Ast_Identifier *identifier = nullptr;
     Ast_Scope member_scope;
     bool is_union = false;
     bool is_tuple = false;
+    bool is_template_struct = false;
+
+    Array<Ast_Struct *> polymorphed_structs; // @NoCopy
 
     Ast_Identifier *parent_struct = nullptr;
 

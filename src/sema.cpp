@@ -2784,6 +2784,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
         case AST_STRUCT: {
             auto _struct = static_cast<Ast_Struct *>(expression);
+            if (_struct->is_template_struct) {
+                // Legal use of a template struct is only from a polymorph of this struct.
+                // So the plain version of the struct is void.
+                _struct->type_info = compiler->type_void;
+                return;
+            }
 
             // Set this early so we dont recurse indefinitely
             if (!_struct->type_value) {
@@ -3420,6 +3426,61 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
     return;
 }
 
+Ast_Struct *Sema::get_polymorph_for_struct(Ast_Struct *_struct, Array<Ast_Type_Instantiation *> &type_args, Ast *site) {
+    assert(_struct->is_template_struct);
+
+    if (_struct->polymorphic_type_alias_scope->declarations.count != type_args.count) {
+        compiler->report_error(site, "Incorrect number of type arguments for template struct instantiation (Wanted %d, Given %d).\n", _struct->polymorphic_type_alias_scope->declarations.count, type_args.count);
+        return nullptr;
+    }
+
+    for (auto arg: type_args) {
+        typecheck_expression(arg);
+        if (compiler->errors_reported) return nullptr;
+    }
+
+    for (auto existing: _struct->polymorphed_structs) {
+        bool viable = true;
+        for (array_count_type i = 0; i < existing->polymorphic_type_alias_scope->declarations.count; ++i) {
+            auto src_type = type_args[i]->type_value;
+            assert(src_type);
+
+            auto dst = static_cast<Ast_Type_Alias *>(existing->polymorphic_type_alias_scope->declarations[i]);
+            assert(dst->type == AST_TYPE_ALIAS);
+
+            auto dst_type = get_type_declaration_resolved_type(dst);
+
+            if (!types_match(src_type, dst_type)) {
+                viable = false;
+                break;
+            }
+        }
+
+        if (viable) return existing;
+    }
+
+    compiler->copier->scope_stack.add(_struct->polymorphic_type_alias_scope->parent);
+    auto copy = static_cast<Ast_Struct *>(compiler->copier->copy(_struct));
+    compiler->copier->scope_stack.pop();
+    assert(copy && copy->type == AST_STRUCT);
+
+    copy->is_template_struct = false;
+    for (array_count_type i = 0; i < copy->polymorphic_type_alias_scope->declarations.count; ++i) {
+        auto alias = static_cast<Ast_Type_Alias *>(copy->polymorphic_type_alias_scope->declarations[i]);
+        assert(alias->type == AST_TYPE_ALIAS);
+
+        auto type_value = type_args[i]->type_value;
+        assert(type_value);
+
+        alias->type_value = type_value;
+    }
+
+    _struct->polymorphed_structs.add(copy);
+
+    typecheck_expression(copy);
+    return copy;
+}
+
 Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
     if (type_inst->type_value) return type_inst->type_value;
 
@@ -3437,23 +3498,28 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
     }
 
     if (type_inst->type_dereference_expression) {
-        typecheck_expression(type_inst->type_dereference_expression);
+        if (type_inst->type_dereference_expression->type == AST_TYPE_INSTANTIATION) {
+            return resolve_type_inst(type_inst);
+        } else {
+            typecheck_expression(type_inst->type_dereference_expression);
+        }
+
         if (compiler->errors_reported) return nullptr;
 
         auto expr = type_inst->type_dereference_expression;
         while (expr->substitution) expr = expr->substitution;
 
-        if (get_type_info(expr)->type != Ast_Type_Info::TYPE) {
+        auto decl = expr;
+        if (expr->type == AST_IDENTIFIER) {
+            decl = static_cast<Ast_Identifier *>(expr)->resolved_declaration;
+        }
+
+        if (!is_a_type_declaration(decl)) {
             // @TODO it would be nice if this could print out a dereference chain:
             // struct Test { func T (){ ...} ... }
             // Typename expression 'Test.T' doesn't name a type.
             compiler->report_error(expr, "Typename expression doesn't name a type.\n");
             return nullptr;
-        }
-
-        auto decl = expr;
-        if (expr->type == AST_IDENTIFIER) {
-            decl = static_cast<Ast_Identifier *>(expr)->resolved_declaration;
         }
 
         if (decl->type == AST_TYPE_ALIAS) {
@@ -3468,6 +3534,11 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
             auto _struct = static_cast<Ast_Struct *>(decl);
             typecheck_expression(_struct);
 
+            // @Hack so that a template instantiation can get this struct
+            if (_struct->is_template_struct) {
+                return make_struct_type(compiler, _struct);
+            }
+
             type_inst->type_value = _struct->type_value;
             return type_inst->type_value;
         } else if (decl->type == AST_ENUM) {
@@ -3479,6 +3550,31 @@ Ast_Type_Info *Sema::resolve_type_inst(Ast_Type_Instantiation *type_inst) {
         } else {
             assert(false);
         }
+    }
+
+    if (type_inst->template_type_inst_of) {
+        auto resolved = resolve_type_inst(type_inst->template_type_inst_of);
+        if (compiler->errors_reported) return nullptr;
+
+        if (!resolved || (resolved && !resolved->struct_decl)) {
+            compiler->report_error(type_inst, "Attempt to instantiate template type of an expression that does not refer to a struct.\n");
+            return nullptr;
+        }
+
+        auto _struct = resolved->struct_decl;
+        if (!_struct->is_template_struct) {
+            compiler->report_error(type_inst, "Struct referred to by template type instantiation is not a template.\n");
+            return nullptr;
+        }
+
+        auto result = get_polymorph_for_struct(_struct, type_inst->template_type_arguments, type_inst);
+        if (!result) {
+            compiler->report_error(type_inst, "Could not instantiate template type.\n");
+            return nullptr;
+        }
+
+        type_inst->type_value = result->type_value;
+        return type_inst->type_value;
     }
 
     if (type_inst->array_element_type) {
