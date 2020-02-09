@@ -1087,7 +1087,7 @@ void Sema::typecheck_scope(Ast_Scope *scope) {
     }
 }
 
-Ast_Function *Sema::get_polymorph_for_function_call(Ast_Function *template_function, Ast_Function_Call *call) {
+Ast_Function *Sema::get_polymorph_for_function_call(Ast_Function *template_function, Ast_Function_Call *call, bool do_errors) {
     assert(template_function->is_template_function);
 
     // @Incomplete if we end up supporting varargs for native functions, then this needs to change
@@ -1126,7 +1126,7 @@ Ast_Function *Sema::get_polymorph_for_function_call(Ast_Function *template_funct
     // and then attempt to resolve the types of the function arguments
     // and resolve the targets of the template type aliases
 
-    auto result = compiler->copier->polymoprh_function_with_arguments(template_function, &call->argument_list, call->implicit_argument_inserted);
+    auto result = compiler->copier->polymoprh_function_with_arguments(template_function, &call->argument_list, call->implicit_argument_inserted, call, do_errors);
     auto polymorph   = result.item1;
     bool is_existing = result.item2;
     if (polymorph) {
@@ -1137,7 +1137,7 @@ Ast_Function *Sema::get_polymorph_for_function_call(Ast_Function *template_funct
     }
     if (compiler->errors_reported) return nullptr;
 
-    assert(!polymorph->is_template_function);
+    if (polymorph) assert(!polymorph->is_template_function);
     return polymorph;
 }
 
@@ -1150,8 +1150,10 @@ Ast_Function *Sema::get_best_overload_from_set(Ast_Function_Call *call, Array<As
         if (compiler->errors_reported) return nullptr;
 
         if (function->is_template_function) {
-            function = get_polymorph_for_function_call(function, call);
+            function = get_polymorph_for_function_call(function, call, false);
             if (compiler->errors_reported) return nullptr;
+
+            if (!function) return nullptr;
         }
 
         auto tuple = function_call_is_viable(call, get_type_info(function), function, false);
@@ -1164,7 +1166,7 @@ Ast_Function *Sema::get_best_overload_from_set(Ast_Function_Call *call, Array<As
         u64 lowest_score = U64_MAX;
         for (auto overload : overload_set) {
             if (overload->is_template_function) {
-                overload = get_polymorph_for_function_call(overload, call);
+                overload = get_polymorph_for_function_call(overload, call, false);
                 if (compiler->errors_reported) return nullptr;
 
                 if (!overload) continue; // no polymorphs that match this call, so skip it
@@ -2136,6 +2138,11 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         for (auto func : overload_set) {
                             // @TODO this is a bit of an easy out for the time being, there are many ways to improve this with better diagnostics.
                             compiler->errors_reported = 0; // Clear errors_reported so that we can get the full diagnostics from the call checking
+
+                            if (func->is_template_function) {
+                                get_polymorph_for_function_call(function, call, true);
+                                continue;
+                            }
                             function_call_is_viable(call, get_type_info(func), func, true);
                         }
 
@@ -2911,6 +2918,33 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             auto result = typecheck_and_implicit_cast_single_expression(deref->index_expression, compiler->type_array_count, 0);
             if (result.item2 != deref->index_expression) deref->index_expression = result.item2; // @Cleanup use substitution if available
             if (compiler->errors_reported) return;
+
+            {
+                // Mostly @Cutnpaste from the Ast_Binary_Expression stuff
+                Atom *operator_atom = compiler->make_atom(OPERATOR_BRACKET_NAME);
+
+                Ast_Identifier *ident = SEMA_NEW(Ast_Identifier);
+                copy_location_info(ident, deref);
+                ident->name = operator_atom;
+                collect_function_overloads_for_atom(operator_atom, deref->enclosing_scope, &ident->overload_set);
+
+                if (ident->overload_set.count) {
+                    Ast_Function_Call *call = SEMA_NEW(Ast_Function_Call);
+                    copy_location_info(call, deref);
+                    call->argument_list.add(deref->array_or_pointer_expression);
+                    call->argument_list.add(deref->index_expression);
+
+                    Ast_Function *function = get_best_overload_from_set(call, ident->overload_set);
+                    if (compiler->errors_reported) return;
+
+                    if (function) {
+                        deref->substitution = call;
+                        call->function_or_function_ptr = function;
+                        typecheck_expression(call);
+                        return;
+                    }
+                }
+            }
 
             auto array_type = get_type_info(deref->array_or_pointer_expression);
             array_type = get_final_type(array_type);

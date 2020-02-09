@@ -22,6 +22,9 @@ struct Token {
         CARET        = '^', // bitwise Xor
         AMPERSAND    = '&', // bitwise And
 
+        LEFT_BRACKET = '[',
+        RIGHT_BRACKET = ']',
+
         LEFT_ANGLE   = '<',
         RIGHT_ANGLE  = '>',
 

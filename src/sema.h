@@ -23,7 +23,7 @@ struct Sema {
 
     Ast_Literal *folds_to_literal(Ast_Expression *expression);
 
-    Ast_Function *get_polymorph_for_function_call(Ast_Function *template_function, Ast_Function_Call *call);
+    Ast_Function *get_polymorph_for_function_call(Ast_Function *template_function, Ast_Function_Call *call, bool do_errors);
 
     Tuple<bool, u64> function_call_is_viable(Ast_Function_Call *call, Ast_Type_Info *function_type, Ast_Function *source, bool do_errors);
     Ast_Function *get_best_overload_from_set(Ast_Function_Call *call, Array<Ast_Function *> &overload_set);

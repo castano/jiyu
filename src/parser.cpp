@@ -344,6 +344,7 @@ Ast_Expression *Parser::parse_postfix_expression() {
             next_token();
             deref->array_or_pointer_expression = sub_expression;
             deref->index_expression = parse_expression();
+            deref->enclosing_scope = get_current_scope();
 
             if (!expect_and_eat((Token::Type) ']')) return nullptr;
 
@@ -1737,17 +1738,26 @@ Ast_Function *Parser::parse_function() {
     if (is_operator_function) {
         token = peek_token();
 
-        if (!is_valid_overloadable_operator(token->type)) {
-            String op_name = token_type_to_string(token->type);
-            defer { free(op_name.data); };
-            compiler->report_error(token, "Token '%.*s' is not a valid operator for overloading.\n", PRINT_ARG(op_name));
-            return nullptr;
-        }
-
         Ast_Identifier *ident = PARSER_NEW(Ast_Identifier);
         ident->enclosing_scope = get_current_scope();
-        ident->name = compiler->make_operator_atom(token->type);
-        next_token();
+
+        if (token->type == Token::LEFT_BRACKET) {
+            next_token();
+
+            if (!expect_and_eat(Token::RIGHT_BRACKET)) return nullptr;
+
+            ident->name = compiler->make_atom(OPERATOR_BRACKET_NAME);
+        } else {
+            if (!is_valid_overloadable_operator(token->type)) {
+                String op_name = token_type_to_string(token->type);
+                defer { free(op_name.data); };
+                compiler->report_error(token, "Token '%.*s' is not a valid operator for overloading.\n", PRINT_ARG(op_name));
+                return nullptr;
+            } else {
+                ident->name = compiler->make_operator_atom(token->type);
+                next_token();
+            }
+        }
 
         function->identifier = ident;
     } else {

@@ -273,6 +273,7 @@ struct Ast_Dereference : Ast_Expression {
 struct Ast_Array_Dereference : Ast_Expression {
     Ast_Array_Dereference() { type = AST_ARRAY_DEREFERENCE; }
 
+    Ast_Scope *enclosing_scope = nullptr; // @NoCopy
     Ast_Expression *array_or_pointer_expression = nullptr;
     Ast_Expression *index_expression = nullptr;
 };

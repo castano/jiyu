@@ -241,6 +241,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY(array_or_pointer_expression);
             COPY(index_expression);
 
+            _new->enclosing_scope = get_current_scope();
+
             return _new;
         }
         case AST_SIZEOF: {
@@ -392,7 +394,7 @@ void Copier::copy_scope(Ast_Scope *_new, Ast_Scope *old) {
     scope_stack.pop();
 }
 
-Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Function *poly, Array<Ast_Expression *> *arguments, bool do_stuff_for_implicit_arg) {
+Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Function *poly, Array<Ast_Expression *> *arguments, bool do_stuff_for_implicit_arg, Ast *callsite, bool allow_errors) {
     assert(arguments->count == poly->arguments.count);
 
     scope_stack.add(poly->polymorphic_type_alias_scope->parent);
@@ -417,7 +419,10 @@ Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Functi
         auto alias = static_cast<Ast_Type_Alias *>(_alias);
         if (!alias->type_value) {
             String name = alias->identifier->name->name;
-            compiler->report_error(alias, "Could not fill typealias '%.*s'.\n", name.length, name.data);
+            if (allow_errors) {
+                compiler->report_error(alias, "Could not fill typealias '%.*s'.\n", name.length, name.data);
+                compiler->report_error(callsite, "From call site:\n");
+            }
             return MakeTuple<Ast_Function *, bool>(nullptr, false);
         }
     }
