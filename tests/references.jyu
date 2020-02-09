@@ -1,0 +1,53 @@
+#import "Basic";
+#import "Array";
+#import "Reference";
+#import "LibC";
+
+// A reference type is needed to make operator[] be robust and work
+// as a lvalue on the left-hand-side of assignemnt.
+// We could alternatively require that an overload for operator[]
+// exists such that it takes a third argument.
+// With this Reference<T> overload of operator[], we can
+// add array-bounds-checks to code without building bounds-checks
+// into the language semantics, and creating a presupposed runtime
+// environment requirement that is hard to escape from.
+operator[] <T>(arr: [..] T, index: array_count_type) -> Reference<T> {
+    assert(index >= 0 && index < arr.count);
+
+    var ref: Reference<T>;
+    ref.data = *arr.data[index];
+
+    printf("Index: %d\n", index);
+    return ref;
+}
+
+func main() {
+    var i: int;
+    var f: float;
+
+    var ref: Reference<int>;
+    ref.data = *i;
+    ref = 10;
+
+    var ref2: Reference<float>;
+    ref2.data = *f;
+    ref2 = 1;
+
+    printf("i: %d\n", i);
+    printf("f: %f\n", f);
+
+    var arr: [..] int;
+
+    arr.add(1);
+    arr.add(2);
+    arr.add(3);
+
+    arr[1] += 1;
+
+    // Unfortunately, the reference type
+    // requires us to extract the data back out like this....
+    // This may change if we allow some sort of markup
+    // to tell the compiler that an rvalue use of Reference<T>
+    // calls some code to get the value.
+    printf("arr[1]: %d\n", <<(arr[1].data));
+}
