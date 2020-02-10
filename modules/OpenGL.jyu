@@ -427,6 +427,8 @@ let GL_MAP_INVALIDATE_BUFFER_BIT      = 0x0008;
 let GL_MAP_FLUSH_EXPLICIT_BIT         = 0x0010;
 let GL_MAP_UNSYNCHRONIZED_BIT         = 0x0020;
 
+let GL_FRAMEBUFFER_SRGB               = 0x8DB9;
+
 func @c_function glEnable(cap: GLenum);
 func @c_function glDisable(cap: GLenum);
 
@@ -510,6 +512,12 @@ var glDrawElements: @c_function (mode: GLenum, count: GLsizei, type: GLenum, ind
 
 var glUniform1i: @c_function (location: GLint, v0: GLint) -> void;
 
+let GL_DEBUG_OUTPUT_SYNCHRONOUS       = 0x8242;
+let GL_DEBUG_OUTPUT                   = 0x92E0;
+
+typealias DEBUGPROC = @c_function (source: GLenum, type: GLenum, id: GLuint, severity: GLenum, length: GLsizei, message: *GLchar, userParam: *void) -> void;
+var glDebugMessageCallback: @c_function (callback: DEBUGPROC, userParam: *void) -> void;
+
 
 func init_gl_functions(get_proc: (name: string) -> *void) {
     glBindVertexArray          = cast() get_proc("glBindVertexArray");
@@ -548,5 +556,6 @@ func init_gl_functions(get_proc: (name: string) -> *void) {
     glDeleteBuffers            = cast() get_proc("glDeleteBuffers");
     glDrawElements             = cast() get_proc("glDrawElements");
     glUniform1i                = cast() get_proc("glUniform1i");
+    glDebugMessageCallback     = cast() get_proc("glDebugMessageCallback");
 }
 
