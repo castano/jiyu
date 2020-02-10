@@ -58,3 +58,26 @@ func __array_add_if_unique<T>(array: *[..] T, item: T) {
     if array.contains(item) == false array.add(item);
     // if !array.contains(item) array.add(item); // @@ This doesn't work!
 }
+
+// Add some configuration flag for disabling these
+// #if DEBUG {
+operator[] <T>(arr: [..] T, index: array_count_type) -> T {
+    assert(index >= 0 && index < arr.count, "Array index out of range!");
+    return arr.data[index];
+}
+
+operator[] <T>(arr: [] T, index: array_count_type) -> T {
+    assert(index >= 0 && index < arr.count, "Array index out of range!");
+    return arr.data[index];
+}
+
+operator[]= <T>(arr: [..] T, index: array_count_type, value: T) {
+    assert(index >= 0 && index < arr.count, "Array index out of range!");
+    arr.data[index] = value;
+}
+
+operator[]= <T>(arr: [] T, index: array_count_type, value: T) {
+    assert(index >= 0 && index < arr.count, "Array index out of range!");
+    arr.data[index] = value;
+}
+// }
