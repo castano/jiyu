@@ -99,6 +99,7 @@ struct Compiler {
     Ast_Type_Info *type_string_length;
 
     Ast_Type_Info *type_array_count;
+    Ast_Type_Info *type_array_count_unsigned;
 
     Ast_Type_Info *type_info_type;
 

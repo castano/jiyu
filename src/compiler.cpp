@@ -373,8 +373,10 @@ void Compiler::init() {
 
     if (is_64bits) {
         type_array_count = type_int64; // @TargetInfo
+        type_array_count_unsigned = type_uint64; // @TargetInfo
     } else if (is_32bits) {
         type_array_count = type_int32; // @TargetInfo
+        type_array_count_unsigned = type_uint32; // @TargetInfo
     }
 
     type_info_type = COMPILER_NEW(Ast_Type_Info);

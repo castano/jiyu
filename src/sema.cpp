@@ -3010,7 +3010,17 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             auto result = typecheck_and_implicit_cast_single_expression(deref->index_expression, compiler->type_array_count, 0);
             if (result.item2 != deref->index_expression) deref->index_expression = result.item2; // @Cleanup use substitution if available
+
             if (compiler->errors_reported) return;
+
+            if (!types_match(get_type_info(deref->index_expression), compiler->type_array_count)) {
+                // If the index expression is unsigned and doesnt implicitly case to type_array_count,
+                // Attempt to cast to the unsigned version of type_array_count so that LLVM does not
+                // try to implicitly sign-extend a uint16 to int32
+
+                auto result = typecheck_and_implicit_cast_single_expression(deref->index_expression, compiler->type_array_count_unsigned, 0);
+                if (result.item2 != deref->index_expression) deref->index_expression = result.item2; // @Cleanup use substitution if available
+            }
 
             {
                 // Mostly @Cutnpaste from the Ast_Binary_Expression stuff
