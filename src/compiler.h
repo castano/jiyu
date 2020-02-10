@@ -16,7 +16,8 @@ struct LLVM_Jitter;
 struct Sema;
 struct Copier;
 
-const String OPERATOR_BRACKET_NAME = to_string("__operator[]");
+const String OPERATOR_BRACKET_NAME        = to_string("__operator[]");
+const String OPERATOR_BRACKET_EQUALS_NAME = to_string("__operator[]=");
 
 struct Atom {
     String name;

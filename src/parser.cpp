@@ -1788,7 +1788,12 @@ Ast_Function *Parser::parse_function() {
 
             if (!expect_and_eat(Token::RIGHT_BRACKET)) return nullptr;
 
-            ident->name = compiler->make_atom(OPERATOR_BRACKET_NAME);
+            if (peek_token()->type == Token::EQUALS) {
+                next_token();
+                ident->name = compiler->make_atom(OPERATOR_BRACKET_EQUALS_NAME);
+            } else {
+                ident->name = compiler->make_atom(OPERATOR_BRACKET_NAME);
+            }
         } else {
             if (!is_valid_overloadable_operator(token->type)) {
                 String op_name = token_type_to_string(token->type);

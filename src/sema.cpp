@@ -1730,6 +1730,57 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 bin = assignment;
             }
 
+            // We handled operator[]= before typechecking anything otherwise we run the risk of
+            // The Ast_Array_Dereference resolving to an overload of operator[]
+            if (bin->operator_type == Token::EQUALS) {
+                if (bin->left->type == AST_ARRAY_DEREFERENCE) {
+                    Atom *operator_atom = compiler->make_atom(OPERATOR_BRACKET_EQUALS_NAME);
+                    auto arr_deref = static_cast<Ast_Array_Dereference *>(bin->left);
+
+                    Ast_Identifier *ident = SEMA_NEW(Ast_Identifier);
+                    ident->name = operator_atom;
+
+                    // First we check in the type on the left if an overload is available.
+                    // This should save a lot of time compared to doing a full scope tree lookup.
+                    typecheck_expression(arr_deref->array_or_pointer_expression);
+                    if (compiler->errors_reported) return;
+
+                    auto left_type = get_type_info(arr_deref->array_or_pointer_expression);
+                    if (is_struct_type(left_type)) {
+                        auto struct_decl = left_type->struct_decl;
+
+                        collect_function_overloads_for_atom(operator_atom, &struct_decl->member_scope, &ident->overload_set);
+                    }
+
+                    if (!ident->overload_set.count) collect_function_overloads_for_atom(operator_atom, bin->enclosing_scope, &ident->overload_set);
+
+                    if (ident->overload_set.count) {
+                        Ast_Function_Call *call = SEMA_NEW(Ast_Function_Call);
+                        copy_location_info(call, bin);
+                        call->argument_list.add(arr_deref->array_or_pointer_expression);
+                        call->argument_list.add(arr_deref->index_expression);
+                        call->argument_list.add(bin->right);
+
+                        Ast_Function *function = get_best_overload_from_set(call, ident->overload_set);
+                        if (compiler->errors_reported) return;
+
+                        if (!function && bin->operator_type == Token::EQUALS) {
+                            call->argument_list[0] = make_unary(compiler, Token::STAR, bin->left);
+                            copy_location_info(call->argument_list[0], bin->left);
+                            function = get_best_overload_from_set(call, ident->overload_set);
+                            if (compiler->errors_reported) return;
+                        }
+
+                        if (function) {
+                            bin->substitution = call;
+                            call->function_or_function_ptr = function;
+                            typecheck_expression(call);
+                            return;
+                        }
+                    }
+                }
+            }
+
             u32 allow_coerce_to_ptr_void_flag = ((bin->operator_type == Token::EQUALS) ? ALLOW_COERCE_TO_PTR_VOID : 0);
 
             if (bin->operator_type == Token::EQUALS) {

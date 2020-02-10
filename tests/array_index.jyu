@@ -1,7 +1,54 @@
 
 #import "LibC";
+#import "Array";
+#import "Basic";
+
+func test_array_index_overloads() {
+    operator[] <T>(arr: [..] T, index: array_count_type) -> T {
+        assert(index >= 0 && index < arr.count, "Array index out of range!");
+        printf("READ index: %d\n", index);
+        return arr.data[index];
+    }
+
+    operator[] <T>(arr: [] T, index: array_count_type) -> T {
+        assert(index >= 0 && index < arr.count, "Array index out of range!");
+        printf("READ index: %d\n", index);
+        return arr.data[index];
+    }
+
+    operator[]= <T>(arr: [..] T, index: array_count_type, value: T) {
+        assert(index >= 0 && index < arr.count, "Array index out of range!");
+        printf("ASSIGN: %d\n", value);
+        arr.data[index] = value;
+    }
+
+    operator[]= <T>(arr: [] T, index: array_count_type, value: T) {
+        assert(index >= 0 && index < arr.count, "Array index out of range!");
+        printf("ASSIGN: %d\n", value);
+        arr.data[index] = value;
+    }
+
+    var arr: [..] int;
+
+    arr.add(1);
+    arr.add(2);
+    arr.add(3);
+
+    var i = arr[1];
+    i += arr[2];
+
+    printf("i: %d\n", i);
+
+    arr[0] += 4;
+
+    printf("arr[0]: %d\n", arr[0]);
+
+    // arr[4]; // Just for fun, trip an assert :P
+}
 
 func main() {
+    test_array_index_overloads();
+
     var arr: [10] uint8;
     var dat: *uint8 = arr.data;
 
