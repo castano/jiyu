@@ -146,6 +146,11 @@ void maybe_add_parent_scope_name(String_Builder *builder, Ast_Scope *start) {
 
 String get_mangled_name(Compiler *compiler, Ast_Function *function) {
     if (function->identifier->name == compiler->atom_main) return function->identifier->name->name;
+
+    // Intrinsics will not implicitly create linkage symbols... at least for now,
+    // so we can just return the identifier.
+    if (function->is_intrinsic) return function->identifier->name->name;
+
     String_Builder builder;
 
     builder.append("_H");
@@ -3835,7 +3840,7 @@ void Sema::typecheck_function_header(Ast_Function *function, bool is_for_type_in
         if (function->is_c_function) {
             function->linkage_name = function->identifier->name->name;
         } else {
-            if (!function->scope) {
+            if (!function->scope && !function->is_intrinsic) {
                 compiler->report_error(function, "Function header found without a body. Did you mean to mark this @c_function?\n");
                 return;
             }
@@ -3868,6 +3873,7 @@ void Sema::typecheck_function(Ast_Function *function) {
         }
 
         if (function->scope) {
+            assert(!function->is_intrinsic);
             typecheck_scope(function->scope);
         }
 

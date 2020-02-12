@@ -1799,6 +1799,16 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 }
 
 Function *LLVM_Generator::get_or_create_function(Ast_Function *function) {
+
+    if (function->is_intrinsic) {
+        if (function->identifier->name == compiler->atom_builtin_debugtrap) {
+            return Intrinsic::getDeclaration(llvm_module, Intrinsic::debugtrap);
+        }
+
+        assert(false);
+        return nullptr;
+    }
+
     assert(function->identifier);
     String linkage_name = function->linkage_name;
 

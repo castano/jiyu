@@ -402,6 +402,8 @@ void Compiler::init() {
     atom_MacOSX    = make_atom(to_string("MacOSX"));
     atom_Windows   = make_atom(to_string("Windows"));
     atom_Linux     = make_atom(to_string("Linux"));
+
+    atom_builtin_debugtrap = make_atom(BUILTIN_DEBUGTRAP_NAME);
 }
 
 void Compiler::add_to_type_table(Ast_Type_Info *info) {
@@ -988,6 +990,12 @@ Ast_Type_Alias *make_type_alias(Compiler *compiler, Ast_Identifier *ident, Ast_T
     alias->identifier = ident;
     alias->type_value = type_value;
     return alias;
+}
+
+Ast_Function *make_function(Compiler *compiler, Ast_Identifier *ident) {
+    Ast_Function *func = COMPILER_NEW2(Ast_Function);
+    func->identifier = ident;
+    return func;
 }
 
 Ast_Type_Info *get_final_type(Ast_Type_Info *info) {

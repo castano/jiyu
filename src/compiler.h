@@ -18,6 +18,7 @@ struct Copier;
 
 const String OPERATOR_BRACKET_NAME        = to_string("__operator[]");
 const String OPERATOR_BRACKET_EQUALS_NAME = to_string("__operator[]=");
+const String BUILTIN_DEBUGTRAP_NAME      = to_string("__builtin_debugtrap");
 
 struct Atom {
     String name;
@@ -117,6 +118,8 @@ struct Compiler {
     Atom *atom_MacOSX;
     Atom *atom_Windows;
     Atom *atom_Linux;
+
+    Atom *atom_builtin_debugtrap;
 
     Array<Ast_Function    *> function_emission_queue;
     Array<Ast_Declaration *> global_decl_emission_queue;
@@ -340,5 +343,6 @@ Ast_Unary_Expression *make_unary(Compiler *compiler, Token::Type op, Ast_Express
 Ast_Binary_Expression *make_binary(Compiler *compiler, Token::Type op, Ast_Expression *left, Ast_Expression *right, Ast *location);
 
 Ast_Type_Alias *make_type_alias(Compiler *compiler, Ast_Identifier *ident, Ast_Type_Info *type_value);
+Ast_Function *make_function(Compiler *compiler, Ast_Identifier *ident);
 
 #endif

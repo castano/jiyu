@@ -72,6 +72,7 @@ Ast_Function *Copier::copy_function(Ast_Function *old) {
     COPY_P(is_template_function);
     COPY_P(linkage_name);
     COPY_P(is_operator_function);
+    COPY_P(is_intrinsic);
     COPY_P(operator_type);
 
 

@@ -33,14 +33,7 @@ func assert(cond: bool, msg: string) {
     if msg  printf("Assertion failed: %.*s\n", msg.length, msg.data);
     else    printf("Assertion failed!\n");
 
-    #if os(Windows) {
-        func @c_function DebugBreak() -> void;
-        DebugBreak();
-    }
-
-    #if os(MacOSX) {
-        exit(-1);
-    }
+    __builtin_debugtrap();
 }
 
 func advance(s: *string, amount: string_length_type) {

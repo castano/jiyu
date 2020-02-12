@@ -200,6 +200,15 @@ extern "C" {
             compiler->preload_scope->declarations.add(alias);
         }
 
+        // Insert intrinsic functions
+        {
+            Ast_Identifier *ident = make_identifier(compiler, compiler->atom_builtin_debugtrap);
+            auto debug_trap = make_function(compiler, ident);
+            debug_trap->is_intrinsic = true;
+            compiler->preload_scope->statements.add(debug_trap);
+            compiler->preload_scope->declarations.add(debug_trap);
+        }
+
         os_init(compiler);
         return compiler;
     }

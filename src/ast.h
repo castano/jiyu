@@ -374,6 +374,7 @@ struct Ast_Function : Ast_Expression {
     bool is_template_function = false;
     bool is_exported = false;
     bool is_operator_function = false;
+    bool is_intrinsic = false;
     Token::Type operator_type;
 
     String linkage_name;       // @NoCopy
