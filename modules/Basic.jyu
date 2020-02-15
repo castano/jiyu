@@ -135,6 +135,61 @@ func split(input: string, delim: uint8) -> [] string {
     return static;
 }
 
+func min<T>(a: T, b: T) -> T {
+    if a < b return a;
+    return b;
+}
+
+func max<T>(a: T, b: T) -> T {
+    if a < b return b;
+    return a;
+}
+
+func append (base: string, str: string, max_size: int64) -> string {
+    // copy str at the end of base.
+    var dst = base.data + base.length;
+    var length = min(max_size - base.length, str.length);
+    memcpy(dst, str.data, cast(uint32)length); // @@ size_t == uint32?
+    var c = base;
+    c.length += length;
+    return c;
+}
+
+func make_string (data: *uint8, length: int64) -> string {
+    var c: string;
+    c.data = data;
+    c.length = length;
+    return c;
+}
+
+func alloc_string(length: int64) -> string {
+    var c: string;
+    c.data = cast(*uint8)malloc(cast(uint32)length);
+    c.length = length;
+    return c;    
+}
+
+func join(input: [] string, delim = "", delim_after_last = false) -> string {
+    if !input.count return "";
+    
+    var length = (input.count - 1) * delim.length;
+    if delim_after_last length += delim.length;
+
+    for input {
+        length += it.length;
+    }
+
+    var result = alloc_string(length);
+    var c = make_string(result.data, 0);
+
+    for input {
+        c = append(c, it, result.length);
+        c = append(c, delim, result.length);
+    }
+
+    return result;
+}
+
 func get_lines(input: string) -> [] string {
     return split(input, '\n');
 }
