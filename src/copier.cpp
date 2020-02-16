@@ -416,7 +416,7 @@ void Copier::copy_scope(Ast_Scope *_new, Ast_Scope *old) {
     scope_stack.pop();
 }
 
-Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Function *poly, Array<Ast_Expression *> *arguments, bool do_stuff_for_implicit_arg, Ast *callsite, bool allow_errors) {
+Tuple<Ast_Function *, bool> Copier::polymorph_function_with_arguments(Ast_Function *poly, Array<Ast_Expression *> *arguments, bool do_stuff_for_implicit_arg, Ast *callsite, bool allow_errors) {
     assert(arguments->count == poly->arguments.count);
 
     scope_stack.add(poly->polymorphic_type_alias_scope->parent);
@@ -590,6 +590,29 @@ bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_i
 
             auto inst = type_inst->template_type_arguments[i];
             bool success = try_to_fill_polymorphic_type_aliases(inst, type_value, false);
+            if (!success) return false;
+        }
+
+        return true;
+    }
+
+    if (type_inst->function_header) {
+        if (target_type_info->type != Ast_Type_Info::FUNCTION) return false;
+
+        bool success = try_to_fill_polymorphic_type_aliases(type_inst->function_header->return_type, target_type_info->return_type, false);
+        if (!success || compiler->errors_reported) return false;
+
+        auto argument_count = type_inst->function_header->arguments.count;
+        if (argument_count != target_type_info->arguments.count) {
+            return false; // @@ Output error?
+        }
+
+        for (array_count_type i = 0; i < argument_count; i++) {
+            auto decl = type_inst->function_header->arguments[i];
+
+            Ast_Type_Info * type_value = target_type_info->arguments[i];
+
+            success = try_to_fill_polymorphic_type_aliases(decl->type_inst, type_value, false);
             if (!success) return false;
         }
 

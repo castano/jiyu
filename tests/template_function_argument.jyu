@@ -1,0 +1,35 @@
+#import "Basic";
+#import "LibC";
+
+// This shorthand form for the function prototype declaration does not work yet:
+// error: Declared variable must be declared with a type or be initialized.
+//func test<T> (a: T, b: T, compare: (T, T) -> int) -> int
+
+
+func test<T> (a: T, b: T, comp: (a: T, b: T) -> int) -> int {
+    return compare(a, b);
+}
+
+func compare(a: int, b: int) -> int {
+    return a - b;
+}
+
+func bar<T> (foo: () -> T) -> T {
+    return foo();
+}
+
+func zero () -> int {
+    return 0;
+}
+
+func main () {
+    var i = bar(zero);
+    var j = 1;
+
+    var result = test(i, j, compare);
+    assert(result == -1);
+
+    printf("result = %d\n", result);
+}
+
+
