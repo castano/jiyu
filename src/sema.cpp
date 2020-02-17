@@ -2232,7 +2232,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             compiler->errors_reported = 0; // Clear errors_reported so that we can get the full diagnostics from the call checking
 
                             if (func->is_template_function) {
-                                get_polymorph_for_function_call(function, call, true);
+                                get_polymorph_for_function_call(func, call, true);
                                 continue;
                             }
                             function_call_is_viable(call, get_type_info(func), func, true);
