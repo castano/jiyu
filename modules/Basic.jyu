@@ -139,18 +139,18 @@ func get_lines(input: string) -> [] string {
     return split(input, '\n');
 }
 
-func read_entire_file(path: string) -> string {
+func read_entire_file(path: string) -> (success: bool, result: string) {
     var c_path = to_c_string(path);
     var file = fopen(c_path, "rb");
     free(c_path);
 
-    if file == null return "";
+    if file == null return (false, "");
 
     fseek(file, 0, SEEK_END);
     var length = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    if !length return "";
+    if !length return (true, "");
 
     var mem = cast(c_string) malloc(cast(size_t) length);
     fread(mem, 1, cast(size_t) length, file);
@@ -161,7 +161,7 @@ func read_entire_file(path: string) -> string {
     var result: string;
     result.data = mem;
     result.length = length;
-    return result;
+    return (true, result);
 }
 
 func write_entire_file(path: string, contents: string) -> bool {
