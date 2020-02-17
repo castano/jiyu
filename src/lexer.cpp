@@ -392,6 +392,24 @@ Token Lexer::lex_token() {
             current_char++;
         }
 
+        // Accept float in scientific notation.
+        if (radix == 10) {
+            if (current_char < text.length && (text[current_char] == 'e' || text[current_char] == 'E')) {
+                is_float = true;
+                current_char++;
+
+                // Accept exponent sign.
+                if (current_char < text.length && (text[current_char] == '-' || text[current_char] == '+')) {
+                    current_char++;
+                }
+
+                // Accept exponent digits.
+                while (current_char < text.length && is_digit(text[current_char], 10)) {
+                    current_char++;
+                }
+            }
+        }
+
         char *value_string = compiler->get_temp_c_string(text.substring(number_start, current_char - number_start));
 
         if (is_float) {
