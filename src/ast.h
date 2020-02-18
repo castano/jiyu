@@ -357,7 +357,7 @@ struct Ast_Declaration : Ast_Expression {
 struct Ast_Function : Ast_Expression {
     Ast_Function() { type = AST_FUNCTION; }
 
-    Ast_Identifier *identifier;
+    Ast_Identifier *identifier = nullptr;
 
     Array<Ast_Declaration *> arguments;
     Ast_Type_Instantiation *return_type = nullptr;

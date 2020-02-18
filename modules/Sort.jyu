@@ -1,0 +1,146 @@
+
+// In-place intro-sort. Should be very similar to std::sort, but appears to be a bit slower in practice. Stuff to do:
+// - Better median selection for small arrays.
+// - Switch to heap sort to avoid excesive recursion.
+// - Fast path in insertion sort for pre-sorted arrays.
+
+// Some references:
+// http://en.wikipedia.org/wiki/Introsort
+// http://ralphunden.net/?q=a-guide-to-introsort
+
+
+// @@ These arrays should all be [], but currently we don't support casting from one array type to another.
+// @@ It would be nice if these worked not just on arrays, but on any container.
+
+
+func sort<T> (array: [..] T, compare: (a: T, b: T) -> int) {
+    intro_sort(array, 0, cast(int)array.count, compare);
+}
+
+func intro_sort<T> (array: [..] T, compare: (a: T, b: T) -> int) {
+    intro_sort(array, 0, cast(int)array.count, compare);
+}
+
+func insertion_sort<T> (array: [..] T, compare: (a: T, b: T) -> int) {
+    insertion_sort(array, 0, cast(int)array.count, compare);
+}
+
+
+// @@ private:
+
+let INSERTION_SORT_THRESHOLD = 32; // 16
+
+func intro_sort<T> (array: [..] T, begin: int, end: int, f: (a: T, b: T) -> int) {
+    if begin < end {
+        introsort_loop(array, begin, end, f);
+        insertion_sort(array, begin, end, f);
+    }
+}
+
+func insertion_sort<T> (array: [..] T, begin: int, end: int, f: (a: T, b: T) -> int) {
+    for begin+1..end-1 {
+        var value = array[it];
+
+        var j = it;
+        while (j != begin && f(value, array[j-1]) < 0) {
+            array[j] = array[j-1];
+            j -= 1;
+        }
+        if it != j {
+            array[j] = value;
+        }
+    }
+}
+
+func introsort_loop<T> (array: [..] T, _begin: int, _end: int, f: (a: T, b: T) -> int) {
+    var begin = _begin;
+    var end = _end;
+    while end-begin > INSERTION_SORT_THRESHOLD {
+        
+        var m = medianof3(array, begin, begin+((end-begin)/2)+1, end-1, f);
+        var p = partition(array, begin, end, m, f);
+
+        // Recurse on smaller side, iterate on larger.
+        if end-p <= p-begin {
+            introsort_loop(array, p, end, f);
+            end = p;
+        }
+        else {
+            introsort_loop(array, begin, p, f);
+            begin = p;
+        }
+    }
+}
+
+
+func partition<T> (a : [..] T, begin: int, end: int, x: T, f: (a: T, b: T) -> int) -> int {
+    var i = begin;
+    var j = end;
+    while true {
+        while f(a[i], x) < 0    i += 1;
+        j -= 1;
+        while f(x, a[j]) < 0    j -= 1;
+        if i >= j return i;
+        
+        var tmp = a[i];
+        a[i] = a[j];
+        a[j] = tmp;
+
+        i += 1;
+    }
+    return -1; // @@ To silence warning only.
+}
+
+func medianof3<T> (a : [..]T, lo: int, mid: int, hi: int, f: (a: T, b: T) -> int) -> T {
+    if f(a[mid], a[lo]) < 0 {
+        if f(a[hi], a[mid]) < 0     return a[mid];  // hi < mid < lo
+        else if f(a[hi], a[lo]) < 0 return a[hi];   // mid < hi < lo
+        else                        return a[lo];   // mid < lo < hi
+    }
+    else {
+        if f(a[mid], a[hi]) < 0     return a[mid];  // lo < mid < hi
+        else if f(a[hi], a[lo]) < 0 return a[lo];   // hi < lo < mid
+        else                        return a[hi];   // lo < hi < mid
+    }
+}
+
+
+/*
+template <template<class> class C, typename T>
+void downheap(C<T> & a, int i, int n, int lo)
+{
+    T value = a[lo+i-1];
+
+    int child;
+    while (i <= n/2)
+    {
+        child = 2*i;
+        if (child < n && a[lo+child-1] < a[lo+child])
+        {
+            child++;
+        }
+        if (!(value < a[lo+child-1])) break;
+        a[lo+i-1] = a[lo+child-1];
+        i = child;
+    }
+    a[lo+i-1] = value;
+}
+
+template <template<class> class C, typename T>
+void heapsort(C<T> & a, int lo, int hi)
+{
+    int n = hi - lo;
+    for (int i = n/2; i >= 1; i--)
+    {
+        downheap(a, i, n, lo);
+    }
+    
+    for (int i = n; i > 1; i--)
+    {
+        swap(a[lo], a[lo+i-1]);
+        downheap(a, 1, i-1, lo);
+    }
+}
+*/
+
+
