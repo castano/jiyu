@@ -158,7 +158,7 @@ struct Ast_Scope : Ast_Expression {
     // Only set for the top-level scope of a function body. scope->owning_function == scope->owning_function->scope.
     Ast_Function   *owning_function = nullptr;  // @NoCopy this is set on the root scope by Copier::copy_function
     Ast_Expression *owning_statement = nullptr; // @NoCopy this is set by respective copying code for owner-nodes (Ast_For ...).
-    Ast_Enum *owning_enum = nullptr;
+    Ast_Enum       *owning_enum = nullptr;
 };
 
 // Used to specify a scope that was inserted due to the compiler resolving a static_if.

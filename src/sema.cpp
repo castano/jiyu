@@ -1463,11 +1463,15 @@ Ast_Expression *Sema::find_declaration_for_atom(Atom *atom, Ast_Scope *start, bo
 
 static
 Ast_Expression *get_nearest_owner(Ast_Scope *scope) {
-    if (scope->owning_statement) return scope->owning_statement;
-    else if (scope->owning_enum) return scope->owning_enum;
-    else if (scope->owning_function) return scope->owning_function;
+    while (scope) {
+        if      (scope->owning_statement) return scope->owning_statement;
+        else if (scope->owning_enum)      return scope->owning_enum;
+        else if (scope->owning_function)  return scope->owning_function;
+        else if (scope->owning_struct)    return scope->owning_struct;
 
-    return get_nearest_owner(scope->parent);
+        scope = scope->parent;
+    }
+    return nullptr;
 }
 
 static
@@ -2886,6 +2890,27 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
         case AST_STRUCT: {
             auto _struct = static_cast<Ast_Struct *>(expression);
+
+            if (_struct->is_anonymous) {
+                char *typekind = "struct";
+                if (_struct->is_union) typekind = "union";
+
+                if (_struct->is_template_struct) {
+                    compiler->report_error(_struct, "Anonymous %s cannot be a template.\n", typekind);
+                    return;
+                }
+
+                auto owner = get_nearest_owner(_struct->member_scope.parent);
+                if (!owner || (owner && owner->type != AST_STRUCT)) {
+                    compiler->report_error(_struct, "Anonymous %s may only be declared within another struct or union.\n", typekind);
+                    return;
+                }
+
+                if (_struct->parent_struct) {
+                    compiler->report_error(_struct, "Anonymous %s cannot inherit from a parent type.\n", typekind);
+                }
+            }
+
             if (_struct->is_template_struct) {
                 // Legal use of a template struct is only from a polymorph of this struct.
                 // So the plain version of the struct is void.
