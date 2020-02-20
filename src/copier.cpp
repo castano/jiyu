@@ -312,6 +312,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY_P(is_union);
             COPY_P(is_tuple);
             COPY_P(is_template_struct);
+            COPY_P(is_anonymous);
             COPY_P(polymorph_source_struct); // Light copy; I am not totally sure this is the right thing to do...
 
             return _new;

@@ -1,0 +1,26 @@
+
+#import "LibC";
+
+struct Test {
+    var d: float;
+
+    union {
+        var a: int;
+        var b: int;
+    }
+
+    var c: int;
+}
+
+func main() {
+    var t: Test;
+
+    t.a = 10;
+    t.c = 20;
+    t.d = 15.5;
+
+    printf("t.d: %f\n", t.d);
+    printf("t.a: %d\n", t.a);
+    printf("t.b: %d\n", t.b);
+    printf("t.c: %d\n", t.c);
+}

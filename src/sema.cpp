@@ -1470,6 +1470,44 @@ Ast_Expression *get_nearest_owner(Ast_Scope *scope) {
     return get_nearest_owner(scope->parent);
 }
 
+static
+bool check_type_info_for_struct_member (Compiler *compiler, Ast_Dereference *deref, Ast_Type_Info *struct_type, Atom *field_atom) {        
+    while (struct_type) {
+        for (auto member : struct_type->struct_members) {
+            if (member.is_let) continue;
+
+            if (member.is_anonymous_struct) {
+                bool found = check_type_info_for_struct_member(compiler, deref, member.type_info, field_atom);
+                if (!found) continue;
+
+                // If we found a candidate, we need to insert a dereference through this member.
+
+                Ast_Dereference *deref_through_anon = SEMA_NEW(Ast_Dereference);
+                deref_through_anon->left = deref->left; // @Hack so expression_is_lvalue doesnt crash
+                deref_through_anon->element_path_index = member.element_index;
+                deref_through_anon->type_info = member.type_info;
+                deref_through_anon->byte_offset = -1; // @Incomplete
+
+                assert(deref_through_anon->type_info);
+
+                deref->left = deref_through_anon;
+                return true;
+            }
+
+            if (member.name == field_atom) {
+                deref->element_path_index = member.element_index;
+                deref->type_info = member.type_info;
+                deref->byte_offset = -1; // @Incomplete
+                return true;
+            }
+        }
+
+        struct_type = struct_type->parent_struct;
+    }
+
+    return false;
+}
+
 s64 pad_to_alignment(s64 current, s64 align) {
     assert(align >= 1);
 
@@ -2449,36 +2487,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 // @Incomplete this should perform a scope lookup for a declaration so we can handle
                 // lets, functions, typealiases, etc..
-                bool found = false;
-                for (auto member : left_type->struct_members) {
-                    if (member.is_let) continue;
-
-                    if (member.name == field_atom) {
-                        found = true;
-
-                        deref->element_path_index = member.element_index;
-                        deref->type_info = member.type_info;
-                        deref->byte_offset = -1; // @Incomplete
-                        break;
-                    }
-                }
-
-                // @Incomplete this doesnt check the parent_struct's potential parent_struct.
-                if (!found && left_type->parent_struct) {
-                    auto parent = left_type->parent_struct;
-                    for (auto member : parent->struct_members) {
-                        if (member.is_let) continue;
-
-                        if (member.name == field_atom) {
-                            found = true;
-
-                            deref->element_path_index = member.element_index;
-                            deref->type_info = member.type_info;
-                            deref->byte_offset = -1; // @Incomplete
-                            break;
-                        }
-                    }
-                }
+                bool found = check_type_info_for_struct_member(compiler, deref, left_type, field_atom);
+                
 
                 if (found && deref->is_type_dereference) {
                     compiler->report_error(deref, "Attempt to use struct variable member without an instance!\n");
@@ -2934,7 +2944,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     element_path_index = get_final_type(type_value)->struct_members.count;
                 }
 
-                // This is likely super @Incomplete
+                // This is likely super @Incomplete                
                 for (auto expr : _struct->member_scope.declarations) {
                     if (expr->type == AST_DECLARATION) {
 
@@ -2982,6 +2992,54 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         }
 
                         info->struct_members.add(member);
+                    } else if (expr->type == AST_STRUCT) {
+                        auto _substruct = static_cast<Ast_Struct *>(expr);
+                        if (_substruct->is_anonymous) {
+                            typecheck_expression(_substruct);
+                            if (compiler->errors_reported) return;
+
+                            auto subtype = get_type_declaration_resolved_type(_substruct);
+
+                            auto final_type = subtype;
+
+                            Ast_Type_Info::Struct_Member member;
+                            member.name = nullptr;
+                            member.type_info = final_type;
+                            member.is_let = false;
+                            member.is_anonymous_struct = true;
+
+                            if (!member.is_let) {
+                                member.element_index = element_path_index;
+                                element_path_index++;
+                            }
+
+                            if (final_type->size == -1) {
+                                char *typekind = "struct";
+                                if (_substruct->is_union) typekind = "union";
+                                compiler->report_error(_substruct, "anonymous %s is an incomplete type.\n", typekind);
+                                // @@ Definition of '%s' is not complete until the closing '}'
+                                return;
+                            }
+
+                            offset_cursor = pad_to_alignment(offset_cursor, final_type->alignment);
+                            member.offset_in_struct = offset_cursor;
+
+                            assert(final_type->stride >= 0);
+                            if (!_struct->is_union) {
+                                offset_cursor += final_type->stride;
+                                size = offset_cursor;
+                            } else {
+                                if (final_type->stride > size) {
+                                    size = final_type->stride;
+                                }
+                            }
+
+                            if (final_type->alignment > biggest_alignment) {
+                                biggest_alignment = final_type->alignment;
+                            }
+
+                            info->struct_members.add(member);
+                        }
                     }
                 }
 

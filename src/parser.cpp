@@ -853,7 +853,11 @@ Ast_Expression *Parser::parse_statement() {
         Ast_Struct *_struct = PARSER_NEW(Ast_Struct);
         next_token();
 
-        _struct->identifier = parse_identifier();
+        if (peek_token()->type != Token::IDENTIFIER) {
+            _struct->is_anonymous = true;
+        } else {
+            _struct->identifier = parse_identifier();
+        }
         _struct->member_scope.parent = get_current_scope();
         _struct->member_scope.owning_struct = _struct;
         _struct->is_union = (token->type == Token::KEYWORD_UNION);

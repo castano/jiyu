@@ -103,6 +103,7 @@ struct Ast_Type_Info {
         s64 element_index        = -1;
         s64 offset_in_struct     = -1;
         Ast_Type_Info *type_info = nullptr;
+        bool is_anonymous_struct = false;
         bool is_let = false;
     };
     Ast_Type_Info *parent_struct = nullptr;
@@ -208,6 +209,7 @@ struct Ast_Struct : Ast_Expression {
     bool is_union = false;
     bool is_tuple = false;
     bool is_template_struct = false;
+    bool is_anonymous = false;
 
     Array<Ast_Struct *> polymorphed_structs; // @NoCopy
     Ast_Struct *polymorph_source_struct = nullptr;
