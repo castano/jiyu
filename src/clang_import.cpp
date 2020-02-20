@@ -455,6 +455,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
             } else {
                 _struct = IMPORT_NEW(Ast_Struct);
                 _struct->is_union = (cursor.kind == CXCursor_UnionDecl);
+                _struct->is_anonymous = (clang_Cursor_isAnonymous(cursor) != 0);
                 _struct->type_value = make_struct_type(compiler, _struct);
                 add_usr_mapping(usr_map, my_usr_string, _struct);
             }
