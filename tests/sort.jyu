@@ -1,0 +1,47 @@
+#import "Basic";
+#import "LibC";
+#import "Sort";
+#import "Random";
+#import "Array";
+
+
+func swap(a: *int, b: *int) {
+    var tmp = <<a;
+    <<a = <<b;
+    <<b = tmp;
+}
+
+// Fisher–Yates shuffle
+func shuffle(array: [..]int) {
+    for 0..<array.count-1 {
+        // error: Incompatible types found on lhs and rhs of binary operator (int64, uint32).
+        // @@ Shouldn't we promote uin32 to int64 automatically?
+        var j = cast(uint32)(it + 1) + random_get_within_bound(cast(uint32)(array.count - it - 1));
+        swap(*array[it], *array[j]);
+    }
+}
+
+func compare(a: int, b: int) -> int {
+    return a-b;
+}
+
+func main () {
+
+    var array: [..]int;
+
+    for 0..100 {
+        array.add(it);
+    }
+
+    shuffle(array);
+
+    for array printf("%d, ", it);
+    printf("\n");
+
+    intro_sort(array, compare);
+
+    for array printf("%d, ", it);
+    printf("\n");
+}
+
+

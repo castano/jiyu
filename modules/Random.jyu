@@ -1,0 +1,114 @@
+// PCG random number generator.
+// http://www.pcg-random.org/pdf/hmc-cs-2014-0905.pdf
+
+
+func random_get () -> uint32 {
+    return random_get(*pcg32_state);
+}
+
+func random_get_within_bound (bound: uint32) -> uint32 {
+    return random_get_within_bound(*pcg32_state, bound);
+}
+
+func random_get_zero_to_one () -> float {
+    return random_get_zero_to_one(*pcg32_state);
+}
+
+func random_get_within_range (min: float, max: float) -> float {
+    return random_get_within_range(*pcg32_state, min, max);
+}
+
+func random_seed (new_seed : uint32) {
+    random_seed(*pcg32_state, new_seed);
+}
+
+
+
+// Generate a 32 bit random number for the given state.
+func random_get (state : *uint64) -> uint32 {
+    var oldstate = <<state;
+    
+    // Advance internal state
+    <<state = <<state * PCG_DEFAULT_MULTIPLIER_64 + PCG_DEFAULT_INCREMENT_64;
+
+    // Calculate output function (XSH RR), uses old state for max ILP
+    var xorshifted = cast(uint32)(((oldstate >> 18) ^ oldstate) >> 27);
+    var rot = cast(uint32)(oldstate >> 59);
+    return (xorshifted >> rot) | (xorshifted << (neg(rot) & 31));
+}
+
+
+// Generate a random number in the [0, range) range for the given state.
+// For an excellent discussion on how to generate bounded random numbers see:
+// http://www.pcg-random.org/posts/bounded-rands.html
+// This implementation uses the basic Lemire's Method as adopted by OpenBSD. For state of the art bounded random number generation see:
+// Fast Random Integer Generation in an Interval - https://arxiv.org/abs/1805.10941
+func random_get_within_bound (state: *uint64, range: uint32) -> uint32 {
+    assert(range != 0);
+    var threshold = neg(range) % range;
+    while true {
+        var r = random_get(state);
+        if r >= threshold return r % range;
+    }
+
+    return 0; // to silence the warning.
+}
+
+func random_get_within_bound2 (state: *uint64, range: uint32) -> uint32 {
+    assert(range != 0);
+
+    var x = random_get(state);
+    var m = cast(uint64)x * cast(uint64)range;
+    var l = cast(uint32)m;
+
+    if l < range {
+        var t: uint32 = neg(range);
+        if t >= range {
+            t -= range;
+            if t >= range t %= range;
+        }
+        while l < t {
+            x = random_get(state);
+            m = cast(uint64)x * cast(uint64)range;
+            l = cast(uint32)m;
+        }
+    }
+
+    return cast(uint32)(m >> 32);
+}
+
+
+
+
+// Generating random floating point values is surprisingly challenging. If you are happy to have a floating point value
+// in the range [0,1) that has been rounded down to the nearest multiple of 1/2^32, you can use this:
+func random_get_zero_to_one (state: *uint64) -> float {
+    return cast(float)(cast(double)random_get(state) * 2.32830643708079737543e-10); // 1/(2^32-1)
+}
+
+// This simply rescales a random number in the [0,1] range to the given range.
+func random_get_within_range (state: *uint64, min: float, max: float) -> float {
+    return random_get_zero_to_one(state) * (max - min) + min;
+}
+
+func random_seed (state: *uint64, new_seed : uint32) {
+    <<state = cast(uint64)new_seed * PCG_DEFAULT_MULTIPLIER_64 + PCG_DEFAULT_INCREMENT_64;
+}
+
+
+
+// private:
+
+#import "Basic"; // for assert
+
+// This is the global PCG state. Ideally this should be thread local to avoid conflicts.
+var pcg32_state : uint64 = PCG_DEFAULT_INCREMENT_64;
+
+let PCG_DEFAULT_MULTIPLIER_64 = 6364136223846793005;
+let PCG_DEFAULT_INCREMENT_64 = 1442695040888963407;
+
+
+// Utility to negate an unsigned integer without annoying casts. Hopefully these are inlined.
+func neg (x: uint32) -> uint32 {
+    return cast(uint32) - cast(int32)x;    // ~x+1
+}
