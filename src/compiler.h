@@ -94,6 +94,7 @@ struct Compiler {
 
     Ast_Type_Info *type_float32;
     Ast_Type_Info *type_float64;
+    Ast_Type_Info *type_float128;
 
     Ast_Type_Info *type_string;
     Ast_Type_Info *type_string_data;

@@ -143,6 +143,7 @@ void LLVM_Generator::init() {
 
     type_f32  = Type::getFloatTy(*llvm_context);
     type_f64  = Type::getDoubleTy(*llvm_context);
+    type_f128 = Type::getFP128Ty(*llvm_context);
 
     type_string_length = nullptr;
     if (TargetMachine->getPointerSize(0) == 4) {
@@ -169,6 +170,7 @@ void LLVM_Generator::init() {
     di_type_u64  = dib->createBasicType("uint64", 64, dwarf::DW_ATE_unsigned);
     di_type_f32  = dib->createBasicType("float",  32, dwarf::DW_ATE_float);
     di_type_f64  = dib->createBasicType("double", 64, dwarf::DW_ATE_float);
+    di_type_f64  = dib->createBasicType("float128", 128, dwarf::DW_ATE_float);
 
     di_type_string_length = nullptr;
     if (TargetMachine->getPointerSize(0) == 4) {
@@ -373,8 +375,9 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
     if (type->type == Ast_Type_Info::FLOAT) {
         switch(type->size) {
-            case 4: return type_f32;
-            case 8: return type_f64;
+            case 4 : return type_f32;
+            case 8 : return type_f64;
+            case 16: return type_f128;
             default: assert(false);
         }
     }
@@ -630,10 +633,17 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
         if (struct_decl->identifier) name = struct_decl->identifier->name->name;
         DIType *derived_from = nullptr;
         DINode::DIFlags flags = DINode::DIFlags();
-        auto empty_elements = dib->getOrCreateArray({});
-        auto final_type = dib->createStructType(di_compile_unit, string_ref(name), debug_file,
+
+        DICompositeType *final_type;
+        if (!type->is_union) {
+            final_type = dib->createStructType(di_compile_unit, string_ref(name), debug_file,
                             line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
-                            flags, derived_from, empty_elements);
+                            flags, derived_from, DINodeArray());
+        } else {
+            final_type = dib->createUnionType(di_compile_unit, string_ref(name), debug_file,
+                            line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
+                            flags, DINodeArray());
+        }
 
         type->debug_type_table_index = llvm_debug_types.count;
         llvm_debug_types.add(final_type);
@@ -645,7 +655,7 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
             auto member_type = member.type_info;
             auto di_type = get_debug_type(member_type);
 
-            String name;
+            String name = String();
             if (member.name) name = member.name->name;
 
             DINode::DIFlags flags = DINode::DIFlags();
@@ -655,7 +665,6 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
                                         member.offset_in_struct * BYTES_TO_BITS, flags, di_type);
             member_types.add(di_member);
         }
-
 
         auto elements = dib->getOrCreateArray(ArrayRef<Metadata *>(member_types.data, member_types.count));
         final_type->replaceElements(elements);
@@ -2167,7 +2176,7 @@ void LLVM_Jitter::init() {
 
     CompileLayer = new IRCompileLayer(*ES, *ObjectLayer, ConcurrentIRCompiler(*JTMB));
 
-    ES->getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(*DL)));
+    ES->getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(DL->getGlobalPrefix())));
 
     llvm->dib->finalize();
 

@@ -2,7 +2,7 @@
 
 set JIYU_DIR=%cd%
 
-set LLVM_VERSION=release_80
+set LLVM_VERSION=release_90
 set LLVM_URL=https://github.com/llvm-mirror/llvm/archive/%LLVM_VERSION%.zip
 set CLANG_URL=https://github.com/llvm-mirror/clang/archive/%LLVM_VERSION%.zip
 

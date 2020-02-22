@@ -2657,15 +2657,14 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (compiler->errors_reported) return;
 
+            auto init_type = get_type_info(_for->initial_iterator_expression);
             if (!_for->upper_range_expression) {
-                auto init_type = get_type_info(_for->initial_iterator_expression);
-                if (init_type->type == Ast_Type_Info::INTEGER) {
+                if (is_int_type(init_type)) {
                     compiler->report_error(_for, "'for' must specify an upper-range. Ex: for 0..1\n");
                     return;
                 }
             } else {
-                auto init_type = get_type_info(_for->initial_iterator_expression);
-                if (init_type->type != Ast_Type_Info::INTEGER) {
+                if (!is_int_type(init_type)) {
                     compiler->report_error(_for, "'..' operator may only be preceeded by an integer expression.\n");
                     return;
                 }
@@ -2680,8 +2679,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                 init_type = get_type_info(_for->initial_iterator_expression);
                 auto upper_type = get_type_info(_for->upper_range_expression);
-                if (upper_type->type != Ast_Type_Info::INTEGER) {
-                    compiler->report_error(_for->upper_range_expression, "'for' upper-range must be an integer expression.\n");
+                if (!is_int_type(upper_type)) {
+                    String given = type_to_string(upper_type);
+                    compiler->report_error(_for->upper_range_expression, "'for' upper-range must be an integer expression (Given %.*s).\n", PRINT_ARG(given));
+                    free(given.data);
                     return;
                 }
 
@@ -2690,7 +2691,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 }
             }
 
-            auto init_type = get_type_info(_for->initial_iterator_expression);
             if (!is_int_type(init_type)) {
                 // @Incomplete
                 bool supports_iteration_interface = type_is_iterable(init_type);
@@ -2999,7 +2999,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             return;
                         }
 
-                        offset_cursor = pad_to_alignment(offset_cursor, final_type->alignment);
+                        auto alignment = final_type->alignment;
+                        if (info->alignment >= 1 && info->alignment < final_type->alignment) alignment = info->alignment;
+
+                        String name;
+                        if (member.name) name = member.name->name;
+                        offset_cursor = pad_to_alignment(offset_cursor, alignment);
                         member.offset_in_struct = offset_cursor;
 
                         assert(final_type->stride >= 0);
@@ -3012,8 +3017,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             }
                         }
 
-                        if (final_type->alignment > biggest_alignment) {
-                            biggest_alignment = final_type->alignment;
+                        if (alignment > biggest_alignment) {
+                            biggest_alignment = alignment;
                         }
 
                         info->struct_members.add(member);
@@ -3046,7 +3051,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                                 return;
                             }
 
-                            offset_cursor = pad_to_alignment(offset_cursor, final_type->alignment);
+                            auto alignment = final_type->alignment;
+                            if (info->alignment >= 1 && info->alignment < final_type->alignment) alignment = info->alignment;
+
+                            offset_cursor = pad_to_alignment(offset_cursor, alignment);
                             member.offset_in_struct = offset_cursor;
 
                             assert(final_type->stride >= 0);
@@ -3059,8 +3067,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                                 }
                             }
 
-                            if (final_type->alignment > biggest_alignment) {
-                                biggest_alignment = final_type->alignment;
+                            if (alignment > biggest_alignment) {
+                                biggest_alignment = alignment;
                             }
 
                             info->struct_members.add(member);

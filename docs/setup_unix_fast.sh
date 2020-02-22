@@ -1,7 +1,7 @@
 
 set -ex
 
-LLVM_VERSION=8.0.0
+LLVM_VERSION=9.0.0
 
 # From this stackoverflow answer from paxdiablo https://stackoverflow.com/a/3466183
 unameOut="$(uname -s)"
@@ -18,11 +18,11 @@ if [ $machine == "Mac" ]
 then
     if [ ! -f llvm-prebuilt.tar.xz ]
     then
-        LLVM_URL="http://releases.llvm.org/$LLVM_VERSION/clang+llvm-$LLVM_VERSION-x86_64-apple-darwin.tar.xz"
+        LLVM_URL="http://releases.llvm.org/$LLVM_VERSION/clang+llvm-$LLVM_VERSION-x86_64-darwin-apple.tar.xz"
         curl -L --output llvm-prebuilt.tar.xz $LLVM_URL
     fi
     tar -xf llvm-prebuilt.tar.xz
-    mv "clang+llvm-$LLVM_VERSION-x86_64-apple-darwin" llvm
+    mv "clang+llvm-$LLVM_VERSION-x86_64-darwin-apple" llvm
 fi
 
 

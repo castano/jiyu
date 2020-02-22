@@ -353,8 +353,9 @@ void Compiler::init() {
     type_uint32 = make_int_type(this, false, 4);
     type_uint64 = make_int_type(this, false, 8);
 
-    type_float32 = make_float_type(this, 4);
-    type_float64 = make_float_type(this, 8);
+    type_float32  = make_float_type(this, 4);
+    type_float64  = make_float_type(this, 8);
+    type_float128 = make_float_type(this, 16);
 
     type_string_data = make_pointer_type(type_uint8);
 
