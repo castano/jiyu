@@ -243,6 +243,10 @@ Ast_Type_Info *get_type_info(Ast_Expression *expr) {
     return expr->type_info;
 }
 
+inline
+s64 get_alignment(Ast_Type_Info *info) {
+    return get_final_type(info)->alignment;
+}
 
 inline
 bool is_valid_primitive_cast(Ast_Type_Info *target, Ast_Type_Info *source) {
@@ -329,6 +333,8 @@ Ast_Literal *make_float_literal(Compiler *compiler, double value, Ast_Type_Info 
 Ast_Literal *make_bool_literal(Compiler *compiler, bool value, Ast *source_loc = nullptr);
 
 Ast_Literal *make_null_literal(Compiler *compiler, Ast_Type_Info *pointer_type, Ast *source_loc = nullptr);
+
+Ast_Literal *make_function_literal(Compiler *compiler, Ast_Function *function, Ast *source_loc = nullptr);
 
 Ast_Identifier *make_identifier(Compiler *compiler, Atom *name);
 

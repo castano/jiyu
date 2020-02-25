@@ -333,6 +333,7 @@ struct Ast_Literal : Ast_Expression {
         FLOAT,
         BOOL,
         NULLPTR,
+        FUNCTION, // Only appears from folds_to_literal
     };
 
     Type literal_type;
@@ -341,6 +342,7 @@ struct Ast_Literal : Ast_Expression {
     s64 integer_value;
     double float_value;
     String string_value;
+    Ast_Function *function;
 };
 
 struct Ast_Declaration : Ast_Expression {

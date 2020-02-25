@@ -872,6 +872,11 @@ Ast_Literal *Sema::folds_to_literal(Ast_Expression *expression) {
                 auto literal = make_integer_literal(compiler, _enum->type_value->type_table_index, compiler->type_info_type, decl);
                 return literal;
             }
+            if (decl->type == AST_FUNCTION) {
+                auto func = static_cast<Ast_Function *>(decl);
+                auto literal = make_function_literal(compiler, func, ident);
+                return literal;
+            }
 
             return nullptr;
         }
@@ -1100,7 +1105,7 @@ void Sema::typecheck_scope(Ast_Scope *scope) {
 
     for (auto &it : scope->statements) {
         // @TODO should we do replacements at the scope level?
-        typecheck_expression(it);
+        typecheck_expression(it, nullptr, /*overload_set_allowed*/false, /*do_function_body*/true);
 
         if (compiler->errors_reported) return;
     }
@@ -1481,11 +1486,9 @@ bool check_type_info_for_struct_member (Compiler *compiler, Ast_Dereference *der
             if (member.is_let) continue;
 
             if (member.is_anonymous_struct) {
-                bool found = check_type_info_for_struct_member(compiler, deref, member.type_info, field_atom);
-                if (!found) continue;
-
+                // @Hack @FixMe We generate this stuff first otherwise if we find a member that is within a nested
+                // anonymous struct, we end up having our dereferences in reverse order and cause errors in the LLVM generator.
                 // If we found a candidate, we need to insert a dereference through this member.
-
                 Ast_Dereference *deref_through_anon = SEMA_NEW(Ast_Dereference);
                 deref_through_anon->left = deref->left; // @Hack so expression_is_lvalue doesnt crash
                 deref_through_anon->element_path_index = member.element_index;
@@ -1494,7 +1497,15 @@ bool check_type_info_for_struct_member (Compiler *compiler, Ast_Dereference *der
 
                 assert(deref_through_anon->type_info);
 
+                auto old_left = deref->left;
                 deref->left = deref_through_anon;
+
+                bool found = check_type_info_for_struct_member(compiler, deref, member.type_info, field_atom);
+                if (!found) {
+                    deref->left = old_left;
+                    continue;
+                }
+                
                 return true;
             }
 
@@ -1523,7 +1534,7 @@ s64 pad_to_alignment(s64 current, s64 align) {
     return current;
 }
 
-void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_numeric_type, bool overload_set_allowed) {
+void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_numeric_type, bool overload_set_allowed, bool do_function_body) {
     while (expression->substitution) expression = expression->substitution;
 
     // @Temporary maybe, if this is a function declaration, typecheck it anyways since typecheck_function_header() will have set
@@ -1646,6 +1657,17 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             compiler->report_error(ident, "Attempt to use struct variable member without an instance!\n");
                             return;
                         }
+
+                        if (!declaration->is_let) {
+                            auto owner = get_nearest_owner(ident->enclosing_scope);
+                            auto decl_owner = get_nearest_owner(declaration->identifier->enclosing_scope);
+
+                            if (owner && owner->type == AST_FUNCTION && decl_owner && decl_owner->type == AST_FUNCTION && owner != decl_owner) {
+                                compiler->report_error(ident, "Attempt to use a variable from an outer stack frame.\n");
+                                compiler->report_error(declaration, "Variable declared here.\n");
+                                return;
+                            }
+                        }
                     }
                 }
             }
@@ -1694,7 +1716,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
             }
 
             if (!decl->is_let && decl->is_struct_member && decl->initializer_expression) {
-                if (!resolves_to_literal_value(decl->initializer_expression)) {
+                if (!folds_to_literal(decl->initializer_expression)) {
                     compiler->report_error(decl->initializer_expression, "Struct member may only be initialized by a literal expression.\n");
                     return;
                 }
@@ -2200,7 +2222,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
         case AST_FUNCTION: {
             auto function = static_cast<Ast_Function *>(expression);
-            typecheck_function(function);
+            if (do_function_body)
+                typecheck_function(function);
+            else
+                typecheck_function_header(function);
             return;
         }
 
@@ -2492,7 +2517,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 // @Incomplete this should perform a scope lookup for a declaration so we can handle
                 // lets, functions, typealiases, etc..
                 bool found = check_type_info_for_struct_member(compiler, deref, left_type, field_atom);
-                
 
                 if (found && deref->is_type_dereference) {
                     compiler->report_error(deref, "Attempt to use struct variable member without an instance!\n");

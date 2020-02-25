@@ -417,7 +417,16 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
             return llvm_types[type->type_table_index];
         }
 
-        auto final_type = StructType::create(*llvm_context, type->struct_decl->identifier ? string_ref(type->struct_decl->identifier->name->name) : "");
+        String name = type->struct_decl->identifier ? type->struct_decl->identifier->name->name : String();
+        if (type->struct_decl->is_anonymous) {
+            if (type->is_union) {
+                name = to_string("union.anon");
+            } else {
+                name = to_string("struct.anon");
+            }
+        }
+
+        auto final_type = StructType::create(*llvm_context, string_ref(name));
         llvm_types[type->type_table_index] = final_type;
 
         Array<Type *> member_types;
@@ -442,6 +451,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
             // as the only member, we will bitcast to the right things elsewhere.
 
             s64 largest_size = -1;
+            s64 largest_alignment = -1;
             array_count_type largest_index = -1;
 
             for (array_count_type i = 0; i < type->struct_members.count; ++i) {
@@ -745,7 +755,9 @@ Value *LLVM_Generator::get_value_for_decl(Ast_Declaration *decl) {
     return nullptr;
 }
 
-static Value *create_alloca_in_entry(IRBuilder<> *irb, Type *type) {
+static Value *create_alloca_in_entry(LLVM_Generator *gen, IRBuilder<> *irb, Ast_Type_Info *type_info) {
+    type_info = get_final_type(type_info);
+
     auto current_block = irb->GetInsertBlock();
     auto current_debug_loc = irb->getCurrentDebugLocation();
 
@@ -754,7 +766,10 @@ static Value *create_alloca_in_entry(IRBuilder<> *irb, Type *type) {
     BasicBlock *entry = &func->getEntryBlock();
     irb->SetInsertPoint(entry->getTerminator());
 
-    Value *alloca = irb->CreateAlloca(type);
+    Type *type = gen->get_type(type_info);
+    AllocaInst *alloca = irb->CreateAlloca(type);
+    assert(type_info->alignment >= 1);
+    alloca->setAlignment(type_info->alignment);
 
     irb->SetInsertPoint(current_block);
     irb->SetCurrentDebugLocation(current_debug_loc);
@@ -779,8 +794,8 @@ Value *LLVM_Generator::create_string_literal(Ast_Literal *lit, bool want_lvalue)
     assert(value);
 
     if (want_lvalue) {
-        auto alloca = create_alloca_in_entry(irb, type_string);
-        irb->CreateStore(value, alloca);
+        auto alloca = create_alloca_in_entry(this, irb, compiler->type_string);
+        irb->CreateAlignedStore(value, alloca, get_alignment(compiler->type_string));
         return alloca;
     }
 
@@ -813,12 +828,28 @@ Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
     assert(info->type == Ast_Type_Info::STRUCT);
     assert(info->struct_decl);
 
+    auto llvm_type = static_cast<StructType *>(get_type(info));
+    if (info->is_union) {
+        return Constant::getNullValue(llvm_type);
+    }
+
     auto _struct = info->struct_decl;
 
     Array<Constant *> element_values;
 
-    if (info->parent_struct) {
-        auto _struct = info->parent_struct->struct_decl;
+    Array<Ast_Struct *> flattened_parents;
+    flattened_parents.add(_struct);
+
+    auto parent = info->parent_struct;
+    while (parent) {
+        parent = get_final_type(parent);
+        flattened_parents.add(parent->struct_decl);
+
+        parent = parent->parent_struct;
+    }
+
+    for (array_count_type i = flattened_parents.count; i > 0; --i) {
+        auto _struct = flattened_parents[i-1];
 
         // @Cutnpaste from the stuff below
         for (auto member: _struct->member_scope.declarations) {
@@ -843,36 +874,17 @@ Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
 
                 assert(init);
                 element_values.add(init);
+            } else if (member->type == AST_STRUCT) {
+                auto struct_decl = static_cast<Ast_Struct *>(member);
+                if (struct_decl->is_anonymous) {
+                    Constant *init = get_constant_struct_initializer(struct_decl->type_value);
+                    assert(init);
+                    element_values.add(init);
+                }
             }
         }
     }
 
-    for (auto member: _struct->member_scope.declarations) {
-        if (member->type == AST_DECLARATION) {
-            auto decl = static_cast<Ast_Declaration *>(member);
-
-            if (decl->is_let) continue;
-            assert(decl->is_struct_member);
-
-            Ast_Type_Info *member_info = get_type_info(decl);
-            Constant *init = nullptr;
-            if (decl->initializer_expression) {
-                auto expr = emit_expression(decl->initializer_expression);
-                assert(dyn_cast<Constant>(expr));
-
-                init = static_cast<Constant *>(expr);
-            } else if (is_struct_type(member_info) && !get_final_type(member_info)->is_union) {
-                init = get_constant_struct_initializer(member_info);
-            } else {
-                init = Constant::getNullValue(get_type(member_info));
-            }
-
-            assert(init);
-            element_values.add(init);
-        }
-    }
-
-    auto llvm_type = static_cast<StructType *>(get_type(info));
     return ConstantStruct::get(llvm_type, ArrayRef<Constant *>(element_values.data, element_values.count));
 }
 
@@ -1210,7 +1222,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 case Ast_Literal::FLOAT:   return ConstantFP::get(type,  lit->float_value);
                 case Ast_Literal::BOOL:    return ConstantInt::get(type, (lit->bool_value ? 1 : 0));
                 case Ast_Literal::NULLPTR: return ConstantPointerNull::get(static_cast<PointerType *>(type));
-                default: return nullptr;
+                case Ast_Literal::FUNCTION:return get_or_create_function(lit->function);
             }
         }
 
@@ -1298,7 +1310,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
             Array<Value *> args;
             if (c_return_is_by_pointer_argument) {
-                auto alloca = create_alloca_in_entry(irb, get_type(type_info->return_type)); // Reserve storage for the return value.
+                auto alloca = create_alloca_in_entry(this, irb, type_info->return_type); // Reserve storage for the return value.
                 args.add(alloca);
             }
 
@@ -1346,7 +1358,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             }
 
             if (is_lvalue) {
-                auto alloca = create_alloca_in_entry(irb, result->getType());
+                auto alloca = create_alloca_in_entry(this, irb, type_info->return_type);
                 irb->CreateStore(result, alloca);
                 return alloca;
             }
@@ -1533,7 +1545,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto _for = static_cast<Ast_For *>(expression);
 
             auto it_decl = _for->iterator_decl;
-            auto it_alloca = create_alloca_in_entry(irb, get_type(get_type_info(it_decl)));
+            auto it_alloca = create_alloca_in_entry(this, irb, get_type_info(it_decl));
             auto decl_type = get_type_info(it_decl);
 
             decl_value_map.add(MakeTuple(it_decl, it_alloca));
@@ -1543,7 +1555,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             Value *it_index_alloca = nullptr;
             if (it_index_decl) {
                 it_index_type = get_type_info(it_index_decl);
-                it_index_alloca = create_alloca_in_entry(irb, get_type(it_index_type));
+                it_index_alloca = create_alloca_in_entry(this, irb, it_index_type);
                 decl_value_map.add(MakeTuple(it_index_decl, it_index_alloca));
                 emit_expression(it_index_decl);
             } else {
@@ -1707,7 +1719,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         case AST_TUPLE_EXPRESSION: {
             auto tuple = static_cast<Ast_Tuple_Expression *>(expression);
 
-            auto memory = create_alloca_in_entry(irb, get_type(get_type_info(tuple)));
+            auto memory = create_alloca_in_entry(this, irb, get_type_info(tuple));
 
             for (array_count_type i = 0; i < tuple->arguments.count; ++i) {
                 auto value = emit_expression(tuple->arguments[i]);
@@ -1862,7 +1874,7 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
         auto decl = static_cast<Ast_Declaration *>(it);
         if (decl->is_let && !decl->is_readonly_variable) continue;
 
-        auto alloca = create_alloca_in_entry(irb, get_type(get_type_info(it)));
+        auto alloca = create_alloca_in_entry(this, irb, get_type_info(it));
 
         String name;
         if (decl->identifier) name = decl->identifier->name->name;
@@ -1895,7 +1907,7 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
         auto decl = static_cast<Ast_Declaration *>(it);
         if (decl->is_let && !decl->is_readonly_variable) continue;
 
-        auto alloca = create_alloca_in_entry(irb, get_type(get_type_info(it)));
+        auto alloca = create_alloca_in_entry(this, irb, get_type_info(it));
 
         String name;
         if (decl->identifier) name = decl->identifier->name->name;
@@ -2025,11 +2037,13 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
         } else {
             // Create storage for value-parameters so that we can treat the parameters
             // the same as local variables during code generation. Maybe this isn't super necessary anymore, idk!
-            Value *alloca = irb->CreateAlloca(get_type(get_type_info(decl)));
+            AllocaInst *alloca = irb->CreateAlloca(get_type(get_type_info(decl)));
+            assert(get_alignment(get_type_info(decl)) >= 1);
+            alloca->setAlignment(get_alignment(get_type_info(decl)));
             irb->CreateStore(a, alloca);
 
             assert(get_value_for_decl(decl) == nullptr);
-            decl_value_map.add(MakeTuple(decl, alloca));
+            decl_value_map.add(MakeTuple<Ast_Declaration *, Value *>(decl, alloca));
 
             storage = alloca;
         }

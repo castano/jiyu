@@ -150,6 +150,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
                 case Ast_Literal::Type::FLOAT:   COPY_P(float_value);   break;
                 case Ast_Literal::Type::BOOL:    COPY_P(bool_value);    break;
                 case Ast_Literal::Type::NULLPTR: break;
+                case Ast_Literal::Type::FUNCTION: COPY_P(function); break;
             }
 
             return _new;

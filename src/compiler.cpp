@@ -585,6 +585,11 @@ void Compiler::resolve_directives() {
                     chosen_block = _if->else_scope;
                     break;
                 }
+
+                case Ast_Literal::FUNCTION: {
+                    chosen_block = _if->then_scope;
+                    break;
+                }
             }
 
             if (chosen_block) {
@@ -932,6 +937,16 @@ Ast_Literal *make_null_literal(Compiler *compiler, Ast_Type_Info *pointer_type, 
     Ast_Literal *lit = COMPILER_NEW2(Ast_Literal);
     lit->literal_type = Ast_Literal::NULLPTR;
     lit->type_info = pointer_type;
+
+    if (source_loc) copy_location_info(lit, source_loc);
+    return lit;
+}
+
+Ast_Literal *make_function_literal(Compiler *compiler, Ast_Function *function, Ast *source_loc) {
+    Ast_Literal *lit = COMPILER_NEW2(Ast_Literal);
+    lit->literal_type = Ast_Literal::FUNCTION;
+    lit->type_info = get_type_info(function);
+    lit->function = function;
 
     if (source_loc) copy_location_info(lit, source_loc);
     return lit;
