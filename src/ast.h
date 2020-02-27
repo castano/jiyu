@@ -216,6 +216,7 @@ struct Ast_Struct : Ast_Expression {
 
     Ast_Identifier *parent_struct = nullptr;
 
+    s64 final_element_path_index = -1;   // @NoCopy
     Ast_Type_Info *type_value = nullptr; // @NoCopy
 };
 

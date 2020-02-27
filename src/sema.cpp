@@ -1105,7 +1105,7 @@ void Sema::typecheck_scope(Ast_Scope *scope) {
 
     for (auto &it : scope->statements) {
         // @TODO should we do replacements at the scope level?
-        typecheck_expression(it, nullptr, /*overload_set_allowed*/false, /*do_function_body*/true);
+        typecheck_expression(it, nullptr, /*overload_set_allowed*/false, /*do_function_body*/true, /*only_want_struct_type*/false);
 
         if (compiler->errors_reported) return;
     }
@@ -1534,13 +1534,14 @@ s64 pad_to_alignment(s64 current, s64 align) {
     return current;
 }
 
-void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_numeric_type, bool overload_set_allowed, bool do_function_body) {
+void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_numeric_type, bool overload_set_allowed, bool do_function_body, bool only_want_struct_type) {
     while (expression->substitution) expression = expression->substitution;
 
     // @Temporary maybe, if this is a function declaration, typecheck it anyways since typecheck_function_header() will have set
     // the type info on the function node, but not have checked the entire body.
-    if (expression->type != AST_FUNCTION && expression->type_info) return;
+    if (expression->type != AST_FUNCTION && expression->type != AST_STRUCT && expression->type_info) return;
     if (expression->type == AST_FUNCTION && static_cast<Ast_Function *>(expression)->body_checked) return;
+    if (expression->type == AST_STRUCT   && static_cast<Ast_Struct *>(expression)->member_scope.type_info) return;
 
     switch (expression->type) {
         case AST_UNINITIALIZED: {
@@ -2942,135 +2943,86 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 return;
             }
 
-            // Set this early so we dont recurse indefinitely
-            if (!_struct->type_value) {
-                // If this is already set, this may have been due to a clang_import
-                _struct->type_value = make_struct_type(compiler, _struct);
-            } else {
-                assert(_struct->type_value->struct_members.count == 0);
-                assert(_struct->type_value->type_table_index == -1);
-            }
+             if (!_struct->type_info) {
 
-            _struct->type_info = compiler->type_info_type;
-
-            if (_struct->parent_struct) {
-                if (_struct->is_union) {
-                    compiler->report_error(_struct, "Unions may not inherit from other types.\n");
-                    return;
-                }
-                typecheck_expression(_struct->parent_struct);
-                if (compiler->errors_reported) return;
-
-                // @Incomplete we should probably make this work with typealiases.
-                if (_struct->parent_struct->resolved_declaration->type != AST_STRUCT) {
-                    compiler->report_error(_struct->parent_struct, "Struct parent must a struct.\n");
-                    return;
+                // Set this early so we dont recurse indefinitely
+                if (!_struct->type_value) {
+                    // If this is already set, this may have been due to a clang_import
+                    _struct->type_value = make_struct_type(compiler, _struct);
+                } else {
+                    assert(_struct->type_value->struct_members.count == 0);
+                    assert(_struct->type_value->type_table_index == -1);
                 }
 
-                _struct->type_value->parent_struct = get_type_declaration_resolved_type(_struct->parent_struct->resolved_declaration);
-            }
-
-            // flag stuct member declarations
-            for (auto _decl : _struct->member_scope.declarations) {
-                if (_decl->type == AST_DECLARATION) {
-                    auto decl = static_cast<Ast_Declaration *>(_decl);
-                    decl->is_struct_member = true;
-                }
-            }
-
-            {
-                auto info = _struct->type_value;
-                assert(info->type == Ast_Type_Info::STRUCT);
-                assert(info->struct_decl == _struct);
-
-                s64 size = 0;
-                s64 offset_cursor = 0;
-                s64 biggest_alignment = 1;
-                s64 element_path_index = 0;
+                _struct->type_info = compiler->type_info_type;
 
                 if (_struct->parent_struct) {
-                    auto type_value = get_type_declaration_resolved_type(_struct->parent_struct->resolved_declaration);
-                    element_path_index = get_final_type(type_value)->struct_members.count;
+                    if (_struct->is_union) {
+                        compiler->report_error(_struct, "Unions may not inherit from other types.\n");
+                        return;
+                    }
+                    typecheck_expression(_struct->parent_struct);
+                    if (compiler->errors_reported) return;
+
+                    // @Incomplete we should probably make this work with typealiases.
+                    if (_struct->parent_struct->resolved_declaration->type != AST_STRUCT) {
+                        compiler->report_error(_struct->parent_struct, "Struct parent must a struct.\n");
+                        return;
+                    }
+
+                    _struct->type_value->parent_struct = get_type_declaration_resolved_type(_struct->parent_struct->resolved_declaration);
                 }
 
-                // This is likely super @Incomplete                
-                for (auto expr : _struct->member_scope.declarations) {
-                    if (expr->type == AST_DECLARATION) {
+                // flag stuct member declarations
+                for (auto _decl : _struct->member_scope.declarations) {
+                    if (_decl->type == AST_DECLARATION) {
+                        auto decl = static_cast<Ast_Declaration *>(_decl);
+                        decl->is_struct_member = true;
+                    }
+                }
 
-                        // @Cleanup @Hack we need to be able to handle other structs, functions, typealiases or at least punt on them.
-                        auto decl = static_cast<Ast_Declaration *>(expr);
-                        typecheck_expression(decl);
-                        if (compiler->errors_reported) return;
+                {
+                    auto info = _struct->type_value;
+                    assert(info->type == Ast_Type_Info::STRUCT);
+                    assert(info->struct_decl == _struct);
 
-                        assert(decl && decl->type_info);
+                    s64 size = 0;
+                    s64 offset_cursor = 0;
+                    s64 biggest_alignment = 1;
+                    s64 element_path_index = 0;
 
-                        Ast_Type_Info::Struct_Member member;
-                        member.name = decl->identifier->name;
-                        member.type_info = decl->type_info;
-                        member.is_let = decl->is_let;
+                    if (_struct->parent_struct) {
+                        auto type_value = get_type_declaration_resolved_type(_struct->parent_struct->resolved_declaration);
+                        element_path_index = get_final_type(type_value)->struct_decl->final_element_path_index;
+                        assert(element_path_index > 0);
+                    }
 
-                        if (!member.is_let) {
-                            member.element_index = element_path_index;
-                            element_path_index++;
-                        }
+                    // This is likely super @Incomplete                
+                    for (auto expr : _struct->member_scope.declarations) {
+                        if (expr->type == AST_DECLARATION) {
 
-                        auto final_type = get_final_type(member.type_info);
-                        if (final_type->size == -1) {
-                            auto member_type_name = type_to_string(member.type_info);
-                            defer { free(member_type_name.data); };
-                            compiler->report_error(decl, "field '%.*s' has incomplete type '%.*s'\n", PRINT_ARG(member.name->name), PRINT_ARG(member_type_name));
-                            // @@ Definition of '%s' is not complete until the closing '}'
-                            return;
-                        }
-
-                        auto alignment = final_type->alignment;
-                        if (info->alignment >= 1 && info->alignment < final_type->alignment) alignment = info->alignment;
-
-                        String name;
-                        if (member.name) name = member.name->name;
-                        offset_cursor = pad_to_alignment(offset_cursor, alignment);
-                        member.offset_in_struct = offset_cursor;
-
-                        assert(final_type->stride >= 0);
-                        if (!_struct->is_union) {
-                            offset_cursor += final_type->stride;
-                            size = offset_cursor;
-                        } else {
-                            if (final_type->stride > size) {
-                                size = final_type->stride;
-                            }
-                        }
-
-                        if (alignment > biggest_alignment) {
-                            biggest_alignment = alignment;
-                        }
-
-                        info->struct_members.add(member);
-                    } else if (expr->type == AST_STRUCT) {
-                        auto _substruct = static_cast<Ast_Struct *>(expr);
-                        if (_substruct->is_anonymous) {
-                            typecheck_expression(_substruct);
+                            // @Cleanup @Hack we need to be able to handle other structs, functions, typealiases or at least punt on them.
+                            auto decl = static_cast<Ast_Declaration *>(expr);
+                            typecheck_expression(decl);
                             if (compiler->errors_reported) return;
 
-                            auto subtype = get_type_declaration_resolved_type(_substruct);
-
-                            auto final_type = subtype;
+                            assert(decl && decl->type_info);
 
                             Ast_Type_Info::Struct_Member member;
-                            member.name = nullptr;
-                            member.type_info = final_type;
-                            member.is_let = false;
-                            member.is_anonymous_struct = true;
+                            member.name = decl->identifier->name;
+                            member.type_info = decl->type_info;
+                            member.is_let = decl->is_let;
 
                             if (!member.is_let) {
                                 member.element_index = element_path_index;
                                 element_path_index++;
                             }
 
+                            auto final_type = get_final_type(member.type_info);
                             if (final_type->size == -1) {
-                                char *typekind = "struct";
-                                if (_substruct->is_union) typekind = "union";
-                                compiler->report_error(_substruct, "anonymous %s is an incomplete type.\n", typekind);
+                                auto member_type_name = type_to_string(member.type_info);
+                                defer { free(member_type_name.data); };
+                                compiler->report_error(decl, "field '%.*s' has incomplete type '%.*s'\n", PRINT_ARG(member.name->name), PRINT_ARG(member_type_name));
                                 // @@ Definition of '%s' is not complete until the closing '}'
                                 return;
                             }
@@ -3078,6 +3030,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             auto alignment = final_type->alignment;
                             if (info->alignment >= 1 && info->alignment < final_type->alignment) alignment = info->alignment;
 
+                            String name;
+                            if (member.name) name = member.name->name;
                             offset_cursor = pad_to_alignment(offset_cursor, alignment);
                             member.offset_in_struct = offset_cursor;
 
@@ -3096,18 +3050,73 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             }
 
                             info->struct_members.add(member);
+                        } else if (expr->type == AST_STRUCT) {
+                            auto _substruct = static_cast<Ast_Struct *>(expr);
+                            if (_substruct->is_anonymous) {
+                                typecheck_expression(_substruct);
+                                if (compiler->errors_reported) return;
+
+                                auto subtype = get_type_declaration_resolved_type(_substruct);
+
+                                auto final_type = subtype;
+
+                                Ast_Type_Info::Struct_Member member;
+                                member.name = nullptr;
+                                member.type_info = final_type;
+                                member.is_let = false;
+                                member.is_anonymous_struct = true;
+
+                                if (!member.is_let) {
+                                    member.element_index = element_path_index;
+                                    element_path_index++;
+                                }
+
+                                if (final_type->size == -1) {
+                                    char *typekind = "struct";
+                                    if (_substruct->is_union) typekind = "union";
+                                    compiler->report_error(_substruct, "anonymous %s is an incomplete type.\n", typekind);
+                                    // @@ Definition of '%s' is not complete until the closing '}'
+                                    return;
+                                }
+
+                                auto alignment = final_type->alignment;
+                                if (info->alignment >= 1 && info->alignment < final_type->alignment) alignment = info->alignment;
+
+                                offset_cursor = pad_to_alignment(offset_cursor, alignment);
+                                member.offset_in_struct = offset_cursor;
+
+                                assert(final_type->stride >= 0);
+                                if (!_struct->is_union) {
+                                    offset_cursor += final_type->stride;
+                                    size = offset_cursor;
+                                } else {
+                                    if (final_type->stride > size) {
+                                        size = final_type->stride;
+                                    }
+                                }
+
+                                if (alignment > biggest_alignment) {
+                                    biggest_alignment = alignment;
+                                }
+
+                                info->struct_members.add(member);
+                            }
                         }
                     }
+
+                    if (info->alignment <= 0) info->alignment = biggest_alignment;
+
+                    if (info->size >= 0) assert(pad_to_alignment(size, info->alignment) == info->size); //this came from clang
+                    info->size = size;
+                    info->stride = pad_to_alignment(info->size, info->alignment);
+
+                    _struct->final_element_path_index = element_path_index;
+
+                    compiler->add_to_type_table(info);
                 }
-
-                if (info->alignment <= 0) info->alignment = biggest_alignment;
-
-                if (info->size >= 0) assert(pad_to_alignment(size, info->alignment) == info->size); //this came from clang
-                info->size = size;
-                info->stride = pad_to_alignment(info->size, info->alignment);
-
-                compiler->add_to_type_table(info);
             }
+
+            if (only_want_struct_type) return;
 
             typecheck_scope(&_struct->member_scope);
             if (compiler->errors_reported) return;

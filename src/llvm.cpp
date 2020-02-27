@@ -432,26 +432,30 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         Array<Type *> member_types;
 
         if (!type->is_union) {
+            Array<Ast_Type_Info *> flattened_parents;
+            flattened_parents.add(type);
+
             auto parent = type->parent_struct;
-            if (parent) {
-                for (auto member : parent->struct_members) {
+            while (parent) {
+                parent = get_final_type(parent);
+                flattened_parents.add(parent);
+                parent = parent->parent_struct;
+            }
+
+            for (array_count_type i = flattened_parents.count; i > 0; --i) {
+                auto type = flattened_parents[i-1];
+
+                for (auto member : type->struct_members) {
                     if (member.is_let) continue;
 
                     member_types.add(make_llvm_type(member.type_info));
                 }
-            }
-
-            for (auto member : type->struct_members) {
-                if (member.is_let) continue;
-
-                member_types.add(make_llvm_type(member.type_info));
             }
         } else {
             // If the struct is a union, then just use the largest member
             // as the only member, we will bitcast to the right things elsewhere.
 
             s64 largest_size = -1;
-            s64 largest_alignment = -1;
             array_count_type largest_index = -1;
 
             for (array_count_type i = 0; i < type->struct_members.count; ++i) {
