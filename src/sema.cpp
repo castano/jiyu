@@ -1426,8 +1426,6 @@ static
 bool check_type_info_for_struct_member (Compiler *compiler, Ast_Dereference *deref, Ast_Type_Info *struct_type, Atom *field_atom) {        
     while (struct_type) {
         for (auto member : struct_type->struct_members) {
-            if (member.is_let) continue;
-
             if (member.is_anonymous_struct) {
                 // @Hack @FixMe We generate this stuff first otherwise if we find a member that is within a nested
                 // anonymous struct, we end up having our dereferences in reverse order and cause errors in the LLVM generator.
@@ -1471,6 +1469,7 @@ s64 pad_to_alignment(s64 current, s64 align) {
 
     s64 minum = current & (align-1);
     if (minum) {
+        assert((current % align) != 0);
         current += align - minum;
     }
 
@@ -2950,17 +2949,16 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                             typecheck_expression(decl);
                             if (compiler->errors_reported) return;
 
+                            if (decl->is_let) continue;
+
                             assert(decl && decl->type_info);
 
                             Ast_Type_Info::Struct_Member member;
                             member.name = decl->identifier->name;
                             member.type_info = decl->type_info;
-                            member.is_let = decl->is_let;
 
-                            if (!member.is_let) {
-                                member.element_index = element_path_index;
-                                element_path_index++;
-                            }
+                            member.element_index = element_path_index;
+                            element_path_index++;
 
                             auto final_type = get_final_type(member.type_info);
                             if (final_type->size == -1) {
@@ -3007,13 +3005,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                                 Ast_Type_Info::Struct_Member member;
                                 member.name = nullptr;
                                 member.type_info = final_type;
-                                member.is_let = false;
                                 member.is_anonymous_struct = true;
-
-                                if (!member.is_let) {
-                                    member.element_index = element_path_index;
-                                    element_path_index++;
-                                }
+                                
+                                member.element_index = element_path_index;
+                                element_path_index++;
 
                                 if (final_type->size == -1) {
                                     char *typekind = "struct";

@@ -446,8 +446,6 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
                 auto type = flattened_parents[i-1];
 
                 for (auto member : type->struct_members) {
-                    if (member.is_let) continue;
-
                     member_types.add(make_llvm_type(member.type_info));
                 }
             }
@@ -460,7 +458,6 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
             for (array_count_type i = 0; i < type->struct_members.count; ++i) {
                 auto member = type->struct_members[i];
-                if (member.is_let) continue;
                 assert(member.offset_in_struct == 0);
 
                 if (member.type_info->size > largest_size) {
@@ -476,6 +473,11 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         }
 
         final_type->setBody(ArrayRef<Type *>(member_types.data, member_types.count), false/*is packed*/);
+
+        // auto size       = TargetMachine->createDataLayout().getTypeSizeInBits(final_type) / 8;
+        // auto alloc_size = TargetMachine->createDataLayout().getTypeAllocSizeInBits(final_type) / 8;
+        // printf("%.*s: %d, alloc %d\n", PRINT_ARG(name), size, alloc_size);
+        // assert(alloc_size == type->stride);
 
         // final_type->dump();
 
@@ -664,8 +666,6 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
 
         Array<Metadata *> member_types;
         for (auto member : type->struct_members) {
-            if (member.is_let) continue;
-
             auto member_type = member.type_info;
             auto di_type = get_debug_type(member_type);
 

@@ -104,7 +104,6 @@ struct Ast_Type_Info {
         s64 offset_in_struct     = -1;
         Ast_Type_Info *type_info = nullptr;
         bool is_anonymous_struct = false;
-        bool is_let = false;
     };
     Ast_Type_Info *parent_struct = nullptr;
     Array<Struct_Member> struct_members; // for STRUCT
