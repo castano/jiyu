@@ -518,8 +518,9 @@ void Compiler::resolve_directives() {
             Ast_Scope_Expansion *exp = COMPILER_NEW(Ast_Scope_Expansion);
             exp->text_span = import->imported_scope->text_span;
             exp->filename = import->imported_scope->filename;
+            exp->declaration_flags |= DECLARATION_IS_PRIVATE;
 
-            import->scope_i_belong_to->private_declarations.add(exp);
+            import->scope_i_belong_to->declarations.add(exp);
 
             exp->scope = import->imported_scope;
             exp->expanded_via_import_directive = import;

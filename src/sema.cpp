@@ -1342,7 +1342,10 @@ Tuple<bool, u64> Sema::function_call_is_viable(Ast_Function_Call *call, Ast_Type
 void Sema::collect_function_overloads_for_atom_in_scope(Atom *atom, Ast_Scope *start, Array<Ast_Function *> *overload_set, bool check_private_declarations) {
     assert(start->rejected_by_static_if == false);
     for (auto it : start->declarations) {
-        while (it->substitution) it = it->substitution;
+        assert(it->substitution == nullptr);
+        // while (it->substitution) it = it->substitution;
+
+        if (!check_private_declarations && (it->declaration_flags & DECLARATION_IS_PRIVATE)) continue;
 
         if (it->type == AST_FUNCTION) {
             auto function = static_cast<Ast_Function *>(it);
@@ -1351,29 +1354,10 @@ void Sema::collect_function_overloads_for_atom_in_scope(Atom *atom, Ast_Scope *s
                 overload_set->add(function);
             }
         } else if (it->type == AST_SCOPE_EXPANSION) {
-            auto exp = static_cast<Ast_Scope_Expansion *>(it);
+            auto exp = reinterpret_cast<Ast_Scope_Expansion *>(it);
 
             bool check_private = (exp->expanded_via_import_directive == nullptr);
             collect_function_overloads_for_atom_in_scope(atom, exp->scope, overload_set, check_private);
-        }
-    }
-
-    if (check_private_declarations) {
-        for (auto it : start->private_declarations) {
-            while (it->substitution) it = it->substitution;
-
-            if (it->type == AST_FUNCTION) {
-                auto function = static_cast<Ast_Function *>(it);
-                if (function->identifier->name == atom) {
-                    // printf("Adding overlaod: %p\n", function);
-                    overload_set->add(function);
-                }
-            } else if (it->type == AST_SCOPE_EXPANSION) {
-                auto exp = static_cast<Ast_Scope_Expansion *>(it);
-
-                bool check_private = (exp->expanded_via_import_directive == nullptr);
-                collect_function_overloads_for_atom_in_scope(atom, exp->scope, overload_set, check_private);
-            }
         }
     }
 }
@@ -1392,23 +1376,13 @@ void Sema::collect_function_overloads_for_atom(Atom *atom, Ast_Scope *start, Arr
 Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom *atom, bool check_private_declarations) {
     // @Incomplete check scope tree
     for (auto it : scope->declarations) {
-        while (it->substitution) it = it->substitution;
+        assert(it->substitution == nullptr);
+        // while (it->substitution) it = it->substitution;
 
-        if (it->type == AST_DECLARATION) {
-            auto decl = static_cast<Ast_Declaration *>(it);
-            if (decl->identifier->name == atom) return it;
-        } else if (it->type == AST_FUNCTION) {
-            auto function = static_cast<Ast_Function *>(it);
-            if (function->identifier->name == atom) return function;
-        } else if (it->type == AST_TYPE_ALIAS) {
-            auto alias = static_cast<Ast_Type_Alias *>(it);
-            if (alias->identifier && alias->identifier->name == atom) return alias;
-        } else if (it->type == AST_STRUCT) {
-            auto _struct = static_cast<Ast_Struct *>(it);
-            if (_struct->identifier && _struct->identifier->name == atom) return _struct;
-        } else if (it->type == AST_ENUM) {
-            auto _enum = static_cast<Ast_Enum *>(it);
-            if (_enum->identifier && _enum->identifier->name == atom) return _enum;
+        if (!check_private_declarations && (it->declaration_flags & DECLARATION_IS_PRIVATE)) continue;
+
+        if (is_declaration(it->type)) {
+            if (it->identifier && it->identifier->name == atom) return it;
         } else if (it->type == AST_SCOPE_EXPANSION) {
             auto exp = static_cast<Ast_Scope_Expansion *>(it);
 
@@ -1417,37 +1391,6 @@ Ast_Expression *Sema::find_declaration_for_atom_in_scope(Ast_Scope *scope, Atom 
             if (decl) return decl;
         } else {
             assert(false);
-        }
-    }
-
-    if (check_private_declarations) {
-        for (auto it : scope->private_declarations) {
-            while (it->substitution) it = it->substitution;
-
-            if (it->type == AST_DECLARATION) {
-                auto decl = static_cast<Ast_Declaration *>(it);
-                if (decl->identifier->name == atom) return it;
-            } else if (it->type == AST_FUNCTION) {
-                auto function = static_cast<Ast_Function *>(it);
-                if (function->identifier->name == atom) return function;
-            } else if (it->type == AST_TYPE_ALIAS) {
-                auto alias = static_cast<Ast_Type_Alias *>(it);
-                if (alias->identifier && alias->identifier->name == atom) return alias;
-            } else if (it->type == AST_STRUCT) {
-                auto _struct = static_cast<Ast_Struct *>(it);
-                if (_struct->identifier && _struct->identifier->name == atom) return _struct;
-            } else if (it->type == AST_ENUM) {
-                auto _enum = static_cast<Ast_Struct *>(it);
-                if (_enum->identifier && _enum->identifier->name == atom) return _enum;
-            } else if (it->type == AST_SCOPE_EXPANSION) {
-                auto exp = static_cast<Ast_Scope_Expansion *>(it);
-
-                bool check_private = (exp->expanded_via_import_directive == nullptr);
-                auto decl = find_declaration_for_atom_in_scope(exp->scope, atom, check_private);
-                if (decl) return decl;
-            } else {
-                assert(false);
-            }
         }
     }
     
@@ -3704,7 +3647,7 @@ Ast_Struct *Sema::get_polymorph_for_struct(Ast_Struct *_struct, Array<Ast_Type_I
 
     _struct->polymorphed_structs.add(copy);
 
-    typecheck_expression(copy);
+    typecheck_expression(copy, /*want_numeric_type*/nullptr, /*overload_set_allowed*/false, /*do_function_body*/false, /*only_want_struct_type*/false);
     return copy;
 }
 

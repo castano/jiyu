@@ -66,7 +66,7 @@ struct Parser {
     
     Ast_Function *parse_function();
 
-    bool add_declaration(Array<Ast_Expression *> * declarations, Ast_Expression * decl);
+    bool add_declaration(Array<Ast_Scope_Entry *> *declarations, Ast_Scope_Entry *decl);
 };
 
 #endif

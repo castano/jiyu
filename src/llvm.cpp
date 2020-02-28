@@ -1871,7 +1871,8 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
 
     // setup variable mappings
     for (auto it : scope->declarations) {
-        while (it->substitution) it = it->substitution;
+        assert(it->substitution == nullptr);
+        // while (it->substitution) it = it->substitution;
 
         if (it->type != AST_DECLARATION) continue;
 
@@ -1901,35 +1902,6 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
                                 get_debug_file(llvm_context, it), get_line_number(it), di_type, always_preserve);
         dib->insertDeclare(alloca, di_local_var, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(it), 0, di_current_scope),
                             current_block);
-    }
-
-    // @Cleanup private decclarations should just be denoted by a flag.
-    for (auto it : scope->private_declarations) {
-        while (it->substitution) it = it->substitution;
-
-        if (it->type != AST_DECLARATION) continue;
-        auto decl = static_cast<Ast_Declaration *>(it);
-        if (decl->is_let && !decl->is_readonly_variable) continue;
-
-        auto alloca = create_alloca_in_entry(this, irb, get_type_info(it));
-
-        String name;
-        if (decl->identifier) name = decl->identifier->name->name;
-
-        if (decl->identifier) {
-            alloca->setName(string_ref(name));
-        }
-
-        assert(get_value_for_decl(decl) == nullptr);
-        decl_value_map.add(MakeTuple(decl, alloca));
-
-        // debug info
-        bool always_preserve = true;
-        auto di_type = get_debug_type(get_type_info(it));
-        auto di_local_var = dib->createAutoVariable(di_current_scope, string_ref(name),
-                                get_debug_file(llvm_context, it), get_line_number(it), di_type, always_preserve);
-        dib->insertDeclare(alloca, di_local_var, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(it), 0, di_current_scope),
-                            entry_block);
     }
 
     for (auto &it : scope->statements) {

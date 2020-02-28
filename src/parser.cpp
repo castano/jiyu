@@ -1287,7 +1287,7 @@ Ast_Expression *Parser::parse_statement() {
     }
 }
 
-static Ast_Expression * find_declaration(Array<Ast_Expression *> * array, Atom * name) {
+static Ast_Expression * find_declaration(Array<Ast_Scope_Entry *> * array, Atom * name) {
     for (auto it: *array) {
         auto id = declaration_identifier(it);
         if (id && id->name == name) {
@@ -1299,7 +1299,7 @@ static Ast_Expression * find_declaration(Array<Ast_Expression *> * array, Atom *
 
 // @FixMe this should not be here, we do not know if something is actually redefined until after
 // directives are resolved. This should be checked in sema. -josh 29 December 2019
-bool Parser::add_declaration(Array<Ast_Expression *> * declarations, Ast_Expression * decl) {
+bool Parser::add_declaration(Array<Ast_Scope_Entry *> *declarations, Ast_Scope_Entry *decl) {
     auto id = declaration_identifier(decl);
 
     // Skip anonymous declarations, in case we have them.
@@ -1344,7 +1344,7 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
             scope->statements.add(stmt);
 
             if (is_declaration(stmt->type)) {
-                if (!add_declaration(&scope->declarations, stmt)) {
+                if (!add_declaration(&scope->declarations, static_cast<Ast_Scope_Entry *>(stmt))) {
                     return;
                 }
             }

@@ -46,6 +46,7 @@ Ast_Function *Copier::copy_function(Ast_Function *old) {
     defer { currently_copying_function = outer_function; };
 
     COPY(identifier);
+    COPY_P(declaration_flags);
 
     COPY(polymorphic_type_alias_scope);
     if (_new->polymorphic_type_alias_scope) {
@@ -121,6 +122,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto _new = COPIER_NEW(Ast_Declaration);
 
             COPY(identifier);
+            COPY_P(declaration_flags);
+
             COPY(initializer_expression);
             COPY(type_inst);
             COPY_P(is_let);
@@ -235,6 +238,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto _new = COPIER_NEW(Ast_Type_Alias);
 
             COPY(identifier);
+            COPY_P(declaration_flags);
+
             COPY(internal_type_inst);
 
             // I think, type_value can be set when internal_type_inst isnt, when the compiler creates a type alias during polymorphing,
@@ -298,6 +303,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto _new = COPIER_NEW(Ast_Struct);
 
             COPY(identifier);
+            COPY_P(declaration_flags);
 
             COPY(polymorphic_type_alias_scope);
             if (_new->polymorphic_type_alias_scope) {
@@ -324,6 +330,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto _new = COPIER_NEW(Ast_Enum);
             
             COPY(identifier);
+            COPY_P(declaration_flags);
+
             copy_scope(&_new->member_scope, &old->member_scope);
             _new->member_scope.owning_enum = _new;
             COPY_P(is_flags);
@@ -407,13 +415,11 @@ void Copier::copy_scope(Ast_Scope *_new, Ast_Scope *old) {
     for (auto expr: old->statements) {
         auto stmt = copy(expr);
         if (is_declaration(stmt->type)) {
-            _new->declarations.add(stmt);
+            _new->declarations.add(static_cast<Ast_Scope_Entry *>(stmt));
         }
 
         _new->statements.add(stmt);
     }
-
-    COPY_ARRAY_P(private_declarations);
 
     scope_stack.pop();
 }
