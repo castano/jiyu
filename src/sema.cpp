@@ -2476,8 +2476,9 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
                     // @Incomplete this doesnt check the parent_struct's potential parent_struct.
                     if (!decl && _struct->parent_struct) {
-                        auto parent = static_cast<Ast_Struct *>(_struct->parent_struct->resolved_declaration);
-                        assert(parent->type == AST_STRUCT);
+                        auto parent = _struct->parent_struct->type_value->struct_decl;
+
+                        assert(parent && parent->type == AST_STRUCT);
                         decl = find_declaration_for_atom_in_scope(&parent->member_scope, field_atom);
                         decl_scope = &parent->member_scope;
                     }
@@ -2908,12 +2909,12 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     if (compiler->errors_reported) return;
 
                     // @Incomplete we should probably make this work with typealiases.
-                    if (_struct->parent_struct->resolved_declaration->type != AST_STRUCT) {
-                        compiler->report_error(_struct->parent_struct, "Struct parent must a struct.\n");
+                    if (!is_struct_type(_struct->parent_struct->type_value)) {
+                        compiler->report_error(_struct->parent_struct, "Struct parent must be a struct.\n");
                         return;
                     }
 
-                    _struct->type_value->parent_struct = get_type_declaration_resolved_type(_struct->parent_struct->resolved_declaration);
+                    _struct->type_value->parent_struct = _struct->parent_struct->type_value;
                 }
 
                 // flag stuct member declarations
@@ -2935,7 +2936,7 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                     s64 element_path_index = 0;
 
                     if (_struct->parent_struct) {
-                        auto type_value = get_type_declaration_resolved_type(_struct->parent_struct->resolved_declaration);
+                        auto type_value = _struct->parent_struct->type_value;
                         element_path_index = get_final_type(type_value)->struct_decl->final_element_path_index;
                         assert(element_path_index > 0);
                     }

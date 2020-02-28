@@ -222,7 +222,7 @@ struct Ast_Struct : Ast_Scope_Entry {
     Array<Ast_Struct *> polymorphed_structs; // @NoCopy
     Ast_Struct *polymorph_source_struct = nullptr;
 
-    Ast_Identifier *parent_struct = nullptr;
+    Ast_Type_Instantiation *parent_struct = nullptr;
 
     s64 final_element_path_index = -1;   // @NoCopy
     Ast_Type_Info *type_value = nullptr; // @NoCopy

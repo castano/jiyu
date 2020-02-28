@@ -906,7 +906,7 @@ Ast_Expression *Parser::parse_statement() {
         if (peek_token()->type == Token::COLON) {
             next_token();
 
-            _struct->parent_struct = parse_identifier();
+            _struct->parent_struct = parse_type_inst();
         }
 
         set_location_info_from_token(&_struct->member_scope, peek_token());
