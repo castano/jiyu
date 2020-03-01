@@ -620,8 +620,13 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
                 auto target = ltype->pointer_to;
                 auto source = rtype->pointer_to->parent_struct;
 
-                if (source && target == source) {
-                    right = cast_ptr_to_ptr(compiler, right, ltype);
+                while (source) {
+                    if (types_match(target, source)) {
+                        right = cast_ptr_to_ptr(compiler, right, ltype);
+                        break;
+                    }
+
+                    source = get_final_type(source)->parent_struct;
                 }
             }
 
