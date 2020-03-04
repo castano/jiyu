@@ -175,6 +175,10 @@ struct Compiler {
 Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct);
 
 Ast_Type_Info *get_final_type(Ast_Type_Info *info);
+// Like get_final_type, but gets the underlying type of distinct typealiases.
+// Only use this when you actually need to know info on the underlying type.
+Ast_Type_Info *get_underlying_final_type(Ast_Type_Info *info);
+
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right);
 
 inline
@@ -184,55 +188,55 @@ bool is_valid_overloadable_operator(Token::Type op) {
 
 inline
 bool is_int_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::INTEGER;
 }
 
 inline
 bool is_int_or_enum_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::INTEGER || info->type == Ast_Type_Info::ENUM;
 }
 
 inline
 bool is_float_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::FLOAT;
 }
 
 inline
 bool is_pointer_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::POINTER;
 }
 
 inline
 bool is_struct_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::STRUCT;
 }
 
 inline
 bool is_enum_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::ENUM;
 }
 
 inline
 bool is_array_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::ARRAY;
 }
 
 inline
 bool is_aggregate_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::STRUCT || info->type == Ast_Type_Info::STRING;
 }
 
 inline
 bool is_function_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::FUNCTION;
 }
 
@@ -245,13 +249,28 @@ Ast_Type_Info *get_type_info(Ast_Expression *expr) {
 
 inline
 s64 get_alignment(Ast_Type_Info *info) {
-    return get_final_type(info)->alignment;
+    return get_underlying_final_type(info)->alignment;
+}
+
+inline
+s64 get_size(Ast_Type_Info *info) {
+    return get_underlying_final_type(info)->size;
+}
+
+inline
+s64 get_stride(Ast_Type_Info *info) {
+    return get_underlying_final_type(info)->stride;
 }
 
 inline
 bool is_valid_primitive_cast(Ast_Type_Info *target, Ast_Type_Info *source) {
     target = get_final_type(target);
     source = get_final_type(source);
+
+    if (target->type == Ast_Type_Info::ALIAS) {
+        assert(target->is_distinct);
+        return is_valid_primitive_cast(target->alias_of, source);
+    }
 
     if (target->type == Ast_Type_Info::POINTER) {
         return (source->type == Ast_Type_Info::INTEGER || source->type == Ast_Type_Info::POINTER);

@@ -833,6 +833,12 @@ Ast_Expression *Parser::parse_statement() {
     if (token->type == Token::KEYWORD_TYPEALIAS) {
         Ast_Type_Alias *alias = PARSER_NEW(Ast_Type_Alias);
         next_token();
+
+        if (peek_token()->type == Token::TAG_DISTINCT) {
+            alias->is_distinct = true;
+            next_token();
+        }
+
         alias->identifier = parse_identifier();
 
         if (!expect_and_eat(Token::EQUALS)) return nullptr;

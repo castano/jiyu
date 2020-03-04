@@ -69,6 +69,13 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
     if (left->type != right->type) return false;
     if (left->size != right->size) return false;
 
+    if (left->type == Ast_Type_Info::ALIAS) {
+        assert(left->is_distinct);
+        assert(right->is_distinct);
+
+        return left->alias_decl == right->alias_decl;
+    }
+
     if (left->type == Ast_Type_Info::INTEGER) {
         return left->is_signed == right->is_signed;
     }
@@ -95,7 +102,10 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
             return true;
         }
 
-        // @Incomplete how would this work for anonymous structs for which a struct declaration doesnt exist? Do we always just create a faux declaration in that case?
+        // @Incomplete how would this work for anonymous structs for which a struct declaration doesnt exist?
+        // Do we always just create a faux declaration in that case?
+        // We probably handle it like the tuple case, an anonymous struct is the same type as another anonymous struct
+        // if all their field types match.
         assert(left->struct_decl);
         assert(right->struct_decl);
         return left->struct_decl == right->struct_decl;
@@ -835,12 +845,12 @@ Tuple<bool, String> Compiler::find_file_in_library_search_paths(String filename)
 // Expression construction stuff, primarily used by sema and clang_import
 
 Ast_Expression *cast_int_to_int(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
-    while (expr->substitution) expr = expr->substitution;
+    auto source = get_final_type(get_type_info(expr));
 
-    assert(is_int_type(expr->type_info));
+    assert(is_int_type(source));
     assert(is_int_type(target));
 
-    if (target->size == expr->type_info->size) return expr;
+    if (get_size(target) == get_size(source)) return expr;
 
     Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
     copy_location_info(cast, expr);
@@ -1016,6 +1026,14 @@ Ast_Function *make_function(Compiler *compiler, Ast_Identifier *ident) {
 }
 
 Ast_Type_Info *get_final_type(Ast_Type_Info *info) {
+    if (!info) return nullptr;
+
+    while (info->type == Ast_Type_Info::ALIAS && !info->is_distinct) info = info->alias_of;
+
+    return info;
+}
+
+Ast_Type_Info *get_underlying_final_type(Ast_Type_Info *info) {
     if (!info) return nullptr;
 
     while (info->type == Ast_Type_Info::ALIAS) info = info->alias_of;

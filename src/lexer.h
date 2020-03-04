@@ -91,6 +91,7 @@ struct Token {
         TAG_META,
         TAG_EXPORT,
         TAG_FLAGS,
+        TAG_DISTINCT,
 
         TEMPORARY_KEYWORD_C_VARARGS = 400,
 

@@ -326,6 +326,7 @@ void print_type_to_builder(String_Builder *builder, Ast_Type_Info *info) {
             String name = alias->identifier->name->name;
             builder->print("%.*s ", PRINT_ARG(name));
             builder->putchar('(');
+            if (alias->is_distinct) builder->append("@distinct ");
             print_type_to_builder(builder, info->alias_of);
             builder->putchar(')');
         } else {
@@ -591,6 +592,28 @@ Tuple<u64, Ast_Expression *> Sema::typecheck_and_implicit_cast_single_expression
     auto right = expression;
 
     if (!types_match(ltype, rtype)) {
+        if (ltype->type == Ast_Type_Info::ALIAS) {
+            assert(ltype->is_distinct);
+            // If the types do not match and it is because ltype is distinct,
+            // we cannot proceed further with trying to cast this expression.
+            return MakeTuple(viability_score, right);
+        }
+
+        if (rtype->type == Ast_Type_Info::ALIAS) {
+            assert(rtype->is_distinct);
+
+            rtype = get_underlying_final_type(rtype);
+            // insert a cast so the rest of the implicit casting works correctly.
+            // @Cutnpaste from cast_int_to_int
+            Ast_Cast *cast = SEMA_NEW(Ast_Cast);
+            copy_location_info(cast, right);
+            cast->expression = right;
+            cast->type_info = rtype;
+
+            right = cast;
+            viability_score += 1;
+        }
+
         if (is_int_type(ltype) && is_int_type(rtype) && (ltype->is_signed == rtype->is_signed)) {
             if (ltype->size > rtype->size) {
                 right = cast_int_to_int(compiler, right, ltype);
@@ -1057,7 +1080,49 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
     u64  left_viability_score  = 0;
     u64  right_viability_score = 0;
 
+    defer {
+        if (result_left)  *result_left  = left;
+        if (result_right) *result_right = right;
+    };
+
     if (!types_match(ltype, rtype)) {
+
+        if (ltype->type == Ast_Type_Info::ALIAS && rtype->type == Ast_Type_Info::ALIAS) {
+            assert(rtype->is_distinct);
+            assert(ltype->is_distinct);
+            // If the types do not match and it is because both types are distinct
+            // we cannot cast away from either.
+            MakeTuple(left_viability_score, right_viability_score);
+        }
+
+        if (rtype->type == Ast_Type_Info::ALIAS) {
+            assert(rtype->is_distinct);
+
+            rtype = get_underlying_final_type(rtype);
+            // insert a cast so the rest of the implicit casting works correctly.
+            // @Cutnpaste from cast_int_to_int
+            Ast_Cast *cast = SEMA_NEW(Ast_Cast);
+            copy_location_info(cast, right);
+            cast->expression = right;
+            cast->type_info = rtype;
+
+            right = cast;
+            right_viability_score += 1;
+        } else if (ltype->type == Ast_Type_Info::ALIAS) {
+            assert(ltype->is_distinct);
+
+            ltype = get_underlying_final_type(ltype);
+            // insert a cast so the rest of the implicit casting works correctly.
+            // @Cutnpaste from cast_int_to_int
+            Ast_Cast *cast = SEMA_NEW(Ast_Cast);
+            copy_location_info(cast, left);
+            cast->expression = left;
+            cast->type_info = ltype;
+
+            left = cast;
+            left_viability_score += 1;
+        }
+
         if (is_int_type(ltype) && is_int_type(rtype) && (ltype->is_signed == rtype->is_signed)) {
             if (ltype->size < rtype->size) {
                 left = cast_int_to_int(compiler, left, rtype);
@@ -1098,9 +1163,6 @@ Tuple<u64, u64> Sema::typecheck_and_implicit_cast_expression_pair(Ast_Expression
             right_viability_score += 1;
         }
     }
-
-    if (result_left)  *result_left  = left;
-    if (result_right) *result_right = right;
 
     return MakeTuple(left_viability_score, right_viability_score);
 }
@@ -2857,6 +2919,8 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                 // Otherwise something might try to resolve before struct_decl is fully typechecked.
                 if (get_final_type(alias->type_value)->struct_decl) typecheck_expression(get_final_type(alias->type_value)->struct_decl);
             }
+
+            alias->type_value->is_distinct = alias->is_distinct;
             alias->type_info = compiler->type_info_type;
             return;
         }
