@@ -53,6 +53,15 @@ static void add_type(String_Builder *builder, Ast_Type_Info *type) {
         builder->putchar('p');
         add_type(builder, type->pointer_to);
     } else if (type->type == Ast_Type_Info::ALIAS) {
+        if (type->is_distinct) {
+            builder->putchar('D');
+            auto alias = type->alias_decl;
+            assert(alias);
+
+            // @Incomplete typealiases that are declared within named-scopes.
+            String name = alias->identifier->name->name;
+            builder->print("%d%.*s", name.length, name.length, name.data);
+        }
         add_type(builder, type->alias_of);
     } else if (type->type == Ast_Type_Info::ARRAY) {
         builder->putchar('A');
@@ -90,7 +99,7 @@ static void add_type(String_Builder *builder, Ast_Type_Info *type) {
             }
         }
 
-        // @Incomplete structs that are declared with other structs/named-scopes.
+        // @Incomplete structs that are declared within other structs/named-scopes.
         // @Incomplete anonymous structs?
         String name = type->struct_decl->identifier->name->name;
         builder->print("%d%.*s", name.length, name.length, name.data);
@@ -2180,38 +2189,18 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
         case AST_LITERAL: {
             auto lit = static_cast<Ast_Literal *>(expression);
 
-            if (want_numeric_type) want_numeric_type = get_final_type(want_numeric_type);
-
-            // @Incomplete @Cleanup we should be able to get rid of want_numeric_type here now that literal folding exists.
-
             // @Incomplete if we have a float literal but want an int type, keep a float type and let the implicit cast system do its job
             if (lit->literal_type == Ast_Literal::INTEGER) {
-                if (want_numeric_type && (is_int_type(want_numeric_type) || is_float_type(want_numeric_type))) {
-                    // @Incomplete check that number can fit in target type
-                    // @Incomplete cast to float if we have an int literal
-                    lit->type_info = want_numeric_type;
-
-
-                    // @Cleanup I'm mutating the literal for now, but this would be a good place to use substitution, I think
-                    // Or since literal ints are considered completely typeless up until this point, maybe this is the right thing to do
-                    if (want_numeric_type->type == Ast_Type_Info::FLOAT) {
-                        lit->literal_type = Ast_Literal::FLOAT;
-                        // @Cleanup the u64 cast
-                        lit->float_value = static_cast<double>((u64)lit->integer_value);
-                    }
-                } else {
-                    // This does not take into account if the literal is negative... but the lexer currently does not
-                    // lex negative numbers so maybe we shouldnt worry about that here.. @TODO -josh 22 December 2019
-                    if (static_cast<u32>(lit->integer_value) == lit->integer_value)
-                        lit->type_info = compiler->type_int32;
-                    else
-                        lit->type_info = compiler->type_int64;
-                }
+                // This does not take into account if the literal is negative... but the lexer currently does not
+                // lex negative numbers so maybe we shouldnt worry about that here.. @TODO -josh 22 December 2019
+                if (static_cast<u32>(lit->integer_value) == lit->integer_value)
+                    lit->type_info = compiler->type_int32;
+                else
+                    lit->type_info = compiler->type_int64;
             }
 
             if (lit->literal_type == Ast_Literal::FLOAT) {
-                if (want_numeric_type && is_float_type(want_numeric_type)) lit->type_info = want_numeric_type;
-                else lit->type_info = compiler->type_float64; // @TODO we should probably have a check that verifies if the literal can fit in a 32-bit float and then default to that.
+                lit->type_info = compiler->type_float64; // @TODO we should probably have a check that verifies if the literal can fit in a 32-bit float and then default to that.
             }
 
             if (lit->literal_type == Ast_Literal::STRING)  lit->type_info = compiler->type_string;
@@ -2220,9 +2209,6 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
 
             if (lit->literal_type == Ast_Literal::NULLPTR) {
                 lit->type_info = compiler->type_ptr_void;
-                if (want_numeric_type && is_pointer_type(want_numeric_type)) {
-                    lit->type_info = want_numeric_type;
-                }
             }
 
             assert(lit->type_info);
