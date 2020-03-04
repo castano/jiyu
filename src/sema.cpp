@@ -2943,6 +2943,10 @@ void Sema::typecheck_expression(Ast_Expression *expression, Ast_Type_Info *want_
                         auto type_value = _struct->parent_struct->type_value;
                         element_path_index = get_final_type(type_value)->struct_decl->final_element_path_index;
                         assert(element_path_index > 0);
+
+                        // Since the parent struct is used as if the individual fields have been declared within this struct
+                        // we use the size instead of the stride.
+                        offset_cursor = type_value->size;
                     }
 
                     // This is likely super @Incomplete                

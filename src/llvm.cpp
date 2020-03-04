@@ -474,10 +474,15 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
         final_type->setBody(ArrayRef<Type *>(member_types.data, member_types.count), false/*is packed*/);
 
-        // auto size       = TargetMachine->createDataLayout().getTypeSizeInBits(final_type) / 8;
-        // auto alloc_size = TargetMachine->createDataLayout().getTypeAllocSizeInBits(final_type) / 8;
-        // printf("%.*s: %d, alloc %d\n", PRINT_ARG(name), size, alloc_size);
-        // assert(alloc_size == type->stride);
+        // There doesnt seem to be a way to tell LLVM that this data structure has custom alignment
+        // so it's alloc size should technically be slightly larger.
+        // if (type->alignment <= 8) {
+        //     final_type->dump();
+        //     auto size       = TargetMachine->createDataLayout().getTypeSizeInBits(final_type) / 8;
+        //     auto alloc_size = TargetMachine->createDataLayout().getTypeAllocSizeInBits(final_type) / 8;
+        //     printf("%.*s: %d, alloc %d\n", PRINT_ARG(name), size, alloc_size);
+        //     assert(alloc_size == type->stride);
+        // }
 
         // final_type->dump();
 
