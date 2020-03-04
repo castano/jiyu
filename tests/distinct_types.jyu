@@ -1,0 +1,69 @@
+#import "LibC";
+
+func main() {
+    typealias A = int;
+    typealias B = int;
+
+    var a: A = 1;
+    var b: B;
+
+    // For normal typealiases, the alias is a loose
+    // renaming off the input type. All operations that
+    // work on the input type, work on the aliased type
+    // as if the aliased type is the same exact type.
+    a + b;
+
+    // For @distinct typealiases, these same operations are
+    // valid, however, the type system does not allow intermingling
+    // of a distinct type and its underlying type, without a cast.
+    typealias @distinct C = int;
+    typealias @distinct D = int;
+    var c: C = 10;
+    var d: D = 11;
+
+    // c + a; // not allowed
+    // d + b; // not allowed
+
+    // c + d; // not allowed
+
+    var e: C = 23;
+    var f: D = 24;
+
+    var g = c + e; // allowed
+    var h = d + f; // allowed
+
+    // g += a; // you are not allowed to implicit cast to the type
+    g += cast(C) a; // you are allowed to explicit cast to the type
+
+    a = g; // you are allowed to implicit cast from the type.
+
+    var n = g + a; // since you cannot implicit cast to a distinct type, n becomes a regular int32
+
+    // g += n; // this is not allowed
+    n += g; // this is allowed
+
+    printf("g: %d\n", g);
+    printf("h: %d\n", h);
+    printf("a: %d\n", a);
+    printf("n: %d\n", n);
+
+    func test(a: C) {
+        printf("C test\n");
+    }
+
+    func test(a: D) {
+        printf("D test\n");
+    }
+
+    func test(a: int) {
+        printf("int test\n");
+    }
+
+    // Since a literal mutation will change the literal from an int to a distinct type
+    // it becomes less viable as a function parameter, so plain int is selected
+    // over C or D since it requires less mutations and less casting.
+    test(1);
+    test(c);
+    test(d);
+}
+

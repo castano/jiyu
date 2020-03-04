@@ -481,15 +481,15 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
 
     u64 viability_score = 0;
     if (lit->literal_type == Ast_Literal::INTEGER) {
-        if (target_type->type == Ast_Type_Info::INTEGER || target_type->type == Ast_Type_Info::ENUM || target_type->type == Ast_Type_Info::FLOAT) {
+        if (is_int_or_enum_type(target_type) || is_float_type(target_type)) {
             if (!types_match(get_type_info(lit), target_type)) {
                 viability_score += 1;
             }
             auto old_type = lit->type_info;
 
-            if (target_type->type == Ast_Type_Info::INTEGER || target_type->type == Ast_Type_Info::ENUM) {
+            if (is_int_or_enum_type(target_type)) {
                 auto target = target_type;
-                if (target_type->type == Ast_Type_Info::ENUM) target = target_type->enum_base_type;
+                if (is_enum_type(target_type)) target = target_type->enum_base_type;
 
                 // I have disabled this stuff for the time being because it prevents the user from being able to do:
                 // let MY_UNSIGNED_VALUE: uint32 = -1;
@@ -519,7 +519,7 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
                 }
                 */
             }
-            else if (target_type->type == Ast_Type_Info::FLOAT) {
+            else if (is_float_type(target_type)) {
                 // @@ Check that integer can be represented exactly with a float.
             }
             
@@ -528,7 +528,7 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
 
             // @Cleanup I'm mutating the literal for now, but this would be a good place to use substitution, I think
             // Or since literal ints are considered completely typeless up until this point, maybe this is the right thing to do
-            if (target_type->type == Ast_Type_Info::FLOAT) {
+            if (is_float_type(target_type)) {
                 lit->literal_type = Ast_Literal::FLOAT;
 
                 if (old_type->is_signed) {
@@ -543,7 +543,7 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
         }
     }
     else if (lit->literal_type == Ast_Literal::FLOAT) {
-        if (target_type && target_type->type == Ast_Type_Info::FLOAT) {
+        if (target_type && is_float_type(target_type)) {
             if (!types_match(get_type_info(lit), target_type)) viability_score += 1;
             lit->type_info = target_type;
         }
@@ -551,9 +551,9 @@ u64 maybe_mutate_literal_to_type(Ast_Literal *lit, Ast_Type_Info *target_type) {
     }
 
     else if (lit->literal_type == Ast_Literal::NULLPTR) {
-        if (target_type->type == Ast_Type_Info::POINTER) {
+        if (is_pointer_type(target_type)) {
             lit->type_info = target_type;
-        } else if (target_type->type == Ast_Type_Info::FUNCTION) {
+        } else if (is_function_type(target_type)) {
             lit->type_info = target_type;
         }
     }
