@@ -40,7 +40,7 @@ extern "C" {
     EXPORT void compiler_add_library_search_path(Compiler *compiler, String path);
     EXPORT void compiler_add_module_search_path(Compiler *compiler, String path);
     EXPORT void compiler_add_compiled_object_for_linking(Compiler *compiler, String path);
-    EXPORT String_Array compiler_get_loaded_files(Compiler *compiler, String filename);
+    EXPORT String_Array compiler_get_loaded_files(Compiler *compiler);
 
 #ifdef __cplusplus
 } // extern "C"

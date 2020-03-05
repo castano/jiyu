@@ -521,7 +521,7 @@ extern "C" {
         compiler->user_supplied_objs.add(copy_string(path));
     }
 
-    EXPORT String_Array compiler_get_loaded_files(Compiler *compiler, String filename) {
+    EXPORT String_Array compiler_get_loaded_files(Compiler *compiler) {
         Array<String> array;
         array.resize(compiler->loaded_imports.count);
        
