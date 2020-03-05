@@ -563,6 +563,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
 
 
 bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *target_scope) {
+    MICROPROFILE_SCOPEI("clang", "perform_import", -1);
     CXIndex index = clang_createIndex(/*excludeDeclarationsFromPCH=*/0, /*displayDiagnostics=*/0);
 
     // @Incomplete
