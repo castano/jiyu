@@ -1327,6 +1327,8 @@ bool Parser::add_declaration(Array<Ast_Scope_Entry *> *declarations, Ast_Scope_E
 }
 
 void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_statement, bool push_scope, bool is_for_case) {
+    MICROPROFILE_SCOPEI("parser", "parse_scope", -1);
+
     if (push_scope) push_scopes(scope);
 
     if (!requires_braces && only_one_statement == true && peek_token()->type == '{') {

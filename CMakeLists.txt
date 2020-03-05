@@ -16,6 +16,23 @@ endif()
 #include_directories()
 
 set (JIYU_SRCS
+    src/ast.h
+    src/clang_import.h
+    src/compiler.h
+    src/compiler_api.h
+    src/copier.h
+    src/compiler.h
+    src/general.h
+    src/lexer.h
+    src/llvm.h
+    src/meow_hash.h
+    src/meow_intrinsics.h
+    src/microprofile.h
+    src/microprofile_html.h
+    src/microsoft_craziness.h
+    src/os_support.h
+    src/parser.h
+    src/sema.h
     src/parser.cpp
     src/lexer.cpp
     src/compiler.cpp
@@ -25,6 +42,7 @@ set (JIYU_SRCS
     src/copier.cpp
     src/os_support.cpp
     src/clang_import.cpp
+    src/microprofile.cpp
 )
 
 set (JIYU_DRIVER_SRCS

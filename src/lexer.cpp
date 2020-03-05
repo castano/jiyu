@@ -618,6 +618,7 @@ Token Lexer::lex_token() {
 }
 
 void Lexer::tokenize_text() {
+    MICROPROFILE_SCOPEI("lexer", "tokenize_text", -1);
     Token tok;
     do {
         tok = lex_token();

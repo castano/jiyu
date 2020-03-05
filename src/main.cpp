@@ -116,6 +116,16 @@ int main(int argc, char **argv) {
     options.verbose_diagnostics = verbose;
     options.emit_llvm_ir        = emit_llvm_ir;
 
+    // Start profiling.
+    MicroProfileOnThreadCreate("Main");
+    MicroProfileSetEnableAllGroups(true);
+    MicroProfileSetForceMetaCounters(true);
+    
+    defer {
+        MicroProfileDumpFileImmediately("microprofile.html", nullptr, nullptr);
+        MicroProfileShutdown();
+    };
+
     auto compiler = create_compiler_instance(&options);
 //     defer { destroy_compiler_instance(compiler); };
 
@@ -146,6 +156,7 @@ int main(int argc, char **argv) {
     if (compiler->is_metaprogram) {
         if (!compiler_jit_program(compiler)) return -1;
 
+        MICROPROFILE_SCOPEI("main", "run", -1);
         String symbol = to_string("main");
         auto *Main = (void (*)(s32 argc, char **argv)) compiler_jit_lookup_symbol(compiler, symbol);
         if (!Main) {

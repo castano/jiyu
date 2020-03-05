@@ -65,6 +65,7 @@ bool read_entire_file(String filepath, String *result) {
 
 static
 void perform_load_from_string(Compiler *compiler, String source, Ast_Scope *target_scope) {
+    MICROPROFILE_SCOPEI("compiler", "perform_load_from_string", -1);
     Lexer *lexer = new Lexer(compiler, source, to_string(""));
     lexer->tokenize_text();
 
@@ -78,6 +79,7 @@ void perform_load_from_string(Compiler *compiler, String source, Ast_Scope *targ
 }
 
 void perform_load(Compiler *compiler, Ast *ast, String filename, Ast_Scope *target_scope) {
+    MICROPROFILE_SCOPEI("compiler", "perform_load", -1);
     String source;
     bool success = read_entire_file(filename, &source);
     if (!success) {
@@ -152,6 +154,8 @@ extern "C" {
     }
 
     EXPORT Compiler *create_compiler_instance(Build_Options *options) {
+        MICROPROFILE_SCOPEI("compiler", "create_compiler_instance", -1);
+
         auto compiler = new Compiler();
 
         compiler->instance_number = __compiler_instance_count++;
@@ -223,6 +227,8 @@ extern "C" {
     }
 
     EXPORT bool compiler_run_default_link_command(Compiler *compiler) {
+        MICROPROFILE_SCOPEI("compiler", "compiler_run_default_link_command", -1);
+
         if (compiler->build_options.only_want_obj_file) return true;
         if (compiler->build_options.executable_name == to_string("")) return false;
 
@@ -439,6 +445,8 @@ extern "C" {
     }
 
     EXPORT bool compiler_typecheck_program(Compiler *compiler) {
+        MICROPROFILE_SCOPEI("compiler", "typecheck_program", -1);
+
         compiler->resolve_directives();
         if (compiler->errors_reported) return false;
 
@@ -475,6 +483,8 @@ extern "C" {
     }
 
     EXPORT bool compiler_generate_llvm_module(Compiler *compiler) {
+        MICROPROFILE_SCOPEI("compiler", "generate_llvm_module", -1);
+
         compiler->llvm_gen->init();
 
         for (auto decl: compiler->global_decl_emission_queue) {
@@ -492,11 +502,15 @@ extern "C" {
     }
 
     EXPORT bool compiler_emit_object_file(Compiler *compiler) {
+        MICROPROFILE_SCOPEI("compiler", "emit_object_file", -1);
+
         compiler->llvm_gen->finalize();
         return compiler->errors_reported == 0;
     }
 
     EXPORT bool compiler_jit_program(Compiler *compiler) {
+        MICROPROFILE_SCOPEI("compiler", "jit_program", -1);
+
         compiler->jitter->init();
         return compiler->errors_reported == 0;
     }
