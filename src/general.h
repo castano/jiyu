@@ -188,6 +188,11 @@ struct String {
     }
 };
 
+struct String_Array {
+    String *data = nullptr;
+    array_count_type count = 0;
+};
+
 // For use with %.*s format. Note the int cast to avoid warning.
 #define PRINT_ARG(str) (int)((str).length), (str).data
 
