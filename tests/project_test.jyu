@@ -1,0 +1,37 @@
+
+#import "Compiler";
+#import "Basic";
+#import "LibC";
+
+
+func print_file_list(compiler: *Compiler) {
+    // Get files from compiler.
+    var project_files = compiler_get_loaded_files(compiler);
+
+    printf("Project files:\n");
+    for project_files {
+        printf("%.*s\n", it.length, it.data);
+    }
+}
+
+func @metaprogram main() {
+
+    var path = "project_test.jyu";
+
+    var options: Build_Options;
+    options.executable_name = strip_path_extension(path);
+
+    var compiler = create_compiler_instance(*options);
+
+    if compiler_load_file(compiler, path) != true return;
+
+    if compiler_typecheck_program(compiler) != true return;
+
+    print_file_list(compiler);
+
+    if compiler_generate_llvm_module(compiler) != true return;
+
+    if compiler_emit_object_file(compiler) != true return;
+    if compiler_run_default_link_command(compiler) != true return;
+
+}

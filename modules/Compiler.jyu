@@ -22,6 +22,8 @@ func @c_function compiler_system_set_default_module_search_path(path: string) ->
 func @c_function create_compiler_instance(options: *Build_Options) -> *Compiler;
 func @c_function destroy_compiler_instance(compiler: *Compiler) -> void;
 
+func @c_function compiler_get_build_options(compiler: *Compiler) -> *Build_Options;
+
 func @c_function compiler_load_file(compiler: *Compiler, filename: string) -> bool;
 func @c_function compiler_load_string(compiler: *Compiler, source: string) -> bool;
 
@@ -52,3 +54,5 @@ func compiler_run_metaprogram(compiler: *Compiler, argc: int32, argv: **uint8) -
 func @c_function compiler_add_library_search_path(compiler: *Compiler, path: string) -> void;
 func @c_function compiler_add_module_search_path(compiler: *Compiler, path: string) -> void;
 func @c_function compiler_add_compiled_object_for_linking(compiler: *Compiler, path: string) -> void;
+
+func @c_function compiler_get_loaded_files(compiler: *Compiler) -> []string;

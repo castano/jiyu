@@ -222,6 +222,10 @@ extern "C" {
         delete compiler;
     }
 
+    EXPORT Build_Options *compiler_get_build_options(Compiler *compiler) {
+        return &compiler->build_options;
+    }
+
     EXPORT bool compiler_run_default_link_command(Compiler *compiler) {
         if (compiler->build_options.only_want_obj_file) return true;
         if (compiler->build_options.executable_name == to_string("")) return false;
@@ -516,4 +520,18 @@ extern "C" {
     EXPORT void compiler_add_compiled_object_for_linking(Compiler *compiler, String path) {
         compiler->user_supplied_objs.add(copy_string(path));
     }
+
+    EXPORT String_Array compiler_get_loaded_files(Compiler *compiler, String filename) {
+        Array<String> array;
+        array.resize(compiler->loaded_imports.count);
+       
+        for (int i = 0; i < array.count; i++) {
+            array.data[i] = compiler->loaded_imports[i]->target_filename;
+        }
+
+        String_Array result = {array.data, array.count};
+        return result;
+        //return MakeTuple(array.data, array.count);
+    }
+
 }

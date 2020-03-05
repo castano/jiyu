@@ -28,6 +28,7 @@ extern "C" {
 
     EXPORT Compiler *create_compiler_instance(Build_Options *options);
     EXPORT void destroy_compiler_instance(Compiler *compiler);
+    EXPORT Build_Options *compiler_get_build_options(Compiler *compiler);
     EXPORT bool compiler_run_default_link_command(Compiler *compiler);
     EXPORT bool compiler_load_file(Compiler *compiler, String filename);
     EXPORT bool compiler_load_string(Compiler *compiler, String source);
@@ -39,6 +40,7 @@ extern "C" {
     EXPORT void compiler_add_library_search_path(Compiler *compiler, String path);
     EXPORT void compiler_add_module_search_path(Compiler *compiler, String path);
     EXPORT void compiler_add_compiled_object_for_linking(Compiler *compiler, String path);
+    EXPORT String_Array compiler_get_loaded_files(Compiler *compiler, String filename);
 
 #ifdef __cplusplus
 } // extern "C"
