@@ -57,6 +57,7 @@ struct Parser {
     Ast_Expression *parse_expression();
     Ast_Expression *parse_statement();
     
+    Ast_Type_Instantiation *parse_primary_type_inst();
     Ast_Type_Instantiation *parse_type_inst();
     
     Ast_Declaration *parse_variable_declaration(bool expect_var_keyword, bool enum_value_declaration = false);
@@ -65,7 +66,7 @@ struct Parser {
     
     Ast_Function *parse_function();
 
-    bool add_declaration(Array<Ast_Expression *> * declarations, Ast_Expression * decl);
+    bool add_declaration(Array<Ast_Scope_Entry *> *declarations, Ast_Scope_Entry *decl);
 };
 
 #endif

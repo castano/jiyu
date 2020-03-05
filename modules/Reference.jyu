@@ -1,0 +1,55 @@
+
+// Simple implementation of a reference since this language does not
+// have reference types
+
+// We currently do not support overloading the dot operator
+// So having a reference of a struct or struct-like type
+// does not allow the syntactic convinience of using those
+// types directly.
+
+// We currently do not have a way to tell the compiler that use
+// of the type in an rvalue context should always dereference to
+// the internal data, pointed to by the data pointer. This means that
+/*
+var i: int;
+var ref: Reference<int>;
+ref.data = *i;
+var value = ref; // value is of type Reference<int> instead of int.
+*/
+
+struct Reference<T> {
+    var data: *T;
+
+    operator= <T>(ref: Reference<T>, rhs: T) {
+        <<ref.data = rhs;
+    }
+
+    operator+ <T>(ref: Reference<T>, rhs: T) -> T {
+        return (<<ref.data) + rhs;
+    }
+
+    operator- <T>(ref: Reference<T>, rhs: T) -> T {
+        return (<<ref.data) - rhs;
+    }
+
+    operator* <T>(ref: Reference<T>, rhs: T) -> T {
+        return (<<ref.data) * rhs;
+    }
+
+    operator/ <T>(ref: Reference<T>, rhs: T) -> T {
+        return (<<ref.data) / rhs;
+    }
+
+    operator[] <T>(ref: Reference<T>, index: array_count_type) -> T {
+        return (<<ref.data)[index];
+    }
+
+}
+
+// Prevents copying the reference when assigned to the internal type.
+// Assignment operator defaults to taking a pointer to the left-hand-side
+// value if it cannot pass the value in unmodified.
+operator= <T>(lhs: *T, ref: Reference<T>) {
+    <<lhs = <<ref.data;
+}
+

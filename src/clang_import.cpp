@@ -15,7 +15,15 @@
 #pragma warning(pop)
 #endif
 
-#define IMPORT_NEW(type) (new (compiler->get_memory(sizeof(type))) type())
+#define IMPORT_NEW(type) ((type *)init_ast(new (compiler->get_memory(sizeof(type))) type(), filename))
+#define IMPORT_NEW2(type) (new (compiler->get_memory(sizeof(type))) type())
+
+static
+void *init_ast(Ast *_new, String filename) {
+    _new->filename = filename;
+    return _new;
+}
+
 
 // Map Clang USR to Jiyu AST nodes.
 struct USR_Pair {
@@ -115,9 +123,10 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
         case CXType_Float128: {
             auto size = clang_Type_getSizeOf(type);
 
-            if      (size == 4) return compiler->type_float32;
-            else if (size == 8) return compiler->type_float64;
-            else assert(false); // @Incomplete 128bit ? half/float16
+            if      (size == 4)  return compiler->type_float32;
+            else if (size == 8)  return compiler->type_float64;
+            else if (size == 16) return compiler->type_float128;
+            else assert(false); // @Incomplete half/float16 ?
 
             return nullptr;
         }
@@ -193,7 +202,7 @@ Ast_Type_Info *get_jiyu_type(Visitor_Data *data, CXType type) {
         // CXType_FunctionNoProto = 110,
         case CXType_FunctionProto: {
             // @Cutnpaste from Compiler::make_function_type
-            Ast_Type_Info *info = IMPORT_NEW(Ast_Type_Info);
+            Ast_Type_Info *info = IMPORT_NEW2(Ast_Type_Info);
             info->type      = Ast_Type_Info::FUNCTION;
             info->size      = compiler->type_ptr_void->size;
             info->stride    = compiler->type_ptr_void->stride;
@@ -277,7 +286,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
     unsigned offset;
     clang_getFileLocation(location, &file, &line, &column, &offset);
 
-//     auto filename = copy_and_dispose(compiler, clang_getFileName(file));
+    auto filename = copy_and_dispose(compiler, clang_getFileName(file));
 
     switch (cursor.kind) {
         case CXCursor_UnexposedAttr: {
@@ -455,8 +464,15 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
             } else {
                 _struct = IMPORT_NEW(Ast_Struct);
                 _struct->is_union = (cursor.kind == CXCursor_UnionDecl);
+                _struct->is_anonymous = (clang_Cursor_isAnonymousRecordDecl(cursor) != 0);
                 _struct->type_value = make_struct_type(compiler, _struct);
-                add_usr_mapping(usr_map, my_usr_string, _struct);
+
+                // Do not add anonymous records to USR mappings,
+                // because two anonymous records in the same scope
+                // have the same USR mapping (and because we will not be referenced by variable declarations).
+                if (!_struct->is_anonymous) add_usr_mapping(usr_map, my_usr_string, _struct);
+
+                if (_struct->is_anonymous) assert(clang_isCursorDefinition(cursor));
             }
 
             assert(_struct->type == AST_STRUCT);
@@ -521,6 +537,12 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
             // decl->is_struct_member = true; // This will be set via typechecking anyways..
             decl->type_info = info;
 
+            if (clang_Cursor_isBitField(cursor)) {
+                // @FixMe report error in a better way
+                auto filename = copy_and_dispose(compiler, clang_getFileName(file));
+                compiler->report_error((Token *)nullptr, "Bitfields are unsupported. Found while importing code at %.*s:%u:%u\n", PRINT_ARG(filename), line, column);
+            }
+
             current_scope->statements.add(decl);
             current_scope->declarations.add(decl);
             break;
@@ -541,6 +563,7 @@ CXChildVisitResult cursor_visitor(CXCursor cursor, CXCursor parent, CXClientData
 
 
 bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *target_scope) {
+    MICROPROFILE_SCOPEI("clang", "perform_import", -1);
     CXIndex index = clang_createIndex(/*excludeDeclarationsFromPCH=*/0, /*displayDiagnostics=*/0);
 
     // @Incomplete
@@ -603,6 +626,8 @@ bool perform_clang_import(Compiler *compiler, char *c_filepath, Ast_Scope *targe
     }
 
     if (compiler->errors_reported) return false;
+
+    String filename; // @Hack for IMPORT_NEW
 
     Array<USR_Pair> usr_map;
     Visitor_Data    data;

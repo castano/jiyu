@@ -69,6 +69,13 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
     if (left->type != right->type) return false;
     if (left->size != right->size) return false;
 
+    if (left->type == Ast_Type_Info::ALIAS) {
+        assert(left->is_distinct);
+        assert(right->is_distinct);
+
+        return left->alias_decl == right->alias_decl;
+    }
+
     if (left->type == Ast_Type_Info::INTEGER) {
         return left->is_signed == right->is_signed;
     }
@@ -95,7 +102,10 @@ bool types_match(Ast_Type_Info *left, Ast_Type_Info *right) {
             return true;
         }
 
-        // @Incomplete how would this work for anonymous structs for which a struct declaration doesnt exist? Do we always just create a faux declaration in that case?
+        // @Incomplete how would this work for anonymous structs for which a struct declaration doesnt exist?
+        // Do we always just create a faux declaration in that case?
+        // We probably handle it like the tuple case, an anonymous struct is the same type as another anonymous struct
+        // if all their field types match.
         assert(left->struct_decl);
         assert(right->struct_decl);
         return left->struct_decl == right->struct_decl;
@@ -353,8 +363,9 @@ void Compiler::init() {
     type_uint32 = make_int_type(this, false, 4);
     type_uint64 = make_int_type(this, false, 8);
 
-    type_float32 = make_float_type(this, 4);
-    type_float64 = make_float_type(this, 8);
+    type_float32  = make_float_type(this, 4);
+    type_float64  = make_float_type(this, 8);
+    type_float128 = make_float_type(this, 16);
 
     type_string_data = make_pointer_type(type_uint8);
 
@@ -373,8 +384,10 @@ void Compiler::init() {
 
     if (is_64bits) {
         type_array_count = type_int64; // @TargetInfo
+        type_array_count_unsigned = type_uint64; // @TargetInfo
     } else if (is_32bits) {
         type_array_count = type_int32; // @TargetInfo
+        type_array_count_unsigned = type_uint32; // @TargetInfo
     }
 
     type_info_type = COMPILER_NEW(Ast_Type_Info);
@@ -400,6 +413,8 @@ void Compiler::init() {
     atom_MacOSX    = make_atom(to_string("MacOSX"));
     atom_Windows   = make_atom(to_string("Windows"));
     atom_Linux     = make_atom(to_string("Linux"));
+
+    atom_builtin_debugtrap = make_atom(BUILTIN_DEBUGTRAP_NAME);
 }
 
 void Compiler::add_to_type_table(Ast_Type_Info *info) {
@@ -513,8 +528,9 @@ void Compiler::resolve_directives() {
             Ast_Scope_Expansion *exp = COMPILER_NEW(Ast_Scope_Expansion);
             exp->text_span = import->imported_scope->text_span;
             exp->filename = import->imported_scope->filename;
+            exp->declaration_flags |= DECLARATION_IS_PRIVATE;
 
-            import->scope_i_belong_to->private_declarations.add(exp);
+            import->scope_i_belong_to->declarations.add(exp);
 
             exp->scope = import->imported_scope;
             exp->expanded_via_import_directive = import;
@@ -578,6 +594,11 @@ void Compiler::resolve_directives() {
                 }
                 case Ast_Literal::NULLPTR: {
                     chosen_block = _if->else_scope;
+                    break;
+                }
+
+                case Ast_Literal::FUNCTION: {
+                    chosen_block = _if->then_scope;
                     break;
                 }
             }
@@ -824,12 +845,12 @@ Tuple<bool, String> Compiler::find_file_in_library_search_paths(String filename)
 // Expression construction stuff, primarily used by sema and clang_import
 
 Ast_Expression *cast_int_to_int(Compiler *compiler, Ast_Expression *expr, Ast_Type_Info *target) {
-    while (expr->substitution) expr = expr->substitution;
+    auto source = get_final_type(get_type_info(expr));
 
-    assert(is_int_type(expr->type_info));
+    assert(is_int_type(source));
     assert(is_int_type(target));
 
-    if (target->size == expr->type_info->size) return expr;
+    if (get_size(target) == get_size(source)) return expr;
 
     Ast_Cast *cast = COMPILER_NEW2(Ast_Cast);
     copy_location_info(cast, expr);
@@ -932,6 +953,16 @@ Ast_Literal *make_null_literal(Compiler *compiler, Ast_Type_Info *pointer_type, 
     return lit;
 }
 
+Ast_Literal *make_function_literal(Compiler *compiler, Ast_Function *function, Ast *source_loc) {
+    Ast_Literal *lit = COMPILER_NEW2(Ast_Literal);
+    lit->literal_type = Ast_Literal::FUNCTION;
+    lit->type_info = get_type_info(function);
+    lit->function = function;
+
+    if (source_loc) copy_location_info(lit, source_loc);
+    return lit;
+}
+
 
 Ast_Identifier *make_identifier(Compiler *compiler, Atom *name) {
     Ast_Identifier *ident = COMPILER_NEW2(Ast_Identifier);
@@ -988,7 +1019,21 @@ Ast_Type_Alias *make_type_alias(Compiler *compiler, Ast_Identifier *ident, Ast_T
     return alias;
 }
 
+Ast_Function *make_function(Compiler *compiler, Ast_Identifier *ident) {
+    Ast_Function *func = COMPILER_NEW2(Ast_Function);
+    func->identifier = ident;
+    return func;
+}
+
 Ast_Type_Info *get_final_type(Ast_Type_Info *info) {
+    if (!info) return nullptr;
+
+    while (info->type == Ast_Type_Info::ALIAS && !info->is_distinct) info = info->alias_of;
+
+    return info;
+}
+
+Ast_Type_Info *get_underlying_final_type(Ast_Type_Info *info) {
     if (!info) return nullptr;
 
     while (info->type == Ast_Type_Info::ALIAS) info = info->alias_of;

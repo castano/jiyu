@@ -1,0 +1,46 @@
+#import "LibC";
+
+struct Poly<T> {
+    var a: T;
+
+    func do_thing(this: *Poly<T>) {
+        if (T == int)   printf("%d\n", this.a);
+        if (T == float) printf("%f\n", this.a);
+
+        // Unfortunately, we cannot straight up do this because this is invalid when T == int or T == float
+        // if (T == string)printf("%.*s\n", this.a.length, this.a.data);
+
+        // But if we added another static-if construct like `when` in Odin then
+        /*
+            when (T == string) printf("%.*s\n", this.a.length, this.a.data);
+        */
+        // would work. I do not want to make #if this generous as #if operates directly on
+        // the scope it is declared in, `when` on the other hand would work exactly like a
+        // a regular `if` except the body is only evaluated when the condition is a literal
+        // `true` (or folds to).
+    }
+}
+
+#import "Basic";
+#import "Array";
+
+func main() {
+    var a: Poly<int>;
+    a.a = 10;
+    a.do_thing();
+
+    var b: Poly<float>;
+    b.a = 1345.234;
+    b.do_thing();
+
+    var c: Poly<string>;
+    c.a = "Hello, Pilot!";
+    c.do_thing();
+
+    printf("%.*s\n", c.a.length, c.a.data);
+
+    // We currently do not have a way to parse TypeName<Typearg, Typearg2, etc>
+    // in regular expressions, so currently one cannot use templates in first-class
+    // uses unless one uses a typealias (since the right hand side of a type alias is
+    // always a type instantiation).
+}

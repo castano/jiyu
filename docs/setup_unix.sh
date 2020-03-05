@@ -3,7 +3,7 @@ set -ex
 
 JIYU_DIR=$PWD
 
-LLVM_VERSION=8.0.0
+LLVM_VERSION=9.0.0
 LLVM_URL=https://github.com/llvm/llvm-project/archive/llvmorg-$LLVM_VERSION.tar.gz
 
 if [ -z $LLVM_TARGETS ]

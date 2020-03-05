@@ -344,8 +344,9 @@ Token Lexer::lex_token() {
         // @Cleanup we should probably have a "tag" token
         else if (result.string == to_string("@c_function"))  result.type = Token::TAG_C_FUNCTION;
         else if (result.string == to_string("@metaprogram")) result.type = Token::TAG_META;
-        else if (result.string == to_string("@export")) result.type = Token::TAG_EXPORT;
-        else if (result.string == to_string("@flags")) result.type = Token::TAG_FLAGS;
+        else if (result.string == to_string("@export"))      result.type = Token::TAG_EXPORT;
+        else if (result.string == to_string("@flags"))       result.type = Token::TAG_FLAGS;
+        else if (result.string == to_string("@distinct"))    result.type = Token::TAG_DISTINCT;
 
         else if (result.string == to_string("temporary_c_vararg")) result.type = Token::TEMPORARY_KEYWORD_C_VARARGS;
 
@@ -390,6 +391,24 @@ Token Lexer::lex_token() {
             }
 
             current_char++;
+        }
+
+        // Accept float in scientific notation.
+        if (radix == 10) {
+            if (current_char < text.length && (text[current_char] == 'e' || text[current_char] == 'E')) {
+                is_float = true;
+                current_char++;
+
+                // Accept exponent sign.
+                if (current_char < text.length && (text[current_char] == '-' || text[current_char] == '+')) {
+                    current_char++;
+                }
+
+                // Accept exponent digits.
+                while (current_char < text.length && is_digit(text[current_char], 10)) {
+                    current_char++;
+                }
+            }
         }
 
         char *value_string = compiler->get_temp_c_string(text.substring(number_start, current_char - number_start));
@@ -599,6 +618,7 @@ Token Lexer::lex_token() {
 }
 
 void Lexer::tokenize_text() {
+    MICROPROFILE_SCOPEI("lexer", "tokenize_text", -1);
     Token tok;
     do {
         tok = lex_token();

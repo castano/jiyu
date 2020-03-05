@@ -3,7 +3,6 @@
 #import "Array";
 
 typealias string_length_type = __builtin_string_length_type;
-typealias array_count_type   = __builtin_array_count_type;
 
 // Okay, so, there's nothing in the language right now to do something like new(My_Struct)
 // SO we take an initializer parameter so we can use the already established template system.
@@ -34,14 +33,7 @@ func assert(cond: bool, msg: string) {
     if msg  printf("Assertion failed: %.*s\n", msg.length, msg.data);
     else    printf("Assertion failed!\n");
 
-    #if os(Windows) {
-        func @c_function DebugBreak() -> void;
-        DebugBreak();
-    }
-
-    #if os(MacOSX) {
-        exit(-1);
-    }
+    __builtin_debugtrap();
 }
 
 func advance(s: *string, amount: string_length_type) {
@@ -147,18 +139,18 @@ func get_lines(input: string) -> [] string {
     return split(input, '\n');
 }
 
-func read_entire_file(path: string) -> string {
+func read_entire_file(path: string) -> (success: bool, result: string) {
     var c_path = to_c_string(path);
     var file = fopen(c_path, "rb");
     free(c_path);
 
-    if file == null return "";
+    if file == null return (false, "");
 
     fseek(file, 0, SEEK_END);
     var length = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    if !length return "";
+    if !length return (true, "");
 
     var mem = cast(c_string) malloc(cast(size_t) length);
     fread(mem, 1, cast(size_t) length, file);
@@ -169,7 +161,7 @@ func read_entire_file(path: string) -> string {
     var result: string;
     result.data = mem;
     result.length = length;
-    return result;
+    return (true, result);
 }
 
 func write_entire_file(path: string, contents: string) -> bool {

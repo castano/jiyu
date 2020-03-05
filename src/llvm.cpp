@@ -1,3 +1,14 @@
+
+// :AboutGetFinalType:
+// Code generation does not care about type system shenanigans,
+// so almost all cases of get_final_type have been replaced with
+// get_underlying_final_type. There are a few instances where
+// respecting the type system is necessary, and that primarily includes
+// debug info generation, since some debug info formats respect
+// that a C typedef is a proper renaming of the type for the user's
+// sake, and so will respect that a typealias is a meaningful
+// renaming.
+
 #include "llvm.h"
 #include "ast.h"
 #include "compiler.h"
@@ -132,7 +143,7 @@ void LLVM_Generator::init() {
     bool is_optimized = false; // @BuildOptions
     const char *COMMAND_LINE_FLAGS = "";
     const unsigned runtime_version = 0;
-    di_compile_unit = dib->createCompileUnit(dwarf::DW_LANG_C, DIFile::get(*llvm_context, "fib.jyu", ""), JIYU_PRODUCER_STRING, is_optimized, COMMAND_LINE_FLAGS, runtime_version);
+    di_compile_unit = dib->createCompileUnit(dwarf::DW_LANG_C, DIFile::get(*llvm_context, "fib.jyu", "."), JIYU_PRODUCER_STRING, is_optimized, COMMAND_LINE_FLAGS, runtime_version);
 
     type_void = Type::getVoidTy(*llvm_context);
     type_i1   = Type::getInt1Ty(*llvm_context);
@@ -143,6 +154,7 @@ void LLVM_Generator::init() {
 
     type_f32  = Type::getFloatTy(*llvm_context);
     type_f64  = Type::getDoubleTy(*llvm_context);
+    type_f128 = Type::getFP128Ty(*llvm_context);
 
     type_string_length = nullptr;
     if (TargetMachine->getPointerSize(0) == 4) {
@@ -169,6 +181,7 @@ void LLVM_Generator::init() {
     di_type_u64  = dib->createBasicType("uint64", 64, dwarf::DW_ATE_unsigned);
     di_type_f32  = dib->createBasicType("float",  32, dwarf::DW_ATE_float);
     di_type_f64  = dib->createBasicType("double", 64, dwarf::DW_ATE_float);
+    di_type_f64  = dib->createBasicType("float128", 128, dwarf::DW_ATE_float);
 
     di_type_string_length = nullptr;
     if (TargetMachine->getPointerSize(0) == 4) {
@@ -301,7 +314,7 @@ static bool is_system_v_target(TargetMachine *TM) {
 }
 
 static bool is_c_return_by_pointer_argument(TargetMachine *TM, Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     if (!is_aggregate_type(info)) return false;
 
     bool is_win32 = TM->getTargetTriple().isOSWindows();
@@ -326,7 +339,7 @@ static bool is_c_return_by_pointer_argument(TargetMachine *TM, Ast_Type_Info *in
 }
 
 static bool is_c_pass_by_pointer_argument(TargetMachine *TM, Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     if (!is_aggregate_type(info)) return false;
 
     bool is_win32 = TM->getTargetTriple().isOSWindows();
@@ -344,7 +357,7 @@ static bool is_c_pass_by_pointer_argument(TargetMachine *TM, Ast_Type_Info *info
 }
 
 Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
-    type = get_final_type(type);
+    type = get_underlying_final_type(type);
 
     if (type->type == Ast_Type_Info::VOID) {
         // return type_i8 for pointers.
@@ -373,8 +386,9 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
     if (type->type == Ast_Type_Info::FLOAT) {
         switch(type->size) {
-            case 4: return type_f32;
-            case 8: return type_f64;
+            case 4 : return type_f32;
+            case 8 : return type_f64;
+            case 16: return type_f128;
             default: assert(false);
         }
     }
@@ -414,25 +428,37 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
             return llvm_types[type->type_table_index];
         }
 
-        auto final_type = StructType::create(*llvm_context, type->struct_decl->identifier ? string_ref(type->struct_decl->identifier->name->name) : "");
+        String name = type->struct_decl->identifier ? type->struct_decl->identifier->name->name : String();
+        if (type->struct_decl->is_anonymous) {
+            if (type->is_union) {
+                name = to_string("union.anon");
+            } else {
+                name = to_string("struct.anon");
+            }
+        }
+
+        auto final_type = StructType::create(*llvm_context, string_ref(name));
         llvm_types[type->type_table_index] = final_type;
 
         Array<Type *> member_types;
 
         if (!type->is_union) {
-            auto parent = type->parent_struct;
-            if (parent) {
-                for (auto member : parent->struct_members) {
-                    if (member.is_let) continue;
+            Array<Ast_Type_Info *> flattened_parents;
+            flattened_parents.add(type);
 
-                    member_types.add(make_llvm_type(member.type_info));
-                }
+            auto parent = type->parent_struct;
+            while (parent) {
+                parent = get_underlying_final_type(parent);
+                flattened_parents.add(parent);
+                parent = parent->parent_struct;
             }
 
-            for (auto member : type->struct_members) {
-                if (member.is_let) continue;
+            for (array_count_type i = flattened_parents.count; i > 0; --i) {
+                auto type = flattened_parents[i-1];
 
-                member_types.add(make_llvm_type(member.type_info));
+                for (auto member : type->struct_members) {
+                    member_types.add(make_llvm_type(member.type_info));
+                }
             }
         } else {
             // If the struct is a union, then just use the largest member
@@ -443,7 +469,6 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
             for (array_count_type i = 0; i < type->struct_members.count; ++i) {
                 auto member = type->struct_members[i];
-                if (member.is_let) continue;
                 assert(member.offset_in_struct == 0);
 
                 if (member.type_info->size > largest_size) {
@@ -460,6 +485,16 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
         final_type->setBody(ArrayRef<Type *>(member_types.data, member_types.count), false/*is packed*/);
 
+        // There doesnt seem to be a way to tell LLVM that this data structure has custom alignment
+        // so it's alloc size should technically be slightly larger.
+        // if (type->alignment <= 8) {
+        //     final_type->dump();
+        //     auto size       = TargetMachine->createDataLayout().getTypeSizeInBits(final_type) / 8;
+        //     auto alloc_size = TargetMachine->createDataLayout().getTypeAllocSizeInBits(final_type) / 8;
+        //     printf("%.*s: %d, alloc %d\n", PRINT_ARG(name), size, alloc_size);
+        //     assert(alloc_size == type->stride);
+        // }
+
         // final_type->dump();
 
         return final_type;
@@ -475,7 +510,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 
         bool is_c_function = type->is_c_function;
 
-        Type *return_type = make_llvm_type(get_final_type(type->return_type));
+        Type *return_type = make_llvm_type(get_underlying_final_type(type->return_type));
         if (type->return_type->type == Ast_Type_Info::VOID) {
             return_type = type_void;
         }
@@ -490,7 +525,7 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
         }
 
         for (auto arg_type : type->arguments) {
-            arg_type = get_final_type(arg_type);
+            arg_type = get_underlying_final_type(arg_type);
             if (arg_type == compiler->type_void) continue;
 
             Type *type = make_llvm_type(arg_type);
@@ -516,7 +551,10 @@ Type *LLVM_Generator::make_llvm_type(Ast_Type_Info *type) {
 }
 
 DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
-    type = get_final_type(type);
+    if (type->type == Ast_Type_Info::ALIAS) {
+        // @TODO typedef ?
+        return get_debug_type(type->alias_of);
+    }
 
     if (type->type == Ast_Type_Info::VOID) {
         return nullptr;
@@ -630,22 +668,27 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
         if (struct_decl->identifier) name = struct_decl->identifier->name->name;
         DIType *derived_from = nullptr;
         DINode::DIFlags flags = DINode::DIFlags();
-        auto empty_elements = dib->getOrCreateArray({});
-        auto final_type = dib->createStructType(di_compile_unit, string_ref(name), debug_file,
+
+        DICompositeType *final_type;
+        if (!type->is_union) {
+            final_type = dib->createStructType(di_compile_unit, string_ref(name), debug_file,
                             line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
-                            flags, derived_from, empty_elements);
+                            flags, derived_from, DINodeArray());
+        } else {
+            final_type = dib->createUnionType(di_compile_unit, string_ref(name), debug_file,
+                            line_number, type->size * BYTES_TO_BITS, type->alignment * BYTES_TO_BITS,
+                            flags, DINodeArray());
+        }
 
         type->debug_type_table_index = llvm_debug_types.count;
         llvm_debug_types.add(final_type);
 
         Array<Metadata *> member_types;
         for (auto member : type->struct_members) {
-            if (member.is_let) continue;
-
             auto member_type = member.type_info;
             auto di_type = get_debug_type(member_type);
 
-            String name;
+            String name = String();
             if (member.name) name = member.name->name;
 
             DINode::DIFlags flags = DINode::DIFlags();
@@ -655,7 +698,6 @@ DIType *LLVM_Generator::get_debug_type(Ast_Type_Info *type) {
                                         member.offset_in_struct * BYTES_TO_BITS, flags, di_type);
             member_types.add(di_member);
         }
-
 
         auto elements = dib->getOrCreateArray(ArrayRef<Metadata *>(member_types.data, member_types.count));
         final_type->replaceElements(elements);
@@ -736,7 +778,9 @@ Value *LLVM_Generator::get_value_for_decl(Ast_Declaration *decl) {
     return nullptr;
 }
 
-static Value *create_alloca_in_entry(IRBuilder<> *irb, Type *type) {
+static Value *create_alloca_in_entry(LLVM_Generator *gen, IRBuilder<> *irb, Ast_Type_Info *type_info) {
+    type_info = get_underlying_final_type(type_info);
+
     auto current_block = irb->GetInsertBlock();
     auto current_debug_loc = irb->getCurrentDebugLocation();
 
@@ -745,7 +789,10 @@ static Value *create_alloca_in_entry(IRBuilder<> *irb, Type *type) {
     BasicBlock *entry = &func->getEntryBlock();
     irb->SetInsertPoint(entry->getTerminator());
 
-    Value *alloca = irb->CreateAlloca(type);
+    Type *type = gen->get_type(type_info);
+    AllocaInst *alloca = irb->CreateAlloca(type);
+    assert(type_info->alignment >= 1);
+    alloca->setAlignment(type_info->alignment);
 
     irb->SetInsertPoint(current_block);
     irb->SetCurrentDebugLocation(current_debug_loc);
@@ -770,8 +817,8 @@ Value *LLVM_Generator::create_string_literal(Ast_Literal *lit, bool want_lvalue)
     assert(value);
 
     if (want_lvalue) {
-        auto alloca = create_alloca_in_entry(irb, type_string);
-        irb->CreateStore(value, alloca);
+        auto alloca = create_alloca_in_entry(this, irb, compiler->type_string);
+        irb->CreateAlignedStore(value, alloca, get_alignment(compiler->type_string));
         return alloca;
     }
 
@@ -799,17 +846,33 @@ Value *LLVM_Generator::dereference(Value *value, s64 element_path_index, bool is
 // because the previous method was generating a large amount of store instructions for zero-initialized
 // fields (and slowing down compilation by quite a lot). -josh 27 December 2019
 Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
 
     assert(info->type == Ast_Type_Info::STRUCT);
     assert(info->struct_decl);
+
+    auto llvm_type = static_cast<StructType *>(get_type(info));
+    if (info->is_union) {
+        return Constant::getNullValue(llvm_type);
+    }
 
     auto _struct = info->struct_decl;
 
     Array<Constant *> element_values;
 
-    if (info->parent_struct) {
-        auto _struct = info->parent_struct->struct_decl;
+    Array<Ast_Struct *> flattened_parents;
+    flattened_parents.add(_struct);
+
+    auto parent = info->parent_struct;
+    while (parent) {
+        parent = get_underlying_final_type(parent);
+        flattened_parents.add(parent->struct_decl);
+
+        parent = parent->parent_struct;
+    }
+
+    for (array_count_type i = flattened_parents.count; i > 0; --i) {
+        auto _struct = flattened_parents[i-1];
 
         // @Cutnpaste from the stuff below
         for (auto member: _struct->member_scope.declarations) {
@@ -826,7 +889,7 @@ Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
                     assert(dyn_cast<Constant>(expr));
 
                     init = static_cast<Constant *>(expr);
-                } else if (is_struct_type(member_info) && !get_final_type(member_info)->is_union) {
+                } else if (is_struct_type(member_info) && !get_underlying_final_type(member_info)->is_union) {
                     init = get_constant_struct_initializer(member_info);
                 } else {
                     init = Constant::getNullValue(get_type(member_info));
@@ -834,41 +897,22 @@ Constant *LLVM_Generator::get_constant_struct_initializer(Ast_Type_Info *info) {
 
                 assert(init);
                 element_values.add(init);
+            } else if (member->type == AST_STRUCT) {
+                auto struct_decl = static_cast<Ast_Struct *>(member);
+                if (struct_decl->is_anonymous) {
+                    Constant *init = get_constant_struct_initializer(struct_decl->type_value);
+                    assert(init);
+                    element_values.add(init);
+                }
             }
         }
     }
 
-    for (auto member: _struct->member_scope.declarations) {
-        if (member->type == AST_DECLARATION) {
-            auto decl = static_cast<Ast_Declaration *>(member);
-
-            if (decl->is_let) continue;
-            assert(decl->is_struct_member);
-
-            Ast_Type_Info *member_info = get_type_info(decl);
-            Constant *init = nullptr;
-            if (decl->initializer_expression) {
-                auto expr = emit_expression(decl->initializer_expression);
-                assert(dyn_cast<Constant>(expr));
-
-                init = static_cast<Constant *>(expr);
-            } else if (is_struct_type(member_info) && !get_final_type(member_info)->is_union) {
-                init = get_constant_struct_initializer(member_info);
-            } else {
-                init = Constant::getNullValue(get_type(member_info));
-            }
-
-            assert(init);
-            element_values.add(init);
-        }
-    }
-
-    auto llvm_type = static_cast<StructType *>(get_type(info));
     return ConstantStruct::get(llvm_type, ArrayRef<Constant *>(element_values.data, element_values.count));
 }
 
 void LLVM_Generator::default_init_struct(Value *decl_value, Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
 
     assert(info->type == Ast_Type_Info::STRUCT);
     assert(info->struct_decl);
@@ -895,7 +939,7 @@ void LLVM_Generator::default_init_struct(Value *decl_value, Ast_Type_Info *info)
     //         } else {
     //             auto mem_info = get_type_info(decl);
     //             if (is_struct_type(mem_info)) {
-    //                 auto final_type = get_final_type(mem_info);
+    //                 auto final_type = get_underlying_final_type(mem_info);
     //                 if (!final_type->is_union) {
     //                     auto gep = dereference(decl_value, element_path_index, true);
     //                     default_init_struct(gep, mem_info);
@@ -1201,7 +1245,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
                 case Ast_Literal::FLOAT:   return ConstantFP::get(type,  lit->float_value);
                 case Ast_Literal::BOOL:    return ConstantInt::get(type, (lit->bool_value ? 1 : 0));
                 case Ast_Literal::NULLPTR: return ConstantPointerNull::get(static_cast<PointerType *>(type));
-                default: return nullptr;
+                case Ast_Literal::FUNCTION:return get_or_create_function(lit->function);
             }
         }
 
@@ -1264,7 +1308,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             } else {
                 // if a declaration does not have an initializer, initialize to 0
                 auto type_info = get_type_info(decl);
-                if (is_struct_type(type_info) && !get_final_type(type_info)->is_union) {
+                if (is_struct_type(type_info) && !get_underlying_final_type(type_info)->is_union) {
                     default_init_struct(decl_value, type_info);
                 } else {
                     auto type = decl_value->getType()->getPointerElementType();
@@ -1277,7 +1321,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         case AST_FUNCTION_CALL: {
             auto call = static_cast<Ast_Function_Call *>(expression);
 
-            auto type_info = get_final_type(get_type_info(call->function_or_function_ptr));
+            auto type_info = get_underlying_final_type(get_type_info(call->function_or_function_ptr));
             assert(type_info->type == Ast_Type_Info::FUNCTION);
 
             auto function_target = emit_expression(call->function_or_function_ptr);
@@ -1289,13 +1333,13 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
             Array<Value *> args;
             if (c_return_is_by_pointer_argument) {
-                auto alloca = create_alloca_in_entry(irb, get_type(type_info->return_type)); // Reserve storage for the return value.
+                auto alloca = create_alloca_in_entry(this, irb, type_info->return_type); // Reserve storage for the return value.
                 args.add(alloca);
             }
 
             for (auto &it : call->argument_list) {
-                auto info = get_final_type(get_type_info(it));
-                assert(info->size >= 0);
+                auto info = get_underlying_final_type(get_type_info(it));
+                assert(get_size(info) >= 0);
 
                 bool is_pass_by_pointer_aggregate = is_aggregate_type(info);
 
@@ -1314,7 +1358,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 
                     auto type = value->getType();
                     if (type->isIntegerTy() && type->getPrimitiveSizeInBits() < type_i32->getPrimitiveSizeInBits()) {
-                        auto arg_type = get_final_type(get_type_info(arg));
+                        auto arg_type = get_underlying_final_type(get_type_info(arg));
                         assert(arg_type->type == Ast_Type_Info::INTEGER || arg_type->type == Ast_Type_Info::BOOL);
                         if (get_type_info(arg)->is_signed) {
                             args[i] = irb->CreateSExt(value, type_i32);
@@ -1337,7 +1381,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             }
 
             if (is_lvalue) {
-                auto alloca = create_alloca_in_entry(irb, result->getType());
+                auto alloca = create_alloca_in_entry(this, irb, type_info->return_type);
                 irb->CreateStore(result, alloca);
                 return alloca;
             }
@@ -1352,7 +1396,14 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto left_expr = deref->left;
             while (left_expr->substitution) left_expr = left_expr->substitution;
 
-            auto left_type = get_final_type(get_type_info(left_expr));
+            auto left_type = get_underlying_final_type(get_type_info(left_expr));
+            bool do_pointer_deref = false;
+            if (is_pointer_type(left_type)) {
+                // free pointer dereference
+                left_type = left_type->pointer_to;
+                do_pointer_deref = true;
+            }
+
             if (left_type->type == Ast_Type_Info::STRUCT) {
                 // if we're dereferencing a union, bitcast to the right type
                 // since LLVM does not have a union type by default.
@@ -1375,6 +1426,9 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             // @Incomplete
             // assert(deref->byte_offset >= 0);
 
+            if (do_pointer_deref) {
+                lhs = irb->CreateLoad(lhs);
+            }
             auto value = dereference(lhs, deref->element_path_index, is_lvalue);
             return value;
         }
@@ -1383,8 +1437,8 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto cast = static_cast<Ast_Cast *>(expression);
             Value *value = emit_expression(cast->expression);
 
-            auto src = get_final_type(get_type_info(cast->expression));
-            auto dst = get_final_type(cast->type_info);
+            auto src = get_underlying_final_type(get_type_info(cast->expression));
+            auto dst = get_underlying_final_type(cast->type_info);
 
             // When casting, treat enums as if they were integers.
             if (src->type == Ast_Type_Info::ENUM) src = src->enum_base_type;
@@ -1514,7 +1568,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto _for = static_cast<Ast_For *>(expression);
 
             auto it_decl = _for->iterator_decl;
-            auto it_alloca = create_alloca_in_entry(irb, get_type(get_type_info(it_decl)));
+            auto it_alloca = create_alloca_in_entry(this, irb, get_type_info(it_decl));
             auto decl_type = get_type_info(it_decl);
 
             decl_value_map.add(MakeTuple(it_decl, it_alloca));
@@ -1524,7 +1578,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             Value *it_index_alloca = nullptr;
             if (it_index_decl) {
                 it_index_type = get_type_info(it_index_decl);
-                it_index_alloca = create_alloca_in_entry(irb, get_type(it_index_type));
+                it_index_alloca = create_alloca_in_entry(this, irb, it_index_type);
                 decl_value_map.add(MakeTuple(it_index_decl, it_index_alloca));
                 emit_expression(it_index_decl);
             } else {
@@ -1620,7 +1674,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
             auto index = emit_expression(deref->index_expression);
 
             auto type = get_type_info(deref->array_or_pointer_expression);
-            type = get_final_type(type);
+            type = get_underlying_final_type(type);
 
             if (type->type == Ast_Type_Info::ARRAY && type->array_element_count == -1) {
                 // @Cleanup hardcoded indices
@@ -1688,7 +1742,7 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
         case AST_TUPLE_EXPRESSION: {
             auto tuple = static_cast<Ast_Tuple_Expression *>(expression);
 
-            auto memory = create_alloca_in_entry(irb, get_type(get_type_info(tuple)));
+            auto memory = create_alloca_in_entry(this, irb, get_type_info(tuple));
 
             for (array_count_type i = 0; i < tuple->arguments.count; ++i) {
                 auto value = emit_expression(tuple->arguments[i]);
@@ -1789,6 +1843,16 @@ Value *LLVM_Generator::emit_expression(Ast_Expression *expression, bool is_lvalu
 }
 
 Function *LLVM_Generator::get_or_create_function(Ast_Function *function) {
+
+    if (function->is_intrinsic) {
+        if (function->identifier->name == compiler->atom_builtin_debugtrap) {
+            return Intrinsic::getDeclaration(llvm_module, Intrinsic::debugtrap);
+        }
+
+        assert(false);
+        return nullptr;
+    }
+
     assert(function->identifier);
     String linkage_name = function->linkage_name;
 
@@ -1826,14 +1890,15 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
 
     // setup variable mappings
     for (auto it : scope->declarations) {
-        while (it->substitution) it = it->substitution;
+        assert(it->substitution == nullptr);
+        // while (it->substitution) it = it->substitution;
 
         if (it->type != AST_DECLARATION) continue;
 
         auto decl = static_cast<Ast_Declaration *>(it);
         if (decl->is_let && !decl->is_readonly_variable) continue;
 
-        auto alloca = create_alloca_in_entry(irb, get_type(get_type_info(it)));
+        auto alloca = create_alloca_in_entry(this, irb, get_type_info(it));
 
         String name;
         if (decl->identifier) name = decl->identifier->name->name;
@@ -1856,35 +1921,6 @@ void LLVM_Generator::emit_scope(Ast_Scope *scope) {
                                 get_debug_file(llvm_context, it), get_line_number(it), di_type, always_preserve);
         dib->insertDeclare(alloca, di_local_var, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(it), 0, di_current_scope),
                             current_block);
-    }
-
-    // @Cleanup private decclarations should just be denoted by a flag.
-    for (auto it : scope->private_declarations) {
-        while (it->substitution) it = it->substitution;
-
-        if (it->type != AST_DECLARATION) continue;
-        auto decl = static_cast<Ast_Declaration *>(it);
-        if (decl->is_let && !decl->is_readonly_variable) continue;
-
-        auto alloca = create_alloca_in_entry(irb, get_type(get_type_info(it)));
-
-        String name;
-        if (decl->identifier) name = decl->identifier->name->name;
-
-        if (decl->identifier) {
-            alloca->setName(string_ref(name));
-        }
-
-        assert(get_value_for_decl(decl) == nullptr);
-        decl_value_map.add(MakeTuple(decl, alloca));
-
-        // debug info
-        bool always_preserve = true;
-        auto di_type = get_debug_type(get_type_info(it));
-        auto di_local_var = dib->createAutoVariable(di_current_scope, string_ref(name),
-                                get_debug_file(llvm_context, it), get_line_number(it), di_type, always_preserve);
-        dib->insertDeclare(alloca, di_local_var, DIExpression::get(*llvm_context, None), DebugLoc::get(get_line_number(it), 0, di_current_scope),
-                            entry_block);
     }
 
     for (auto &it : scope->statements) {
@@ -1996,11 +2032,13 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
         } else {
             // Create storage for value-parameters so that we can treat the parameters
             // the same as local variables during code generation. Maybe this isn't super necessary anymore, idk!
-            Value *alloca = irb->CreateAlloca(get_type(get_type_info(decl)));
+            AllocaInst *alloca = irb->CreateAlloca(get_type(get_type_info(decl)));
+            assert(get_alignment(get_type_info(decl)) >= 1);
+            alloca->setAlignment(get_alignment(get_type_info(decl)));
             irb->CreateStore(a, alloca);
 
             assert(get_value_for_decl(decl) == nullptr);
-            decl_value_map.add(MakeTuple(decl, alloca));
+            decl_value_map.add(MakeTuple<Ast_Declaration *, Value *>(decl, alloca));
 
             storage = alloca;
         }
@@ -2029,7 +2067,7 @@ void LLVM_Generator::emit_function(Ast_Function *function) {
     if (!current_block->getTerminator()) {
         auto return_type = function->return_type;
         // @Cleanup early out for void types since we use i8 for pointers
-        if (return_type && get_final_type(return_type->type_value)->type != Ast_Type_Info::VOID) {
+        if (return_type && get_underlying_final_type(return_type->type_value)->type != Ast_Type_Info::VOID) {
             irb->CreateRet(Constant::getNullValue(get_type(return_type->type_value)));
         } else {
             irb->CreateRetVoid();
@@ -2147,7 +2185,7 @@ void LLVM_Jitter::init() {
 
     CompileLayer = new IRCompileLayer(*ES, *ObjectLayer, ConcurrentIRCompiler(*JTMB));
 
-    ES->getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(*DL)));
+    ES->getMainJITDylib().setGenerator(cantFail(DynamicLibrarySearchGenerator::GetForCurrentProcess(DL->getGlobalPrefix())));
 
     llvm->dib->finalize();
 

@@ -46,6 +46,7 @@ Ast_Function *Copier::copy_function(Ast_Function *old) {
     defer { currently_copying_function = outer_function; };
 
     COPY(identifier);
+    COPY_P(declaration_flags);
 
     COPY(polymorphic_type_alias_scope);
     if (_new->polymorphic_type_alias_scope) {
@@ -71,6 +72,9 @@ Ast_Function *Copier::copy_function(Ast_Function *old) {
     COPY_P(is_c_varargs);
     COPY_P(is_template_function);
     COPY_P(linkage_name);
+    COPY_P(is_operator_function);
+    COPY_P(is_intrinsic);
+    COPY_P(operator_type);
 
 
     return _new;
@@ -87,6 +91,9 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY_P(operator_type);
             COPY(left);
             COPY(right);
+
+            _new->enclosing_scope = get_current_scope();
+
             return _new;
         }
         case AST_UNARY_EXPRESSION: {
@@ -95,6 +102,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
 
             COPY_P(operator_type);
             COPY(expression);
+            _new->enclosing_scope = get_current_scope();
+
             return _new;
         }
         case AST_IDENTIFIER: {
@@ -113,6 +122,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto _new = COPIER_NEW(Ast_Declaration);
 
             COPY(identifier);
+            COPY_P(declaration_flags);
+
             COPY(initializer_expression);
             COPY(type_inst);
             COPY_P(is_let);
@@ -142,6 +153,7 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
                 case Ast_Literal::Type::FLOAT:   COPY_P(float_value);   break;
                 case Ast_Literal::Type::BOOL:    COPY_P(bool_value);    break;
                 case Ast_Literal::Type::NULLPTR: break;
+                case Ast_Literal::Type::FUNCTION: COPY_P(function); break;
             }
 
             return _new;
@@ -216,6 +228,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             COPY(array_size_expression);
             COPY_P(array_is_dynamic);
             COPY(function_header);
+            COPY(template_type_inst_of);
+            COPY_ARRAY(template_type_arguments);
 
             return _new;
         }
@@ -224,6 +238,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto _new = COPIER_NEW(Ast_Type_Alias);
 
             COPY(identifier);
+            COPY_P(declaration_flags);
+
             COPY(internal_type_inst);
 
             // I think, type_value can be set when internal_type_inst isnt, when the compiler creates a type alias during polymorphing,
@@ -240,6 +256,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
 
             COPY(array_or_pointer_expression);
             COPY(index_expression);
+
+            _new->enclosing_scope = get_current_scope();
 
             return _new;
         }
@@ -285,10 +303,24 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto _new = COPIER_NEW(Ast_Struct);
 
             COPY(identifier);
+            COPY_P(declaration_flags);
+
+            COPY(polymorphic_type_alias_scope);
+            if (_new->polymorphic_type_alias_scope) {
+                COPY_ARRAY(polymorphic_type_alias_scope->declarations);
+                scope_stack.add(_new->polymorphic_type_alias_scope);
+            }
+
             copy_scope(&_new->member_scope, &old->member_scope);
+
+            if (_new->polymorphic_type_alias_scope) scope_stack.pop();
+
             _new->member_scope.owning_struct = _new;
             COPY_P(is_union);
             COPY_P(is_tuple);
+            COPY_P(is_template_struct);
+            COPY_P(is_anonymous);
+            COPY_P(polymorph_source_struct); // Light copy; I am not totally sure this is the right thing to do...
 
             return _new;
         }
@@ -298,6 +330,8 @@ Ast_Expression *Copier::copy(Ast_Expression *expression) {
             auto _new = COPIER_NEW(Ast_Enum);
             
             COPY(identifier);
+            COPY_P(declaration_flags);
+
             copy_scope(&_new->member_scope, &old->member_scope);
             _new->member_scope.owning_enum = _new;
             COPY_P(is_flags);
@@ -381,18 +415,16 @@ void Copier::copy_scope(Ast_Scope *_new, Ast_Scope *old) {
     for (auto expr: old->statements) {
         auto stmt = copy(expr);
         if (is_declaration(stmt->type)) {
-            _new->declarations.add(stmt);
+            _new->declarations.add(static_cast<Ast_Scope_Entry *>(stmt));
         }
 
         _new->statements.add(stmt);
     }
 
-    COPY_ARRAY_P(private_declarations);
-
     scope_stack.pop();
 }
 
-Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Function *poly, Array<Ast_Expression *> *arguments, bool do_stuff_for_implicit_arg) {
+Tuple<Ast_Function *, bool> Copier::polymorph_function_with_arguments(Ast_Function *poly, Array<Ast_Expression *> *arguments, bool do_stuff_for_implicit_arg, Ast *callsite, bool allow_errors) {
     assert(arguments->count == poly->arguments.count);
 
     scope_stack.add(poly->polymorphic_type_alias_scope->parent);
@@ -415,9 +447,12 @@ Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Functi
 
     for (auto _alias: poly_copy->polymorphic_type_alias_scope->declarations) {
         auto alias = static_cast<Ast_Type_Alias *>(_alias);
-        if (!alias->type_value) {
+        if (!alias->internal_type_inst && !alias->type_value) {
             String name = alias->identifier->name->name;
-            compiler->report_error(alias, "Could not fill typealias '%.*s'.\n", name.length, name.data);
+            if (allow_errors) {
+                compiler->report_error(alias, "Could not fill typealias '%.*s'.\n", name.length, name.data);
+                compiler->report_error(callsite, "From call site:\n");
+            }
             return MakeTuple<Ast_Function *, bool>(nullptr, false);
         }
     }
@@ -452,7 +487,9 @@ Tuple<Ast_Function *, bool> Copier::polymoprh_function_with_arguments(Ast_Functi
 // @Incomplete do_stuff_for_implicit_arg currently allows you to dereference a struct-or-array-type
 // and automatically fill one level of indirection of a pointer, but it doesnt allow you to dereference
 // a pointer-type and fill a struct-or-array-type argument.
-bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_inst, Ast_Type_Info *target_type_info, bool do_stuff_for_implicit_arg) {
+bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_inst, Ast_Type_Info *target_type_info, bool do_stuff_for_implicit_arg, bool is_for_filling_a_template_inst) {
+    target_type_info = get_final_type(target_type_info);
+
     if (type_inst->pointer_to) {
         if (do_stuff_for_implicit_arg) {
             bool is_struct_or_array = is_struct_type(target_type_info) || is_array_type(target_type_info);
@@ -492,6 +529,22 @@ bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_i
             if (!alias->internal_type_inst && !alias->type_value) {
                 // template argument
                 assert(target_type_info);
+
+                if (is_for_filling_a_template_inst) {
+                    auto target_struct = target_type_info->struct_decl;
+                    if (target_struct && target_struct->polymorph_source_struct) {
+                        compiler->report_error(ident, "Filling polymorphic template argument using an uninstantiated polymorphic type is unsupported.\n");
+                        return false;
+                        /*
+                        auto old = alias;
+                        auto type_inst = COPIER_NEW(Ast_Type_Instantiation);
+                        type_inst->type_dereference_expression = target_struct->polymorph_source_struct;
+                        alias->internal_type_inst = type_inst;
+                        return true;
+                        */
+                    }
+                }
+
                 alias->type_value = target_type_info;
                 return true;
             } else {
@@ -504,6 +557,13 @@ bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_i
         } else if (decl->type == AST_STRUCT) {
             auto _struct = static_cast<Ast_Struct *>(decl);
             compiler->sema->typecheck_expression(_struct);
+
+            if (_struct->is_template_struct) {
+                auto target = target_type_info->struct_decl;
+                if (!target) return false;;
+
+                return _struct == target->polymorph_source_struct;
+            }
             return types_match(_struct->type_value, target_type_info);
         } else {
             assert(false);
@@ -518,6 +578,53 @@ bool Copier::try_to_fill_polymorphic_type_aliases(Ast_Type_Instantiation *type_i
         if (compiler->errors_reported) return false;
 
         return success;
+    }
+
+    if (type_inst->template_type_inst_of) {
+        if (target_type_info->type != Ast_Type_Info::STRUCT) return false;
+
+        auto struct_decl = target_type_info->struct_decl;
+        if (!struct_decl->polymorphic_type_alias_scope) return false;
+
+        bool success = try_to_fill_polymorphic_type_aliases(type_inst->template_type_inst_of, struct_decl->type_value, false, true);
+        if (!success) return false;
+
+        for (array_count_type i = 0; i < struct_decl->polymorphic_type_alias_scope->declarations.count; ++i) {
+            auto alias = struct_decl->polymorphic_type_alias_scope->declarations[i];
+            assert(alias->type == AST_TYPE_ALIAS);
+
+            auto type_value = get_type_declaration_resolved_type(alias);
+            assert(type_value);
+
+            auto inst = type_inst->template_type_arguments[i];
+            bool success = try_to_fill_polymorphic_type_aliases(inst, type_value, false);
+            if (!success) return false;
+        }
+
+        return true;
+    }
+
+    if (type_inst->function_header) {
+        if (target_type_info->type != Ast_Type_Info::FUNCTION) return false;
+
+        bool success = try_to_fill_polymorphic_type_aliases(type_inst->function_header->return_type, target_type_info->return_type, false);
+        if (!success || compiler->errors_reported) return false;
+
+        auto argument_count = type_inst->function_header->arguments.count;
+        if (argument_count != target_type_info->arguments.count) {
+            return false; // @@ Output error?
+        }
+
+        for (array_count_type i = 0; i < argument_count; i++) {
+            auto decl = type_inst->function_header->arguments[i];
+
+            Ast_Type_Info * type_value = target_type_info->arguments[i];
+
+            success = try_to_fill_polymorphic_type_aliases(decl->type_inst, type_value, false);
+            if (!success) return false;
+        }
+
+        return true;
     }
 
     assert(false);

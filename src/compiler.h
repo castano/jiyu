@@ -16,6 +16,10 @@ struct LLVM_Jitter;
 struct Sema;
 struct Copier;
 
+const String OPERATOR_BRACKET_NAME        = to_string("__operator[]");
+const String OPERATOR_BRACKET_EQUALS_NAME = to_string("__operator[]=");
+const String BUILTIN_DEBUGTRAP_NAME      = to_string("__builtin_debugtrap");
+
 struct Atom {
     String name;
     u32 hash;
@@ -90,12 +94,14 @@ struct Compiler {
 
     Ast_Type_Info *type_float32;
     Ast_Type_Info *type_float64;
+    Ast_Type_Info *type_float128;
 
     Ast_Type_Info *type_string;
     Ast_Type_Info *type_string_data;
     Ast_Type_Info *type_string_length;
 
     Ast_Type_Info *type_array_count;
+    Ast_Type_Info *type_array_count_unsigned;
 
     Ast_Type_Info *type_info_type;
 
@@ -113,6 +119,8 @@ struct Compiler {
     Atom *atom_MacOSX;
     Atom *atom_Windows;
     Atom *atom_Linux;
+
+    Atom *atom_builtin_debugtrap;
 
     Array<Ast_Function    *> function_emission_queue;
     Array<Ast_Declaration *> global_decl_emission_queue;
@@ -167,64 +175,68 @@ struct Compiler {
 Ast_Type_Info *make_struct_type(Compiler *compiler, Ast_Struct *_struct);
 
 Ast_Type_Info *get_final_type(Ast_Type_Info *info);
+// Like get_final_type, but gets the underlying type of distinct typealiases.
+// Only use this when you actually need to know info on the underlying type.
+Ast_Type_Info *get_underlying_final_type(Ast_Type_Info *info);
+
 bool types_match(Ast_Type_Info *left, Ast_Type_Info *right);
 
 inline
 bool is_valid_overloadable_operator(Token::Type op) {
-    return op == Token::MINUS || op == Token::PLUS || op == Token::STAR || op == Token::SLASH;
+    return op == Token::MINUS || op == Token::PLUS || op == Token::STAR || op == Token::SLASH || op == Token::EQUALS;
 }
 
 inline
 bool is_int_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::INTEGER;
 }
 
 inline
 bool is_int_or_enum_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::INTEGER || info->type == Ast_Type_Info::ENUM;
 }
 
 inline
 bool is_float_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::FLOAT;
 }
 
 inline
 bool is_pointer_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::POINTER;
 }
 
 inline
 bool is_struct_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::STRUCT;
 }
 
 inline
 bool is_enum_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::ENUM;
 }
 
 inline
 bool is_array_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::ARRAY;
 }
 
 inline
 bool is_aggregate_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::STRUCT || info->type == Ast_Type_Info::STRING;
 }
 
 inline
 bool is_function_type(Ast_Type_Info *info) {
-    info = get_final_type(info);
+    info = get_underlying_final_type(info);
     return info->type == Ast_Type_Info::FUNCTION;
 }
 
@@ -235,11 +247,30 @@ Ast_Type_Info *get_type_info(Ast_Expression *expr) {
     return expr->type_info;
 }
 
+inline
+s64 get_alignment(Ast_Type_Info *info) {
+    return get_underlying_final_type(info)->alignment;
+}
+
+inline
+s64 get_size(Ast_Type_Info *info) {
+    return get_underlying_final_type(info)->size;
+}
+
+inline
+s64 get_stride(Ast_Type_Info *info) {
+    return get_underlying_final_type(info)->stride;
+}
 
 inline
 bool is_valid_primitive_cast(Ast_Type_Info *target, Ast_Type_Info *source) {
     target = get_final_type(target);
     source = get_final_type(source);
+
+    if (target->type == Ast_Type_Info::ALIAS) {
+        assert(target->is_distinct);
+        return is_valid_primitive_cast(target->alias_of, source);
+    }
 
     if (target->type == Ast_Type_Info::POINTER) {
         return (source->type == Ast_Type_Info::INTEGER || source->type == Ast_Type_Info::POINTER);
@@ -322,6 +353,8 @@ Ast_Literal *make_bool_literal(Compiler *compiler, bool value, Ast *source_loc =
 
 Ast_Literal *make_null_literal(Compiler *compiler, Ast_Type_Info *pointer_type, Ast *source_loc = nullptr);
 
+Ast_Literal *make_function_literal(Compiler *compiler, Ast_Function *function, Ast *source_loc = nullptr);
+
 Ast_Identifier *make_identifier(Compiler *compiler, Atom *name);
 
 // @Note MUST typecheck the return value of this!!!
@@ -336,5 +369,6 @@ Ast_Unary_Expression *make_unary(Compiler *compiler, Token::Type op, Ast_Express
 Ast_Binary_Expression *make_binary(Compiler *compiler, Token::Type op, Ast_Expression *left, Ast_Expression *right, Ast *location);
 
 Ast_Type_Alias *make_type_alias(Compiler *compiler, Ast_Identifier *ident, Ast_Type_Info *type_value);
+Ast_Function *make_function(Compiler *compiler, Ast_Identifier *ident);
 
 #endif

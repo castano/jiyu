@@ -37,6 +37,14 @@ typedef s32 string_length_type;
 static_assert(sizeof(array_count_type) == sizeof(void *), "sizeof(array_count_type) must match sizeof(void *).");
 // static_assert(sizeof(string_length_type) == sizeof(void *), "sizeof(string_length_type) must match sizeof(void *).");
 
+#define MICROPROFILE_ENABLED 0 // Enable for profiling.
+#define MICROPROFILE_GPU_TIMERS 0
+#define MICROPROFILE_WEBSERVER 0
+#define MICROPROFILE_EMBED_HTML 1
+#include "microprofile.h"
+
+
+
 const int BYTES_TO_BITS = 8;
 
 template<typename T>

@@ -344,6 +344,7 @@ Ast_Expression *Parser::parse_postfix_expression() {
             next_token();
             deref->array_or_pointer_expression = sub_expression;
             deref->index_expression = parse_expression();
+            deref->enclosing_scope = get_current_scope();
 
             if (!expect_and_eat((Token::Type) ']')) return nullptr;
 
@@ -369,6 +370,7 @@ Ast_Expression *Parser::parse_unary_expression() {
         token->type == Token::TILDE) {
         Ast_Unary_Expression *ref = PARSER_NEW(Ast_Unary_Expression);
         ref->operator_type = token->type;
+        ref->enclosing_scope = get_current_scope();
 
         next_token();
 
@@ -431,10 +433,7 @@ Ast_Expression *Parser::parse_multiplicative_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_unary_expression();
             if (!right) {
@@ -468,10 +467,7 @@ Ast_Expression *Parser::parse_additive_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_multiplicative_expression();
             if (!right) {
@@ -505,10 +501,7 @@ Ast_Expression *Parser::parse_shift_expression() {
             bin->left = sub_expression;
 
             next_token();
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_additive_expression();
             if (!right) {
@@ -545,9 +538,7 @@ Ast_Expression *Parser::parse_relational_expression() {
 
             next_token();
 
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_shift_expression();
             if (!right) {
@@ -581,10 +572,7 @@ Ast_Expression *Parser::parse_equality_expression() {
             Ast_Binary_Expression *bin = PARSER_NEW(Ast_Binary_Expression);
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_relational_expression();
             if (!right) {
@@ -619,10 +607,7 @@ Ast_Expression *Parser::parse_and_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_equality_expression();
             if (!right) {
@@ -657,10 +642,7 @@ Ast_Expression *Parser::parse_exclusive_or_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_and_expression();
             if (!right) {
@@ -695,10 +677,7 @@ Ast_Expression *Parser::parse_inclusive_or_expression() {
 
             bin->operator_type = token->type;
             bin->left = sub_expression;
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_exclusive_or_expression();
             if (!right) {
@@ -733,10 +712,7 @@ Ast_Expression *Parser::parse_logical_and_expression() {
             bin->left = sub_expression;
 
             next_token();
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_inclusive_or_expression();
             if (!right) {
@@ -771,10 +747,7 @@ Ast_Expression *Parser::parse_logical_xor_expression() {
             bin->left = sub_expression;
 
             next_token();
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_logical_and_expression();
             if (!right) {
@@ -809,10 +782,7 @@ Ast_Expression *Parser::parse_logical_or_expression() {
             bin->left = sub_expression;
 
             next_token();
-
-            if (is_valid_overloadable_operator(bin->operator_type)) {
-                bin->enclosing_scope = get_current_scope();
-            }
+            bin->enclosing_scope = get_current_scope();
 
             auto right = parse_logical_xor_expression();
             if (!right) {
@@ -863,6 +833,12 @@ Ast_Expression *Parser::parse_statement() {
     if (token->type == Token::KEYWORD_TYPEALIAS) {
         Ast_Type_Alias *alias = PARSER_NEW(Ast_Type_Alias);
         next_token();
+
+        if (peek_token()->type == Token::TAG_DISTINCT) {
+            alias->is_distinct = true;
+            next_token();
+        }
+
         alias->identifier = parse_identifier();
 
         if (!expect_and_eat(Token::EQUALS)) return nullptr;
@@ -883,15 +859,60 @@ Ast_Expression *Parser::parse_statement() {
         Ast_Struct *_struct = PARSER_NEW(Ast_Struct);
         next_token();
 
-        _struct->identifier = parse_identifier();
+        if (peek_token()->type != Token::IDENTIFIER) {
+            _struct->is_anonymous = true;
+        } else {
+            _struct->identifier = parse_identifier();
+        }
         _struct->member_scope.parent = get_current_scope();
         _struct->member_scope.owning_struct = _struct;
         _struct->is_union = (token->type == Token::KEYWORD_UNION);
 
+        if (peek_token()->type == Token::LEFT_ANGLE) {
+            Ast_Scope *polymorphic_scope = PARSER_NEW(Ast_Scope);
+            polymorphic_scope->is_template_argument_block = true;
+            polymorphic_scope->parent = get_current_scope();
+            _struct->polymorphic_type_alias_scope = polymorphic_scope;
+            next_token();
+
+            push_scopes(polymorphic_scope);
+
+            token = peek_token();
+            while (token->type != Token::END) {
+                Ast_Type_Alias *alias = PARSER_NEW(Ast_Type_Alias);
+                alias->identifier = parse_identifier();
+
+                if (!alias->identifier) {
+                    compiler->report_error(alias, "Expected identifier in template argument list but got something else.\n");
+                    return nullptr;
+                }
+
+                polymorphic_scope->declarations.add(alias);
+
+                token = peek_token();
+                if (token->type == Token::COMMA) {
+                    next_token();
+
+                    token = peek_token();
+                    continue;
+                }
+
+                if (!expect_and_eat(Token::RIGHT_ANGLE)) return nullptr;
+
+                break;
+            }
+
+            pop_scopes();
+
+            _struct->member_scope.parent = polymorphic_scope;
+
+            _struct->is_template_struct = true;
+        }
+
         if (peek_token()->type == Token::COLON) {
             next_token();
 
-            _struct->parent_struct = parse_identifier();
+            _struct->parent_struct = parse_type_inst();
         }
 
         set_location_info_from_token(&_struct->member_scope, peek_token());
@@ -1291,6 +1312,7 @@ Ast_Expression *Parser::parse_statement() {
             bin->operator_type = token->type;
 
             next_token();
+            bin->enclosing_scope = get_current_scope();
 
             Ast_Expression *right = parse_expression();
             if (!right) {
@@ -1318,7 +1340,7 @@ Ast_Expression *Parser::parse_statement() {
     }
 }
 
-static Ast_Expression * find_declaration(Array<Ast_Expression *> * array, Atom * name) {
+static Ast_Expression * find_declaration(Array<Ast_Scope_Entry *> * array, Atom * name) {
     for (auto it: *array) {
         auto id = declaration_identifier(it);
         if (id && id->name == name) {
@@ -1330,7 +1352,7 @@ static Ast_Expression * find_declaration(Array<Ast_Expression *> * array, Atom *
 
 // @FixMe this should not be here, we do not know if something is actually redefined until after
 // directives are resolved. This should be checked in sema. -josh 29 December 2019
-bool Parser::add_declaration(Array<Ast_Expression *> * declarations, Ast_Expression * decl) {
+bool Parser::add_declaration(Array<Ast_Scope_Entry *> *declarations, Ast_Scope_Entry *decl) {
     auto id = declaration_identifier(decl);
 
     // Skip anonymous declarations, in case we have them.
@@ -1352,6 +1374,8 @@ bool Parser::add_declaration(Array<Ast_Expression *> * declarations, Ast_Express
 }
 
 void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_statement, bool push_scope, bool is_for_case) {
+    MICROPROFILE_SCOPEI("parser", "parse_scope", -1);
+
     if (push_scope) push_scopes(scope);
 
     if (!requires_braces && only_one_statement == true && peek_token()->type == '{') {
@@ -1375,7 +1399,7 @@ void Parser::parse_scope(Ast_Scope *scope, bool requires_braces, bool only_one_s
             scope->statements.add(stmt);
 
             if (is_declaration(stmt->type)) {
-                if (!add_declaration(&scope->declarations, stmt)) {
+                if (!add_declaration(&scope->declarations, static_cast<Ast_Scope_Entry *>(stmt))) {
                     return;
                 }
             }
@@ -1493,6 +1517,36 @@ Ast_Type_Instantiation *Parser::wrap_primitive_type(Ast_Type_Info *info) {
 }
 
 Ast_Type_Instantiation *Parser::parse_type_inst() {
+    auto inst = parse_primary_type_inst();
+
+    while (peek_token()->type == Token::LEFT_ANGLE) {
+        Ast_Type_Instantiation *_template = PARSER_NEW(Ast_Type_Instantiation);
+        _template->template_type_inst_of = inst;
+
+        next_token();
+
+        while (peek_token()->type != Token::END) {
+            auto arg = parse_type_inst();
+
+            _template->template_type_arguments.add(arg);
+
+            if (peek_token()->type == Token::COMMA) {
+                next_token();
+                continue;
+            }
+
+            if (peek_token()->type == Token::RIGHT_ANGLE) break;
+        }
+
+        if (!expect_and_eat(Token::RIGHT_ANGLE)) return nullptr;
+
+        inst = _template;
+    }
+
+    return inst;
+}
+
+Ast_Type_Instantiation *Parser::parse_primary_type_inst() {
     Token *token = peek_token();
 
     Ast_Type_Info *builtin_primitive = nullptr;
@@ -1626,7 +1680,7 @@ Ast_Type_Instantiation *Parser::parse_type_inst() {
         return nullptr;
     }
 
-    if (token->type == '(') {
+    if (token->type == Token::LEFT_PAREN) {
         Ast_Type_Instantiation *final_type_inst = PARSER_NEW(Ast_Type_Instantiation);
         next_token();
 
@@ -1783,18 +1837,33 @@ Ast_Function *Parser::parse_function() {
 
     if (is_operator_function) {
         token = peek_token();
-
-        if (!is_valid_overloadable_operator(token->type)) {
-            String op_name = token_type_to_string(token->type);
-            defer { free(op_name.data); };
-            compiler->report_error(token, "Token '%.*s' is not a valid operator for overloading.\n", PRINT_ARG(op_name));
-            return nullptr;
-        }
+        function->operator_type = token->type;
 
         Ast_Identifier *ident = PARSER_NEW(Ast_Identifier);
         ident->enclosing_scope = get_current_scope();
-        ident->name = compiler->make_operator_atom(token->type);
-        next_token();
+
+        if (token->type == Token::LEFT_BRACKET) {
+            next_token();
+
+            if (!expect_and_eat(Token::RIGHT_BRACKET)) return nullptr;
+
+            if (peek_token()->type == Token::EQUALS) {
+                next_token();
+                ident->name = compiler->make_atom(OPERATOR_BRACKET_EQUALS_NAME);
+            } else {
+                ident->name = compiler->make_atom(OPERATOR_BRACKET_NAME);
+            }
+        } else {
+            if (!is_valid_overloadable_operator(token->type)) {
+                String op_name = token_type_to_string(token->type);
+                defer { free(op_name.data); };
+                compiler->report_error(token, "Token '%.*s' is not a valid operator for overloading.\n", PRINT_ARG(op_name));
+                return nullptr;
+            } else {
+                ident->name = compiler->make_operator_atom(token->type);
+                next_token();
+            }
+        }
 
         function->identifier = ident;
     } else {

@@ -37,6 +37,8 @@ func compile_failing_test(source: string) {
 func @metaprogram main() {
     var as_metaprogram = true;
 
+    compile_single_test_file("tests/anon_unions.jyu", as_metaprogram);
+    compile_single_test_file("tests/template_structs.jyu", as_metaprogram);
     compile_single_test_file("tests/default_params.jyu", as_metaprogram);
     compile_single_test_file("tests/switch.jyu", as_metaprogram);
     compile_single_test_file("tests/tuples.jyu", as_metaprogram);
@@ -57,6 +59,7 @@ func @metaprogram main() {
     compile_single_test_file("tests/typeof.jyu", as_metaprogram);
     compile_single_test_file("tests/jit.jyu", true); // jit.jyu cannot compile as a regular program so always run it as metaprogram.. Though, that can probably change in the future when the compile can be compiled as just a library and linked against jiyu programs.
     compile_single_test_file("tests/for_loops.jyu", as_metaprogram);
+    compile_single_test_file("tests/distinct_types.jyu", as_metaprogram);
 
     // Attempt to use an incomplete type:
     compile_failing_test("struct Foo { var foo: My_Foo; } typealias My_Foo = Foo;");
